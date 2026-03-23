@@ -48,25 +48,25 @@ export default function LoginScreen() {
   };
 
   return (
-    <div className="flex flex-col h-full bg-white">
+    <div className="flex flex-col h-[100dvh] bg-white overflow-y-auto">
       {/* Header */}
-      <div className="bg-brand-secondary/30 p-10 flex flex-col items-center justify-center rounded-b-[3rem] relative overflow-hidden border-b-4 border-brand-primary/20">
+      <div className="bg-brand-secondary/30 py-8 px-6 flex flex-col items-center justify-center rounded-b-[2.5rem] relative overflow-hidden border-b-4 border-brand-primary/20 shrink-0">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_to_bottom_right,rgba(245,166,35,0.1),transparent)] flex items-center justify-center"></div>
-        <div className="flex items-center gap-3 mb-6 relative z-10">
-          <div className="bg-brand-primary p-3 rounded-2xl text-white shadow-xl">
-            <Leaf size={40} />
+        <div className="flex items-center gap-2 mb-4 relative z-10">
+          <div className="bg-brand-primary p-2.5 rounded-2xl text-white shadow-xl">
+            <Leaf size={32} />
           </div>
           <div className="flex flex-col">
-            <span className="text-4xl font-black text-brand-dark tracking-tighter leading-none">INCUBANT</span>
-            <span className="text-[0.65rem] font-bold text-brand-gray tracking-[0.2em] uppercase mt-1">Antioqueña de Incubación S.A.S.</span>
+            <span className="text-3xl font-black text-brand-dark tracking-tighter leading-none">INCUBANT</span>
+            <span className="text-[0.55rem] font-bold text-brand-gray tracking-[0.2em] uppercase mt-1">Antioqueña de Incubación</span>
           </div>
         </div>
-        <h1 className="text-xl font-bold text-brand-dark tracking-tight relative z-10 text-center uppercase">Panel de Control de Incubación</h1>
-        <p className="text-brand-gray font-semibold mt-1 relative z-10 text-sm">Acceso Restringido</p>
+        <h1 className="text-lg font-bold text-brand-dark tracking-tight relative z-10 text-center uppercase px-4">Panel de Control de Incubación</h1>
+        <p className="text-brand-gray font-semibold mt-1 relative z-10 text-xs">Acceso Restringido</p>
       </div>
 
       {/* Form */}
-      <div className="flex-1 p-8 flex flex-col justify-center max-w-md mx-auto w-full">
+      <div className="flex-1 p-6 flex flex-col justify-center max-w-md mx-auto w-full">
         <form onSubmit={handleLogin} className="space-y-8">
           
           {error && (

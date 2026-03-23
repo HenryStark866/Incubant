@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useMachineStore } from '../store/useMachineStore';
-import { ThermometerSun, LogIn, AlertCircle, Loader2 } from 'lucide-react';
+import { ThermometerSun, LogIn, AlertCircle, Loader2, Leaf } from 'lucide-react';
 import { requestNotificationPermission, scheduleHourlyNotifications } from '../utils/notifications';
 
 export default function LoginScreen() {
@@ -52,7 +52,15 @@ export default function LoginScreen() {
       {/* Header */}
       <div className="bg-brand-secondary/30 p-10 flex flex-col items-center justify-center rounded-b-[3rem] relative overflow-hidden border-b-4 border-brand-primary/20">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_to_bottom_right,rgba(245,166,35,0.1),transparent)] flex items-center justify-center"></div>
-        <img src="/logo.png" alt="Incubant Logo" className="w-64 h-auto mb-4 relative z-10" />
+        <div className="flex items-center gap-3 mb-6 relative z-10">
+          <div className="bg-brand-primary p-3 rounded-2xl text-white shadow-xl">
+            <Leaf size={40} />
+          </div>
+          <div className="flex flex-col">
+            <span className="text-4xl font-black text-brand-dark tracking-tighter leading-none">INCUBANT</span>
+            <span className="text-[0.65rem] font-bold text-brand-gray tracking-[0.2em] uppercase mt-1">Antioqueña de Incubación S.A.S.</span>
+          </div>
+        </div>
         <h1 className="text-xl font-bold text-brand-dark tracking-tight relative z-10 text-center uppercase">Panel de Control de Incubación</h1>
         <p className="text-brand-gray font-semibold mt-1 relative z-10 text-sm">Acceso Restringido</p>
       </div>

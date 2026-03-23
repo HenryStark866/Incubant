@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { 
   Activity, AlertTriangle, Clock, Users, LayoutDashboard, 
   Settings, ChevronDown, X, Image as ImageIcon, CheckCircle2,
-  Download, Loader2
+  Download, Loader2, Leaf
 } from 'lucide-react';
 import { 
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer 
@@ -186,7 +186,15 @@ export default function SupervisorDashboard() {
       {/* Sidebar */}
       <div className="w-72 bg-white border-r border-gray-100 flex flex-col shadow-xl z-20">
         <div className="p-8 flex flex-col items-center gap-4 border-b border-gray-50 bg-brand-secondary/5">
-          <img src="/logo.png" alt="Incubant Logo" className="w-48 h-auto" />
+        <div className="flex items-center gap-2 mb-2">
+          <div className="bg-brand-primary p-2 rounded-xl text-white shadow-md">
+            <Leaf size={24} />
+          </div>
+          <div className="flex flex-col">
+            <span className="text-2xl font-black text-brand-dark tracking-tight leading-none">INCUBANT</span>
+            <span className="text-[0.5rem] font-bold text-brand-gray tracking-widest uppercase mt-0.5">Antioqueña de Incubación S.A.S.</span>
+          </div>
+        </div>
           <div className="text-center px-4 py-1 bg-brand-primary/10 rounded-full border border-brand-primary/20">
             <p className="text-[10px] text-brand-primary font-black uppercase tracking-[0.2em]">Sistema de Monitoreo</p>
           </div>

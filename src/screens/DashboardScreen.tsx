@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useMachineStore, MachineType } from '../store/useMachineStore';
-import { CheckCircle2, Clock, UploadCloud, Loader2, LogOut, ChevronRight } from 'lucide-react';
+import { CheckCircle2, Clock, UploadCloud, Loader2, LogOut, ChevronRight, Leaf } from 'lucide-react';
 
 export default function DashboardScreen() {
   const [activeTab, setActiveTab] = useState<MachineType>('incubadora');
@@ -104,7 +104,12 @@ export default function DashboardScreen() {
       <div className="bg-white px-6 py-5 border-b border-gray-200 shadow-sm z-10">
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-4">
-            <img src="/logo.png" alt="Incubant" className="h-8 w-auto object-contain" />
+            <div className="flex items-center gap-2">
+              <div className="bg-brand-primary p-1.5 rounded-lg text-white shadow-sm">
+                <Leaf size={18} />
+              </div>
+              <span className="text-lg font-black text-brand-dark tracking-tight leading-none pb-0.5 pointer-events-none">INCUBANT</span>
+            </div>
             <div className="h-8 w-px bg-gray-200"></div>
             <div>
               <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">Operario Activo</p>

@@ -17,30 +17,27 @@ async function startServer() {
   // 1. Endpoint de Autenticación
   app.post('/api/login', async (req, res) => {
     const { id, pin } = req.body;
-    
-    // Simulación temporal solicitada
-    if (id === '1' && pin === '1234') {
-      return res.status(200).json({
-        user: {
-          id: 'user-1',
-          name: 'Juan Pérez',
-          role: 'OPERARIO'
-        }
-      });
-    }
 
-    // Lógica real con Prisma (comentada o activa si hay DB)
-    /*
+    // Lógica real con Prisma
     try {
-      const user = await prisma.user.findUnique({ where: { id } }); // o buscar por pin_acceso
-      if (user && user.pin_acceso === pin && user.rol === 'OPERARIO') {
-        return res.status(200).json({ user: { id: user.id, name: user.nombre, role: user.rol } });
+      // Buscar usuario en la base de datos por string de ID
+      const user = await prisma.user.findUnique({ where: { id } }); 
+      
+      // Validar si el usuario existe, el pin coincide y si es operario o supervisor
+      if (user && user.pin_acceso === pin && (user.rol === 'OPERARIO' || user.rol === 'SUPERVISOR' || user.rol === 'ADMIN')) {
+        return res.status(200).json({ 
+          user: { 
+            id: user.id, 
+            name: user.nombre, 
+            role: user.rol 
+          } 
+        });
       }
     } catch (e) {
-      console.error(e);
+      console.error('Error al intentar inicio de sesión en BD:', e);
     }
-    */
 
+    // Respuesta genérica de error si la validación falla
     return res.status(401).json({ error: 'Credenciales inválidas' });
   });
 

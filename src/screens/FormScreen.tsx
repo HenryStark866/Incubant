@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { useMachineStore, MachineData } from '../store/useMachineStore';
-import { ChevronLeft, Save, AlertCircle, Thermometer, Droplets, Calendar, RotateCw, Wind, Bell, MessageSquare, Activity, CheckCircle2 } from 'lucide-react';
+import { ChevronLeft, Save, AlertCircle, Thermometer, Droplets, Calendar, RotateCw, Wind, Bell, MessageSquare, Activity, CheckCircle2, Leaf } from 'lucide-react';
 
 // Focus Fix: Move InputField component OUTSIDE the main render function
 const InputField = React.memo(({ 
@@ -154,7 +154,12 @@ export default function FormScreen() {
             <ChevronLeft size={20} />
           </button>
           <div>
-             <img src="/logo.png" alt="Incubant" className="h-6 w-auto mb-1" />
+             <div className="flex items-center gap-1.5 mb-2">
+               <div className="bg-brand-primary p-1 rounded text-white shadow-sm">
+                 <Leaf size={14} />
+               </div>
+               <span className="text-sm font-black text-brand-dark tracking-tight leading-none pointer-events-none">INCUBANT</span>
+             </div>
              <p className="text-[10px] font-black text-[#F5A623] uppercase tracking-[0.2em] leading-none">
               Control: {isIncubadora ? 'Incubadora' : 'Nacedora'} {machine.number.toString().padStart(2, '0')}
             </p>

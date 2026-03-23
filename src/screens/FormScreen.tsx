@@ -1,11 +1,10 @@
 import React, { useState, useCallback } from 'react';
 import { useMachineStore, MachineData } from '../store/useMachineStore';
-import { ChevronLeft, Save, AlertCircle, Thermometer, Droplets, Calendar, RotateCw, Type } from 'lucide-react';
+import { ChevronLeft, Save, AlertCircle, Thermometer, Droplets, Calendar, RotateCw, Fingerprint } from 'lucide-react';
 
 // Focus Fix: Move InputField component OUTSIDE the main render function
-// This prevents React from unmounting/remounting the input on every keystroke
 const InputField = React.memo(({ 
-  label, value, onChange, placeholder, unit, icon: Icon, error 
+  label, value, onChange, placeholder, unit, icon: Icon, error, disabled = false
 }: { 
   label: string, 
   value: string, 
@@ -13,34 +12,47 @@ const InputField = React.memo(({
   placeholder: string, 
   unit: string,
   icon: any,
-  error?: boolean
+  error?: boolean,
+  disabled?: boolean
 }) => (
-  <div className="flex-1">
-    <label className="block text-[11px] font-black text-brand-gray uppercase tracking-[0.2em] mb-2 px-1">
-      <div className="flex items-center gap-1.5 leading-none">
-        <Icon size={12} className="text-brand-primary" />
-        {label}
+  <div className={`bg-white rounded-[2rem] p-8 border-2 transition-all shadow-sm ${
+    disabled ? 'opacity-40 grayscale pointer-events-none border-gray-100 bg-gray-50' : 
+    error ? 'border-red-500 bg-red-50' : 'border-gray-50 bg-white shadow-brand-dark/5'
+  }`}>
+    <div className="flex items-center gap-3 mb-6">
+      <div className={`p-3 rounded-2xl ${error ? 'bg-red-100 text-red-500' : 'bg-gray-100 text-brand-gray'}`}>
+        <Icon size={20} />
       </div>
-    </label>
-    <div className="relative group">
+      <label className="text-sm font-black text-brand-dark uppercase tracking-[0.1em]">
+        {label}
+      </label>
+    </div>
+    
+    <div className="relative">
       <input
         type="number"
         step="0.1"
         inputMode="decimal"
+        disabled={disabled}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        className={`w-full bg-white border-2 rounded-2xl px-5 py-4 text-xl font-black text-brand-dark transition-all shadow-sm ${
-          error 
-            ? 'border-red-500 bg-red-50 focus:ring-4 focus:ring-red-100' 
-            : 'border-gray-100 focus:border-brand-primary focus:ring-4 focus:ring-brand-primary/5'
+        className={`w-full bg-transparent text-4xl font-black text-brand-dark focus:outline-none placeholder:text-gray-200 transition-all ${
+           error ? 'text-red-600' : ''
         }`}
       />
-      <div className="absolute right-5 top-1/2 -translate-y-1/2 flex items-center gap-2 pointer-events-none">
-         <span className={`text-xs font-black uppercase tracking-widest ${error ? 'text-red-400' : 'text-brand-gray opacity-40'}`}>
+      <div className="absolute right-0 bottom-1 flex items-center gap-2 pointer-events-none">
+         <span className={`text-xs font-black uppercase tracking-widest ${error ? 'text-red-400' : 'text-brand-gray opacity-30'}`}>
           {unit}
         </span>
       </div>
+    </div>
+    <div className={`h-1.5 w-full mt-4 rounded-full overflow-hidden ${disabled ? 'bg-gray-200' : 'bg-gray-50'}`}>
+       <div className={`h-full transition-all duration-500 ${
+         disabled ? 'w-0' :
+         error ? 'bg-red-500 w-full' :
+         value ? 'bg-brand-primary w-full' : 'w-0'
+       }`}></div>
     </div>
   </div>
 ));
@@ -64,7 +76,6 @@ export default function FormScreen() {
 
   const [errors, setErrors] = useState<Partial<Record<keyof MachineData, boolean>>>({});
 
-  // Memoized handlers for performance and consistency
   const handleInputChange = useCallback((field: keyof MachineData, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
     if (errors[field]) {
@@ -76,20 +87,18 @@ export default function FormScreen() {
     const newErrors: Partial<Record<keyof MachineData, boolean>> = {};
     let hasErrors = false;
 
-    // Campos obligatorios para ambas
     if (!formData.temperatura) { newErrors.temperatura = true; hasErrors = true; }
     if (!formData.humedad) { newErrors.humedad = true; hasErrors = true; }
-    if (!formData.diaIncubacion) { newErrors.diaIncubacion = true; hasErrors = true; }
-
-    // Específico para incubadora
-    if (machine?.type === 'incubadora' && !formData.numeroVolteos) {
-      newErrors.numeroVolteos = true;
-      hasErrors = true;
+    
+    const isIncubadora = machine?.type === 'incubadora';
+    
+    if (isIncubadora) {
+        if (!formData.diaIncubacion) { newErrors.diaIncubacion = true; hasErrors = true; }
+        if (!formData.numeroVolteos) { newErrors.numeroVolteos = true; hasErrors = true; }
     }
 
     if (hasErrors) {
       setErrors(newErrors);
-      // Feedback táctico en dispositivo móvil
       navigator.vibrate?.(100);
       return;
     }
@@ -102,147 +111,120 @@ export default function FormScreen() {
   const isIncubadora = machine.type === 'incubadora';
 
   return (
-    <div className="flex flex-col h-full bg-white relative">
+    <div className="flex flex-col h-full bg-[#F5F5F7] relative">
       
-      {/* Dynamic Header with Real Logo */}
-      <div className="bg-white border-b border-gray-100 p-5 flex items-center justify-between sticky top-0 z-30 shadow-sm">
-        <div className="flex items-center gap-4">
+      {/* Professional Minimalist Header */}
+      <div className="bg-white border-b border-gray-100 p-6 flex items-center justify-between sticky top-0 z-30">
+        <div className="flex items-center gap-5">
           <button 
             onClick={() => setCapturedPhoto(null)}
-            className="p-3 bg-gray-50 text-brand-gray rounded-2xl active:scale-90 transition-all border border-gray-100"
+            className="p-3 bg-gray-50 text-brand-dark rounded-2xl active:scale-95 transition-all border border-gray-100"
           >
-            <ChevronLeft size={20} />
+            <ChevronLeft size={24} />
           </button>
+          <div className="h-10 w-[1px] bg-gray-100"></div>
           <div>
-             <img src="/logo.png" alt="Incubant" className="h-7 w-auto mb-0.5" />
-             <p className="text-[10px] font-black text-brand-primary uppercase tracking-[0.2em] leading-none">
-              {isIncubadora ? 'Incubadora' : 'Nacedora'} {machine.number}
-            </p>
-          </div>
-        </div>
-        <div className="flex flex-col items-end">
-          <p className="text-[9px] font-black text-brand-gray uppercase tracking-widest leading-none mb-1 opacity-50">Registro Actual</p>
-          <div className="px-3 py-1 bg-brand-primary/10 rounded-full border border-brand-primary/20">
-             <p className="text-[9px] font-black text-brand-primary">{new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
+             <h1 className="text-xl font-black text-brand-dark tracking-tighter">
+               Registro: <span className="text-brand-primary">{isIncubadora ? 'Incubadora' : 'Nacedora'} {machine.number}</span>
+             </h1>
+             <p className="text-[10px] font-black text-brand-gray uppercase tracking-[0.2em] opacity-40">Planta de Incubación • {new Date().toLocaleDateString()}</p>
           </div>
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto bg-gray-50/30">
+      <div className="flex-1 overflow-y-auto px-6 pt-6 pb-44 space-y-6">
         
-        {/* Photo Reference (Miniaturized for space) */}
-        <div className="p-4">
-          <div className="bg-white p-2 rounded-[2rem] border border-gray-100 shadow-sm flex items-center gap-4 overflow-hidden group">
-            <div className="relative w-32 h-24 rounded-[1.5rem] overflow-hidden border-2 border-gray-50 shadow-inner shrink-0 bg-brand-dark">
-              <img src={capturedPhoto} alt="Captura" className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
-            </div>
-            <div className="flex-1">
-              <h4 className="text-xs font-black text-brand-dark uppercase tracking-widest mb-1.5 opacity-80">Referencia Visual</h4>
-              <p className="text-[10px] text-brand-gray font-bold leading-relaxed pr-2">Asegúrate de que los valores ingresados coincidan con lo observado en el display de la máquina.</p>
-            </div>
-          </div>
+        {/* Photo Reference Tooltip-style */}
+        <div className="relative group">
+           <div className="absolute -top-3 left-8 bg-brand-dark text-white text-[9px] font-black uppercase tracking-widest px-3 py-1 rounded-full z-10 shadow-lg">Referencia Visual</div>
+           <div className="w-full h-40 rounded-[2.5rem] overflow-hidden border-4 border-white shadow-xl bg-brand-dark ring-1 ring-gray-100">
+             <img src={capturedPhoto} alt="Captura" className="w-full h-full object-cover opacity-80" />
+           </div>
         </div>
 
-        {/* Validation Alert */}
-        {Object.keys(errors).length > 0 && (
-          <div className="mx-4 mb-4 animate-in fade-in slide-in-from-top-2">
-            <div className="bg-red-50 border-2 border-red-100 p-4 rounded-3xl flex items-center gap-3">
-              <div className="w-10 h-10 rounded-2xl bg-white flex items-center justify-center shadow-sm shrink-0 border border-red-100">
-                <AlertCircle className="text-red-500" size={20} />
-              </div>
-              <div>
-                <p className="text-sm font-black text-red-700">Faltan Datos Críticos</p>
-                <p className="text-[11px] text-red-500 font-bold">Por favor completa los campos resaltados en rojo.</p>
-              </div>
-            </div>
-          </div>
-        )}
+        {/* Form Fields as Cards */}
+        <div className="space-y-6">
+          <InputField 
+            label="Temperatura" 
+            value={formData.temperatura} 
+            onChange={(v) => handleInputChange('temperatura', v)}
+            placeholder="0.0" 
+            unit="°C" 
+            icon={Thermometer}
+            error={errors.temperatura}
+          />
 
-        {/* Form Fields */}
-        <div className="p-4 space-y-6 pb-40">
-          
-          <div className="grid grid-cols-2 gap-4">
-            <InputField 
-              label="Temperatura" 
-              value={formData.temperatura} 
-              onChange={(v) => handleInputChange('temperatura', v)}
-              placeholder="37.5" 
-              unit="°C" 
-              icon={Thermometer}
-              error={errors.temperatura}
-            />
-            <InputField 
-              label="Humedad" 
-              value={formData.humedad} 
-              onChange={(v) => handleInputChange('humedad', v)}
-              placeholder="55.0" 
-              unit="%" 
-              icon={Droplets}
-              error={errors.humedad}
-            />
-          </div>
+          <InputField 
+            label="Humedad" 
+            value={formData.humedad} 
+            onChange={(v) => handleInputChange('humedad', v)}
+            placeholder="0" 
+            unit="%" 
+            icon={Droplets}
+            error={errors.humedad}
+          />
 
-          <div className="flex gap-4">
-            <InputField 
-              label="Día Actual" 
-              value={formData.diaIncubacion} 
-              onChange={(v) => handleInputChange('diaIncubacion', v)}
-              placeholder="12" 
-              unit="DÍA" 
-              icon={Calendar}
-              error={errors.diaIncubacion}
-            />
-            {isIncubadora ? (
+          {isIncubadora && (
+            <>
               <InputField 
-                label="N° Volteos" 
+                label="Día de Incubación" 
+                value={formData.diaIncubacion} 
+                onChange={(v) => handleInputChange('diaIncubacion', v)}
+                placeholder="0" 
+                unit="DÍA" 
+                icon={Calendar}
+                error={errors.diaIncubacion}
+              />
+              <InputField 
+                label="Número de Volteos" 
                 value={formData.numeroVolteos || ''} 
                 onChange={(v) => handleInputChange('numeroVolteos', v)}
-                placeholder="4" 
+                placeholder="0" 
                 unit="CANT" 
                 icon={RotateCw}
                 error={errors.numeroVolteos}
               />
-            ) : (
-               <div className="flex-1">
-                 <label className="block text-[11px] font-black text-brand-gray opacity-40 uppercase tracking-[0.2em] mb-2 px-1">Nacedora</label>
-                 <div className="w-full bg-gray-100/50 border-2 border-dashed border-gray-200 rounded-2xl px-5 py-4 flex items-center justify-center">
-                    <p className="text-[10px] font-black text-brand-gray opacity-30 uppercase tracking-widest">Sin Volteos</p>
-                 </div>
-               </div>
-            )}
-          </div>
+            </>
+          )}
 
-          <div className="pt-2">
-            <label className="block text-[11px] font-black text-brand-gray uppercase tracking-[0.2em] mb-3 px-1">
-               <div className="flex items-center gap-1.5">
-                <Type size={12} className="text-brand-primary" />
-                Observaciones Complementarias
-              </div>
-            </label>
-            <textarea
-              value={formData.observaciones}
-              onChange={(e) => handleInputChange('observaciones', e.target.value)}
-              placeholder="Ej: Se detectó ruido inusual en ventilador..."
-              className="w-full bg-white border-2 border-gray-100 rounded-[2rem] px-6 py-5 text-base text-brand-dark font-medium focus:outline-none focus:border-brand-primary focus:ring-4 focus:ring-brand-primary/5 transition-all min-h-[140px] resize-none shadow-sm"
-            />
+          <div className="bg-white rounded-[2.5rem] p-8 border-2 border-gray-50 shadow-sm shadow-brand-dark/5">
+             <div className="flex items-center gap-3 mb-6">
+                <div className="p-3 rounded-2xl bg-gray-100 text-brand-gray">
+                  <Fingerprint size={20} />
+                </div>
+                <label className="text-sm font-black text-brand-dark uppercase tracking-[0.1em]">Observaciones Técnicas</label>
+             </div>
+             <textarea
+                value={formData.observaciones}
+                onChange={(e) => handleInputChange('observaciones', e.target.value)}
+                placeholder="Opcional..."
+                className="w-full bg-gray-50/50 border-2 border-gray-50 rounded-2xl px-6 py-5 text-lg text-brand-dark font-medium focus:outline-none focus:border-brand-primary transition-all min-h-[120px] resize-none"
+             />
           </div>
         </div>
+
+        {/* Validation Feedback */}
+        {Object.keys(errors).length > 0 && (
+          <div className="bg-red-500 text-white p-6 rounded-[2rem] flex items-center gap-4 shadow-xl shadow-red-500/20 animate-bounce">
+            <AlertCircle size={28} />
+            <p className="font-bold text-sm tracking-tight">Completa todos los campos obligatorios para continuar.</p>
+          </div>
+        )}
       </div>
 
-      {/* Persistent Action Bar - Highly optimized for Mobile Thumb */}
-      <div className="absolute bottom-0 inset-x-0 p-6 bg-white/80 backdrop-blur-xl border-t border-gray-100 shadow-[0_-20px_40px_rgba(0,0,0,0.05)] z-40">
+      {/* Corporate Action Bar */}
+      <div className="absolute bottom-0 inset-x-0 p-8 bg-white/90 backdrop-blur-2xl border-t border-gray-100 z-40">
         <button 
           onClick={handleSave}
-          className="w-full py-5 rounded-[2rem] font-black text-xl flex items-center justify-center gap-4 bg-brand-primary text-white active:bg-[#E6951F] active:scale-95 transition-all shadow-2xl shadow-brand-primary/30 uppercase tracking-[0.1em]"
+          className="w-full py-6 rounded-[2.5rem] font-black text-xl flex items-center justify-center gap-4 bg-brand-primary text-white active:scale-95 transition-all shadow-2xl shadow-brand-primary/40 uppercase tracking-[0.1em]"
         >
-          <div className="p-2 bg-white/20 rounded-xl shadow-inner">
-            <Save size={24} />
-          </div>
-          Guardar Registro
+          <Save size={24} />
+          Confirmar y Guardar
         </button>
-        <p className="text-center text-[10px] text-brand-gray mt-4 font-black uppercase tracking-[0.2em] opacity-40">
-          Autenticando como: {useMachineStore.getState().currentUser?.name || 'Operario'}
-        </p>
+        <div className="flex items-center justify-center gap-2 mt-5 opacity-40">
+           <img src="/logo.png" alt="Incubant" className="h-3 grayscale" />
+           <p className="text-[9px] font-black text-brand-gray uppercase tracking-widest">Genuino Incubant Monitor</p>
+        </div>
       </div>
     </div>
   );

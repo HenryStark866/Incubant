@@ -78,7 +78,7 @@ export default function LoginScreen() {
               pattern="[0-9]*"
               value={operatorId}
               onChange={(e) => setOperatorId(e.target.value)}
-              placeholder="Ej: 1"
+              placeholder=""
               className="w-full bg-gray-50 border-2 border-gray-100 rounded-2xl px-6 py-4 text-xl font-bold text-brand-dark focus:outline-none focus:border-brand-primary focus:ring-4 focus:ring-brand-primary/5 transition-all shadow-sm"
             />
           </div>

@@ -48,28 +48,28 @@ export default function LoginScreen() {
   };
 
   return (
-    <div className="flex flex-col h-full bg-gray-50">
+    <div className="flex flex-col h-full bg-white">
       {/* Header */}
-      <div className="bg-blue-600 text-white p-8 shadow-md flex flex-col items-center justify-center rounded-b-[2.5rem] relative overflow-hidden">
-        <div className="absolute inset-0 bg-blue-700 opacity-20 pattern-diagonal-lines"></div>
-        <ThermometerSun size={64} className="mb-4 relative z-10" />
-        <h1 className="text-3xl font-black tracking-tight relative z-10">AgriMonitor</h1>
-        <p className="text-blue-200 font-medium mt-2 relative z-10">Control de Incubación</p>
+      <div className="bg-brand-secondary/30 p-10 flex flex-col items-center justify-center rounded-b-[3rem] relative overflow-hidden border-b-4 border-brand-primary/20">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_to_bottom_right,rgba(245,166,35,0.1),transparent)] flex items-center justify-center"></div>
+        <img src="/logo.png" alt="Incubant Logo" className="w-64 h-auto mb-4 relative z-10" />
+        <h1 className="text-xl font-bold text-brand-dark tracking-tight relative z-10 text-center uppercase">Panel de Control de Incubación</h1>
+        <p className="text-brand-gray font-semibold mt-1 relative z-10 text-sm">Acceso Restringido</p>
       </div>
 
       {/* Form */}
-      <div className="flex-1 p-6 flex flex-col justify-center">
-        <form onSubmit={handleLogin} className="space-y-6">
+      <div className="flex-1 p-8 flex flex-col justify-center max-w-md mx-auto w-full">
+        <form onSubmit={handleLogin} className="space-y-8">
           
           {error && (
-            <div className="bg-red-100 text-red-700 p-4 rounded-2xl flex items-center gap-3 text-sm font-bold border border-red-200 animate-in fade-in slide-in-from-top-2">
+            <div className="bg-red-50 text-red-600 p-4 rounded-2xl flex items-center gap-3 text-sm font-bold border border-red-100 animate-in fade-in slide-in-from-top-2">
               <AlertCircle size={20} className="shrink-0" />
               {error}
             </div>
           )}
 
-          <div className="space-y-2">
-            <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider ml-2">
+          <div className="space-y-3">
+            <label className="block text-xs font-bold text-brand-gray uppercase tracking-widest ml-1">
               ID de Operario
             </label>
             <input
@@ -79,13 +79,13 @@ export default function LoginScreen() {
               value={operatorId}
               onChange={(e) => setOperatorId(e.target.value)}
               placeholder="Ej: 1"
-              className="w-full bg-white border-2 border-gray-200 rounded-2xl px-5 py-4 text-xl font-bold text-gray-800 focus:outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100 transition-all shadow-sm"
+              className="w-full bg-gray-50 border-2 border-gray-100 rounded-2xl px-6 py-4 text-xl font-bold text-brand-dark focus:outline-none focus:border-brand-primary focus:ring-4 focus:ring-brand-primary/5 transition-all shadow-sm"
             />
           </div>
 
-          <div className="space-y-2">
-            <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider ml-2">
-              PIN de Acceso (4 dígitos)
+          <div className="space-y-3">
+            <label className="block text-xs font-bold text-brand-gray uppercase tracking-widest ml-1">
+              PIN de Acceso
             </label>
             <input
               type="password"
@@ -95,29 +95,29 @@ export default function LoginScreen() {
               value={pin}
               onChange={(e) => setPin(e.target.value)}
               placeholder="****"
-              className="w-full bg-white border-2 border-gray-200 rounded-2xl px-5 py-4 text-xl font-bold text-gray-800 focus:outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100 transition-all shadow-sm tracking-[0.5em]"
+              className="w-full bg-gray-50 border-2 border-gray-100 rounded-2xl px-6 py-4 text-xl font-bold text-brand-dark focus:outline-none focus:border-brand-primary focus:ring-4 focus:ring-brand-primary/5 transition-all shadow-sm tracking-[0.5em]"
             />
           </div>
 
           <button
             type="submit"
             disabled={isLoading}
-            className="w-full py-4 mt-4 rounded-2xl font-black text-lg flex items-center justify-center gap-2 bg-blue-600 text-white active:bg-blue-700 transition-all shadow-lg shadow-blue-600/30 disabled:bg-blue-400 disabled:shadow-none"
+            className="w-full py-5 mt-4 rounded-2xl font-black text-lg flex items-center justify-center gap-3 bg-brand-primary text-white hover:bg-[#E6951F] active:scale-[0.98] transition-all shadow-xl shadow-brand-primary/30 disabled:bg-gray-300 disabled:shadow-none uppercase tracking-wider"
           >
             {isLoading ? (
               <Loader2 size={24} className="animate-spin" />
             ) : (
               <>
                 <LogIn size={24} />
-                Ingresar al Turno
+                Iniciar Sesión
               </>
             )}
           </button>
         </form>
 
-        <div className="mt-8 text-center">
-          <p className="text-sm text-gray-400 font-medium">
-            Usa ID: <span className="font-bold text-gray-600">1</span> y PIN: <span className="font-bold text-gray-600">1234</span> para probar
+        <div className="mt-12 text-center">
+          <p className="text-[10px] text-brand-gray font-bold uppercase tracking-widest opacity-50">
+            INCUBANT - ANTIOQUEÑA DE INCUBACIÓN S.A.S. © 2026
           </p>
         </div>
       </div>

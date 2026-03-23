@@ -1,1 +1,26 @@
 @import "tailwindcss";
+
+@theme {
+  --color-brand-primary: #f5a623;
+  --color-brand-secondary: #ffd05b;
+  --color-brand-dark: #1a1a1a;
+  --color-brand-gray: #7a7a7a;
+  --color-brand-light: #f9f9f9;
+  --radius-brand: 1.5rem;
+}
+
+@layer base {
+  body {
+    @apply bg-brand-light text-brand-dark font-sans selection:bg-brand-primary/20 selection:text-brand-primary;
+  }
+}
+
+@layer components {
+  .btn-brand {
+    @apply bg-brand-primary hover:bg-[#e6951f] text-white font-bold py-3 px-6 rounded-brand transition-all active:scale-95 shadow-lg shadow-brand-primary/20;
+  }
+  
+  .card-brand {
+    @apply bg-white border border-gray-100 rounded-brand p-6 shadow-sm;
+  }
+}

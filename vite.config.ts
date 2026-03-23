@@ -14,10 +14,10 @@ export default defineConfig(({mode}) => {
         registerType: 'autoUpdate',
         includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'mask-icon.svg'],
         manifest: {
-          name: 'AgriMonitor',
-          short_name: 'AgriMonitor',
-          description: 'Control de Incubación y Nacedoras',
-          theme_color: '#2563eb', // blue-600
+          name: 'Incubant Monitor',
+          short_name: 'Incubant',
+          description: 'Sistema de Gestión y Monitoreo - Antioqueña de Incubación S.A.S.',
+          theme_color: '#f5a623',
           background_color: '#ffffff',
           display: 'standalone',
           icons: [

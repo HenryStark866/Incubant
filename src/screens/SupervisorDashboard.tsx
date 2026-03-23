@@ -7,6 +7,8 @@ import {
 import { 
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer 
 } from 'recharts';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 const MOCK_OPERATORS = [
   { id: 1, name: 'Juan Pérez', shift: 'Mañana (06:00 - 14:00)', status: 'Activo' },
@@ -63,7 +65,110 @@ export default function SupervisorDashboard() {
   const activeAlarms = machinesData.filter(m => m.status === 'alarm').length;
 
   const handleDownloadReport = () => {
-    window.open('/api/reports/latest', '_blank');
+    try {
+      const doc = new jsPDF();
+      
+      // Header y Logo corporativo (texto figurativo)
+      doc.setFontSize(22);
+      doc.setTextColor(245, 166, 35); // Naranja Incubant
+      doc.setFont("helvetica", "bold");
+      doc.text('INCUBANT MONITOR', 14, 20);
+      
+      doc.setFontSize(12);
+      doc.setTextColor(50, 50, 50);
+      doc.text('REPORTE Y CONTROL DIARIO DE MÁQUINAS (INCUBADORAS Y NACEDORAS)', 14, 28);
+      
+      doc.setFontSize(10);
+      doc.setTextColor(100, 100, 100);
+      doc.setFont("helvetica", "normal");
+      doc.text(`Fecha de Reporte: ${new Date().toLocaleDateString()} a las ${new Date().toLocaleTimeString()}`, 14, 35);
+      doc.text(`Operario Responsable: Juan Pérez (Supervisor de Turno)`, 14, 40);
+
+      // Preparar datos para las Incubadoras
+      const incubadoras = machinesData.filter(m => m.type === 'incubadora');
+      const tableDataIncubadoras = incubadoras.map(m => [
+        m.name.replace('Incubadora ', ''),
+        m.status === 'alarm' ? 'Alarma' : m.status === 'maintenance' ? 'Mantenim.' : 'OK',
+        m.data?.diaIncubacion || m.incubatorDay || '--',
+        m.data?.tempOvoscan || m.temp || '--',
+        m.data?.tempAire || '--',
+        m.data?.humedadRelativa || m.humidity || '--',
+        m.data?.co2 || '--',
+        m.data?.volteoNumero || '--',
+        m.data?.volteoPosicion || '--',
+        m.data?.alarma || 'No',
+        m.data?.observaciones?.substring(0, 30) || ''
+      ]);
+
+      doc.setFontSize(14);
+      doc.setTextColor(0, 0, 0);
+      doc.setFont("helvetica", "bold");
+      doc.text('CONTROL DIARIO INCUBADORAS', 14, 55);
+
+      autoTable(doc, {
+        startY: 60,
+        head: [['N°', 'Estado', 'Día', 'T.Ovo', 'T.Aire', 'Hum %', 'CO2', 'V/N°', 'V/Pos', 'Alarma', 'Observaciones']],
+        body: tableDataIncubadoras,
+        theme: 'grid',
+        headStyles: { fillColor: [245, 166, 35], textColor: 255, fontSize: 8, fontStyle: 'bold' },
+        styles: { fontSize: 7, cellPadding: 2 },
+        alternateRowStyles: { fillColor: [245, 245, 245] },
+      });
+
+      // Preparar datos para las Nacedoras
+      const currentY = (doc as any).lastAutoTable.finalY + 15;
+      const nacedoras = machinesData.filter(m => m.type === 'nacedora');
+      const tableDataNacedoras = nacedoras.map(m => [
+        m.name.replace('Nacedora ', ''),
+        m.status === 'alarm' ? 'Alarma' : m.status === 'maintenance' ? 'Mantenim.' : 'OK',
+        m.data?.diaIncubacion || m.incubatorDay || '--',
+        m.data?.temperatura || m.temp || '--',
+        m.data?.humedadRelativa || m.humidity || '--',
+        m.data?.co2 || '--',
+        m.data?.observaciones?.substring(0, 40) || ''
+      ]);
+
+      // Comprobar si hay espacio para las nacedoras, o crear nueva página
+      if (currentY > 250) {
+        doc.addPage();
+        doc.text('CONTROL DIARIO NACEDORAS', 14, 20);
+        autoTable(doc, {
+          startY: 25,
+          head: [['N°', 'Estado', 'Día Inc.', 'Temp °C', 'Hum %', 'CO2', 'Observaciones']],
+          body: tableDataNacedoras,
+          theme: 'grid',
+          headStyles: { fillColor: [100, 100, 100], textColor: 255, fontSize: 8, fontStyle: 'bold' },
+          styles: { fontSize: 8, cellPadding: 2 },
+          alternateRowStyles: { fillColor: [245, 245, 245] },
+        });
+      } else {
+        doc.text('CONTROL DIARIO NACEDORAS', 14, currentY);
+        autoTable(doc, {
+          startY: currentY + 5,
+          head: [['N°', 'Estado', 'Día Inc.', 'Temp °C', 'Hum %', 'CO2', 'Observaciones']],
+          body: tableDataNacedoras,
+          theme: 'grid',
+          headStyles: { fillColor: [100, 100, 100], textColor: 255, fontSize: 8, fontStyle: 'bold' },
+          styles: { fontSize: 8, cellPadding: 2 },
+          alternateRowStyles: { fillColor: [245, 245, 245] },
+        });
+      }
+
+      // Pie de página
+      const pageCount = (doc.internal as any).getNumberOfPages();
+      for (let i = 1; i <= pageCount; i++) {
+        doc.setPage(i);
+        doc.setFontSize(8);
+        doc.setTextColor(150, 150, 150);
+        doc.text(`Documento Confidencial - Incubant © ${new Date().getFullYear()} | Página ${i} de ${pageCount}`, 14, 290);
+      }
+
+      // Forzar la descarga en el cliente
+      doc.save(`Control_Diario_${new Date().toISOString().split('T')[0]}.pdf`);
+    } catch (error) {
+      console.error('Error al generar PDF:', error);
+      alert('Error al compilar el documento. Verifica si hay datos disponibles.');
+    }
   };
 
   if (isLoading) {

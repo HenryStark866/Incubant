@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useMachineStore, MachineType } from '../store/useMachineStore';
-import { CheckCircle2, Clock, ThermometerSun, UploadCloud, Loader2, LogOut } from 'lucide-react';
+import { CheckCircle2, Clock, UploadCloud, Loader2, LogOut, ChevronRight } from 'lucide-react';
 
 export default function DashboardScreen() {
   const [activeTab, setActiveTab] = useState<MachineType>('incubadora');
@@ -76,137 +76,152 @@ export default function DashboardScreen() {
   };
 
   return (
-    <div className="flex flex-col h-full bg-white relative">
+    <div className="flex flex-col h-full bg-[#F5F5F7] relative font-sans">
       {/* Overlay de Sincronización */}
       {(isSyncing || syncSuccess) && (
-        <div className="absolute inset-0 z-50 bg-brand-dark/40 backdrop-blur-sm flex items-center justify-center p-6">
-          <div className="bg-white rounded-[2.5rem] p-10 flex flex-col items-center text-center w-full max-w-sm shadow-2xl animate-in fade-in zoom-in duration-200 border-2 border-brand-primary/10">
+        <div className="absolute inset-0 z-50 bg-[#1A1A1A]/40 backdrop-blur-sm flex items-center justify-center p-6">
+          <div className="bg-white rounded-3xl p-10 flex flex-col items-center text-center w-full max-w-sm shadow-2xl animate-in fade-in zoom-in duration-200">
             {isSyncing ? (
               <>
-                <Loader2 className="w-20 h-20 text-brand-primary animate-spin mb-6" />
-                <h2 className="text-2xl font-black text-brand-dark mb-2">Sincronizando...</h2>
-                <p className="text-brand-gray font-medium">Actualizando registros en la nube</p>
+                <Loader2 className="w-16 h-16 text-[#F5A623] animate-spin mb-6" />
+                <h2 className="text-2xl font-bold text-[#1A1A1A] mb-2">Sincronizando...</h2>
+                <p className="text-gray-500 font-medium">Actualizando registros en la nube</p>
               </>
             ) : (
               <>
                 <div className="w-20 h-20 bg-green-50 rounded-full flex items-center justify-center mb-6">
                   <CheckCircle2 className="w-12 h-12 text-green-500" />
                 </div>
-                <h2 className="text-2xl font-black text-brand-dark mb-2">¡Completado!</h2>
-                <p className="text-brand-gray font-medium">Los datos se han guardado correctamente.</p>
+                <h2 className="text-2xl font-bold text-[#1A1A1A] mb-2">¡Completado!</h2>
+                <p className="text-gray-500 font-medium">Los datos se han guardado correctamente.</p>
               </>
             )}
           </div>
         </div>
       )}
 
-      {/* Header */}
-      <div className="bg-brand-secondary/20 p-5 border-b-2 border-brand-primary/10 z-10">
-        <div className="flex items-center justify-between mb-5">
-          <div className="flex items-center gap-3">
-            <img src="/logo.png" alt="Incubant" className="h-10 w-auto" />
-            <div className="h-8 w-[2px] bg-brand-primary/20 mx-1"></div>
+      {/* Header Corporativo */}
+      <div className="bg-white px-6 py-5 border-b border-gray-200 shadow-sm z-10">
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-4">
+            <img src="/logo.png" alt="Incubant" className="h-8 w-auto object-contain" />
+            <div className="h-8 w-px bg-gray-200"></div>
             <div>
-              <p className="text-[10px] text-brand-gray font-bold uppercase tracking-wider">Operario</p>
-              <p className="text-sm font-black text-brand-dark leading-none">{currentUser?.name}</p>
+              <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">Operario Activo</p>
+              <p className="text-sm font-bold text-[#1A1A1A]">{currentUser?.name}</p>
             </div>
           </div>
           <button 
             onClick={logout}
-            className="p-3 bg-white text-brand-gray rounded-2xl hover:text-red-500 transition-colors shadow-sm border border-gray-100 active:scale-90"
+            className="p-3 bg-[#F5F5F7] text-gray-500 rounded-xl hover:text-red-500 hover:bg-red-50 transition-colors active:scale-95"
           >
             <LogOut size={20} />
           </button>
         </div>
 
-        {/* Tabs */}
-        <div className="flex bg-gray-100/50 rounded-2xl p-1.5 border border-gray-100 shadow-inner">
+        {/* Tabs de Navegación */}
+        <div className="flex bg-[#F5F5F7] rounded-xl p-1.5 border border-gray-200">
           <button
             onClick={() => setActiveTab('incubadora')}
-            className={`flex-1 py-3 text-xs font-bold rounded-xl transition-all ${
-              activeTab === 'incubadora' ? 'bg-brand-primary text-white shadow-lg shadow-brand-primary/20 scale-[1.02]' : 'text-brand-gray hover:text-brand-dark'
+            className={`flex-1 py-3 text-sm font-bold rounded-lg transition-all ${
+              activeTab === 'incubadora' 
+                ? 'bg-white text-[#1A1A1A] shadow-sm' 
+                : 'text-gray-400 hover:text-gray-600'
             }`}
           >
-            Incubadoras (24)
+            Incubadoras
           </button>
           <button
             onClick={() => setActiveTab('nacedora')}
-            className={`flex-1 py-3 text-xs font-bold rounded-xl transition-all ${
-              activeTab === 'nacedora' ? 'bg-brand-primary text-white shadow-lg shadow-brand-primary/20 scale-[1.02]' : 'text-brand-gray hover:text-brand-dark'
+            className={`flex-1 py-3 text-sm font-bold rounded-lg transition-all ${
+              activeTab === 'nacedora' 
+                ? 'bg-white text-[#1A1A1A] shadow-sm' 
+                : 'text-gray-400 hover:text-gray-600'
             }`}
           >
-            Nacedoras (12)
+            Nacedoras
           </button>
         </div>
       </div>
 
-      {/* Stats */}
-      <div className="flex gap-4 p-5 bg-white border-b border-gray-100 shadow-sm z-10">
-        <div className="flex-1 bg-brand-secondary/5 p-4 rounded-2xl border border-brand-secondary/20 flex items-center gap-4">
-          <div className="p-2 bg-white rounded-xl shadow-sm">
-            <Clock className="text-brand-primary" size={20} />
+      {/* Resumen / Stats */}
+      <div className="px-6 py-5">
+        <div className="flex gap-4">
+          <div className="flex-1 bg-white p-4 rounded-2xl border border-gray-100 shadow-sm flex items-center gap-4">
+            <div className="p-3 bg-orange-50 rounded-xl">
+              <Clock className="text-[#F5A623]" size={22} />
+            </div>
+            <div>
+              <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Pendientes</p>
+              <p className="text-2xl font-black text-[#1A1A1A] leading-none mt-1">{pendingCount}</p>
+            </div>
           </div>
-          <div>
-            <p className="text-[9px] text-brand-gray font-bold uppercase tracking-widest">Pendientes</p>
-            <p className="text-2xl font-black text-brand-dark leading-none">{pendingCount}</p>
-          </div>
-        </div>
-        <div className="flex-1 bg-green-50/50 p-4 rounded-2xl border border-green-100 flex items-center gap-4">
-          <div className="p-2 bg-white rounded-xl shadow-sm">
-            <CheckCircle2 className="text-green-500" size={20} />
-          </div>
-          <div>
-            <p className="text-[9px] text-brand-gray font-bold uppercase tracking-widest">Revisadas</p>
-            <p className="text-2xl font-black text-brand-dark leading-none">{completedCount}</p>
+          <div className="flex-1 bg-white p-4 rounded-2xl border border-gray-100 shadow-sm flex items-center gap-4">
+            <div className="p-3 bg-green-50 rounded-xl">
+              <CheckCircle2 className="text-green-500" size={22} />
+            </div>
+            <div>
+              <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Completadas</p>
+              <p className="text-2xl font-black text-[#1A1A1A] leading-none mt-1">{completedCount}</p>
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Grid */}
-      <div className="flex-1 overflow-y-auto p-5 pb-32">
-        <div className="grid grid-cols-3 gap-4">
+      {/* Grid de Máquinas */}
+      <div className="flex-1 overflow-y-auto px-6 pb-32">
+        <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">
+          Listado de {activeTab === 'incubadora' ? 'Incubadoras' : 'Nacedoras'}
+        </h3>
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
           {filteredMachines.map(machine => (
             <button
               key={machine.id}
               onClick={() => handleMachineClick(machine.id, machine.status)}
-              className={`relative p-5 rounded-[1.8rem] border-2 flex flex-col items-center justify-center gap-1 transition-all active:scale-95 ${
+              disabled={machine.status === 'completed'}
+              className={`relative p-4 rounded-2xl border flex flex-row items-center justify-between transition-all active:scale-95 ${
                 machine.status === 'completed'
-                  ? 'bg-green-50/30 border-green-500/50 text-green-700 shadow-sm shadow-green-100'
-                  : 'bg-white border-gray-100 text-brand-dark shadow-sm hover:border-brand-primary/30'
+                  ? 'bg-green-50/50 border-green-200 text-green-700'
+                  : 'bg-white border-gray-200 text-[#1A1A1A] shadow-sm hover:border-[#F5A623]/50'
               }`}
             >
-              <span className="text-3xl font-black tracking-tighter">{machine.number}</span>
-              <span className={`text-[8px] uppercase font-black tracking-widest ${
-                machine.status === 'completed' ? 'text-green-600' : 'text-brand-gray opacity-60'
-              }`}>
-                {machine.status === 'completed' ? 'OK' : 'VER'}
-              </span>
+              <div className="flex flex-col items-start gap-1">
+                <span className="text-2xl font-black tracking-tight">{machine.number}</span>
+                <span className={`text-[10px] font-bold uppercase tracking-wider ${
+                  machine.status === 'completed' ? 'text-green-600' : 'text-gray-400'
+                }`}>
+                  {machine.status === 'completed' ? 'Revisada' : 'Pendiente'}
+                </span>
+              </div>
               
-              {machine.status === 'completed' && (
-                <div className="absolute -top-1 -right-1 bg-green-500 text-white rounded-full p-1 shadow-md">
-                  <CheckCircle2 size={12} strokeWidth={4} />
+              {machine.status === 'completed' ? (
+                <div className="bg-white rounded-full p-1 shadow-sm border border-green-100">
+                  <CheckCircle2 size={16} className="text-green-500" strokeWidth={3} />
                 </div>
+              ) : (
+                <ChevronRight size={20} className="text-gray-300" />
               )}
             </button>
           ))}
         </div>
       </div>
 
-      {/* Sync Button */}
-      <div className="absolute bottom-0 inset-x-0 p-6 bg-white/80 backdrop-blur-md border-t border-gray-100 shadow-[0_-15px_30px_rgba(0,0,0,0.03)] z-20">
+      {/* Botón de Sincronización */}
+      <div className="absolute bottom-0 inset-x-0 p-6 bg-gradient-to-t from-[#F5F5F7] via-[#F5F5F7] to-transparent z-20">
         <button 
           onClick={handleSync}
           disabled={!allCompleted || isSyncing}
-          className={`w-full py-5 rounded-2xl font-black text-lg flex items-center justify-center gap-3 transition-all shadow-xl uppercase tracking-widest ${
+          className={`w-full py-4 rounded-2xl font-bold text-base flex items-center justify-center gap-3 transition-all uppercase tracking-wide ${
             allCompleted 
-              ? 'bg-brand-primary text-white active:bg-[#E6951F] shadow-brand-primary/30' 
-              : 'bg-gray-100 text-brand-gray/40 shadow-none cursor-not-allowed border border-gray-100'
+              ? 'bg-[#F5A623] text-white active:bg-[#e0961d] shadow-lg shadow-[#F5A623]/30' 
+              : 'bg-gray-200 text-gray-400 cursor-not-allowed border border-gray-300'
           }`}
         >
-          <UploadCloud size={24} />
-          {allCompleted ? 'Finalizar Recorrido' : `Pendientes: ${pendingCount}`}
+          <UploadCloud size={22} />
+          {allCompleted ? 'Sincronizar Datos' : `Faltan ${pendingCount} revisiones`}
         </button>
       </div>
     </div>
   );
 }
+

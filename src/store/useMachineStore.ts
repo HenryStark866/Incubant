@@ -11,10 +11,17 @@ export interface User {
 }
 
 export interface MachineData {
-  temperatura: string;
-  humedad: string;
   diaIncubacion: string;
-  numeroVolteos?: string; // Solo para incubadoras
+  // Para Incubadoras
+  tempOvoscan?: string;
+  tempAire?: string;
+  volteoNumero?: string;
+  volteoPosicion?: string;
+  alarma?: 'Si' | 'No';
+  // Para Nacedoras (o general)
+  temperatura?: string; 
+  humedadRelativa: string;
+  co2: string;
   observaciones: string;
 }
 

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { 
   Activity, AlertTriangle, Clock, Users, LayoutDashboard, 
   Settings, ChevronDown, X, Image as ImageIcon, CheckCircle2,
-  Download, Loader2, Leaf
+  Download, Loader2, Egg
 } from 'lucide-react';
 import { 
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer 
@@ -188,7 +188,7 @@ export default function SupervisorDashboard() {
         <div className="p-8 flex flex-col items-center gap-4 border-b border-gray-50 bg-brand-secondary/5">
         <div className="flex items-center gap-2 mb-2">
           <div className="bg-brand-primary p-2 rounded-xl text-white shadow-md">
-            <Leaf size={24} />
+            <Egg size={24} />
           </div>
           <div className="flex flex-col">
             <span className="text-2xl font-black text-brand-dark tracking-tight leading-none">INCUBANT</span>

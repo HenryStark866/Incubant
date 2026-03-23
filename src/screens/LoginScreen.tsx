@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useMachineStore } from '../store/useMachineStore';
-import { ThermometerSun, LogIn, AlertCircle, Loader2, Leaf } from 'lucide-react';
+import { ThermometerSun, LogIn, AlertCircle, Loader2, Egg } from 'lucide-react';
 import { requestNotificationPermission, scheduleHourlyNotifications } from '../utils/notifications';
 
 export default function LoginScreen() {
@@ -54,7 +54,7 @@ export default function LoginScreen() {
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_to_bottom_right,rgba(245,166,35,0.1),transparent)] flex items-center justify-center"></div>
         <div className="flex items-center gap-2 mb-4 relative z-10">
           <div className="bg-brand-primary p-2.5 rounded-2xl text-white shadow-xl">
-            <Leaf size={32} />
+            <Egg size={32} />
           </div>
           <div className="flex flex-col">
             <span className="text-3xl font-black text-brand-dark tracking-tighter leading-none">INCUBANT</span>

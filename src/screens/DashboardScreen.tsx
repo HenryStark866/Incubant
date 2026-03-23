@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useMachineStore, MachineType } from '../store/useMachineStore';
-import { CheckCircle2, Clock, UploadCloud, Loader2, LogOut, ChevronRight, Leaf } from 'lucide-react';
+import { CheckCircle2, Clock, UploadCloud, Loader2, LogOut, ChevronRight, Egg } from 'lucide-react';
 
 export default function DashboardScreen() {
   const [activeTab, setActiveTab] = useState<MachineType>('incubadora');
@@ -106,7 +106,7 @@ export default function DashboardScreen() {
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-2">
               <div className="bg-brand-primary p-1.5 rounded-lg text-white shadow-sm">
-                <Leaf size={18} />
+                <Egg size={18} />
               </div>
               <span className="text-lg font-black text-brand-dark tracking-tight leading-none pb-0.5 pointer-events-none">INCUBANT</span>
             </div>

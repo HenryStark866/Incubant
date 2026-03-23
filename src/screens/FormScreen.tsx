@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { useMachineStore, MachineData } from '../store/useMachineStore';
-import { ChevronLeft, Save, AlertCircle, Thermometer, Droplets, Calendar, RotateCw, Wind, Bell, MessageSquare, Activity, CheckCircle2, Leaf } from 'lucide-react';
+import { ChevronLeft, Save, AlertCircle, Thermometer, Droplets, Calendar, RotateCw, Wind, Bell, MessageSquare, Activity, CheckCircle2, Egg } from 'lucide-react';
 
 // Focus Fix: Move InputField component OUTSIDE the main render function
 const InputField = React.memo(({ 
@@ -156,7 +156,7 @@ export default function FormScreen() {
           <div>
              <div className="flex items-center gap-1.5 mb-2">
                <div className="bg-brand-primary p-1 rounded text-white shadow-sm">
-                 <Leaf size={14} />
+                 <Egg size={14} />
                </div>
                <span className="text-sm font-black text-brand-dark tracking-tight leading-none pointer-events-none">INCUBANT</span>
              </div>

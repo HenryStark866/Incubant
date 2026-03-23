@@ -392,12 +392,30 @@ export default function SupervisorDashboard() {
                   <div className="grid grid-cols-2 gap-4">
                     <div className="bg-gray-50/50 p-5 rounded-3xl border border-gray-100 shadow-inner">
                       <p className="text-[10px] font-bold text-brand-gray mb-1 uppercase tracking-widest">Temperatura</p>
-                      <p className="text-2xl font-black text-brand-primary">{selectedMachine.temp}°C</p>
+                      <p className="text-2xl font-black text-brand-primary">
+                        {selectedMachine.data?.temperatura || selectedMachine.temp || '--'}°C
+                      </p>
                     </div>
                     <div className="bg-gray-50/50 p-5 rounded-3xl border border-gray-100 shadow-inner">
                       <p className="text-[10px] font-bold text-brand-gray mb-1 uppercase tracking-widest">Humedad</p>
-                      <p className="text-2xl font-black text-brand-primary">{selectedMachine.humidity}%</p>
+                      <p className="text-2xl font-black text-brand-primary">
+                        {selectedMachine.data?.humedad || selectedMachine.humidity || '--'}%
+                      </p>
                     </div>
+                    <div className="bg-gray-50/50 p-5 rounded-3xl border border-gray-100 shadow-inner">
+                      <p className="text-[10px] font-bold text-brand-gray mb-1 uppercase tracking-widest">Día</p>
+                      <p className="text-2xl font-black text-brand-primary">
+                        {selectedMachine.data?.diaIncubacion || '--'}
+                      </p>
+                    </div>
+                    {selectedMachine.type === 'incubadora' && (
+                      <div className="bg-gray-50/50 p-5 rounded-3xl border border-gray-100 shadow-inner">
+                        <p className="text-[10px] font-bold text-brand-gray mb-1 uppercase tracking-widest">Volteos</p>
+                        <p className="text-2xl font-black text-brand-primary">
+                          {selectedMachine.data?.numeroVolteos || '--'}
+                        </p>
+                      </div>
+                    )}
                   </div>
                 </div>
 

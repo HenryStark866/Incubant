@@ -11,15 +11,10 @@ export interface User {
 }
 
 export interface MachineData {
-  tempPrincipalActual: string;
-  tempPrincipalConsigna: string;
-  co2Actual: string;
-  co2Consigna: string;
-  ventiladorVelocidad: string;
-  tempSecundariaActual: string;
-  tempSecundariaConsigna: string;
-  tempSuperiorActual: string;
-  tempSuperiorNA: boolean;
+  temperatura: string;
+  humedad: string;
+  diaIncubacion: string;
+  numeroVolteos?: string; // Solo para incubadoras
   observaciones: string;
 }
 

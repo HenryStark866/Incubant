@@ -1,10 +1,8 @@
 import express from 'express';
 import { PrismaClient } from '@prisma/client';
-import cron from 'node-cron';
 import { createServer as createViteServer } from 'vite';
 import path from 'path';
 import fs from 'fs';
-import PDFDocument from 'pdfkit';
 
 const prisma = new PrismaClient();
 
@@ -193,104 +191,29 @@ async function startServer() {
     }
   });
 
-  app.get('/api/reports/latest', (req, res) => {
-    const reportsDir = path.join(process.cwd(), 'reports');
-    if (!fs.existsSync(reportsDir)) {
-      return res.status(404).json({ error: 'No hay reportes disponibles' });
-    }
-
-    const files = fs.readdirSync(reportsDir).filter(f => f.endsWith('.pdf'));
-    if (files.length === 0) {
-      return res.status(404).json({ error: 'No hay reportes disponibles' });
-    }
-
-    // Obtener el más reciente
-    files.sort((a, b) => {
-      return fs.statSync(path.join(reportsDir, b)).mtime.getTime() - 
-             fs.statSync(path.join(reportsDir, a)).mtime.getTime();
-    });
-
-    const latestFile = files[0];
-    res.download(path.join(reportsDir, latestFile));
-  });
-
-  // 3. Estructura del Cron Job (Reporte 7h 40m)
-  const generarReporteTurno = async () => {
-    console.log("Generando reporte de turno para Supervisor...");
-    
-    // Calcular la fecha hace 7 horas y 40 minutos (460 minutos)
-    const hace7h40m = new Date(Date.now() - 460 * 60 * 1000);
-    let registros: any[] = [];
-
+  app.get('/api/dashboard/operators', async (req, res) => {
     try {
-      registros = await prisma.hourlyLog.findMany({
-        where: {
-          fecha_hora: {
-            gte: hace7h40m
-          }
-        },
-        include: {
-          user: true,
-          machine: true
+      const users = await prisma.user.findMany({
+        select: {
+          id: true,
+          nombre: true,
+          rol: true
         }
       });
-      console.log(`Se encontraron ${registros.length} registros en el último turno de 7h 40m.`);
+      // Mapear rol a turno / estado por defecto si no existe info de turno
+      const mappedUsers = users.map(user => ({
+        id: user.id,
+        name: user.nombre,
+        role: user.rol,
+        shift: user.rol === 'SUPERVISOR' || user.rol === 'ADMIN' ? 'Gestión' : 'Rotativo',
+        status: 'Activo'
+      }));
+      res.json(mappedUsers);
     } catch (error) {
-      console.error("Error al generar el reporte (posiblemente sin BD):", error);
-      // Continuamos para generar un PDF vacío o de prueba
+      console.error('Error fetching operators:', error);
+      res.status(500).json({ error: 'Failed to fetch operators' });
     }
-
-    try {
-      const reportsDir = path.join(process.cwd(), 'reports');
-      if (!fs.existsSync(reportsDir)) {
-        fs.mkdirSync(reportsDir, { recursive: true });
-      }
-
-      const fileName = `Reporte_Turno_${Date.now()}.pdf`;
-      const filePath = path.join(reportsDir, fileName);
-      
-      const doc = new PDFDocument();
-      doc.pipe(fs.createWriteStream(filePath));
-      
-      doc.fontSize(20).text('Reporte de Turno - Planta de Incubación', { align: 'center' });
-      doc.moveDown();
-      doc.fontSize(12).text(`Fecha y Hora: ${new Date().toLocaleString()}`);
-      
-      const operario = registros.length > 0 ? registros[0].user.nombre : 'Juan Pérez (Simulado)';
-      doc.text(`Operario a cargo: ${operario}`);
-      doc.moveDown();
-
-      let sumTemp = 0, sumHum = 0, alarmas = 0;
-      registros.forEach(r => {
-        sumTemp += r.temp_principal_actual;
-        sumHum += r.co2_actual;
-        if (Math.abs(r.temp_principal_actual - r.temp_principal_consigna) > 0.5) alarmas++;
-      });
-      
-      const avgTemp = registros.length ? (sumTemp / registros.length).toFixed(2) : '37.5';
-      const avgHum = registros.length ? (sumHum / registros.length).toFixed(2) : '55.0';
-
-      doc.text(`Promedio Temperatura: ${avgTemp}°C`);
-      doc.text(`Promedio Humedad/CO2: ${avgHum}%`);
-      doc.text(`Total Alarmas (Fuera de rango): ${alarmas}`);
-      
-      doc.end();
-      console.log(`Reporte PDF generado: ${fileName}`);
-    } catch (pdfErr) {
-      console.error("Error al generar PDF:", pdfErr);
-    }
-  };
-
-  // Ejecutar a las 13:40 y 21:40
-  cron.schedule('40 13,21 * * *', generarReporteTurno);
-  // Ejecutar a las 06:00
-  cron.schedule('0 6 * * *', generarReporteTurno);
-
-  // Generate an initial report if none exist
-  const reportsDir = path.join(process.cwd(), 'reports');
-  if (!fs.existsSync(reportsDir) || fs.readdirSync(reportsDir).filter(f => f.endsWith('.pdf')).length === 0) {
-    generarReporteTurno();
-  }
+  });
 
   // Vite middleware for development (Frontend)
   if (process.env.NODE_ENV !== "production") {

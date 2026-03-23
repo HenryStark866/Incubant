@@ -10,11 +10,7 @@ import {
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
-const MOCK_OPERATORS = [
-  { id: 1, name: 'Juan Pérez', shift: 'Mañana (06:00 - 14:00)', status: 'Activo' },
-  { id: 2, name: 'María Gómez', shift: 'Tarde (14:00 - 22:00)', status: 'Descanso' },
-  { id: 3, name: 'Carlos Ruiz', shift: 'Noche (22:00 - 06:00)', status: 'Descanso' },
-];
+// Operadores se cargarán dinámicamente desde la BD
 
 export default function SupervisorDashboard() {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'personal'>('dashboard');
@@ -23,35 +19,45 @@ export default function SupervisorDashboard() {
 
   const [machinesData, setMachinesData] = useState<any[]>([]);
   const [trendsData, setTrendsData] = useState<any[]>([]);
+  const [operatorsData, setOperatorsData] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const [statusRes, trendsRes] = await Promise.all([
-          fetch('/api/dashboard/status'),
-          fetch('/api/dashboard/trends')
-        ]);
-        
-        const statusJson = await statusRes.json();
-        const trendsJson = await trendsRes.json();
-        
-        if (statusRes.ok && Array.isArray(statusJson)) {
-          setMachinesData(statusJson);
-        } else {
-          setMachinesData([]);
-        }
+      const fetchData = async () => {
+        try {
+          const [statusRes, trendsRes, operatorsRes] = await Promise.all([
+            fetch('/api/dashboard/status'),
+            fetch('/api/dashboard/trends'),
+            fetch('/api/dashboard/operators')
+          ]);
+          
+          const statusJson = await statusRes.json();
+          const trendsJson = await trendsRes.json();
+          const operatorsJson = await operatorsRes.json();
+          
+          if (statusRes.ok && Array.isArray(statusJson)) {
+            setMachinesData(statusJson);
+          } else {
+            setMachinesData([]);
+          }
+  
+          if (trendsRes.ok && Array.isArray(trendsJson)) {
+            setTrendsData(trendsJson);
+          } else {
+            setTrendsData([]);
+          }
 
-        if (trendsRes.ok && Array.isArray(trendsJson)) {
-          setTrendsData(trendsJson);
-        } else {
+          if (operatorsRes.ok && Array.isArray(operatorsJson)) {
+            setOperatorsData(operatorsJson);
+          } else {
+            setOperatorsData([]);
+          }
+        } catch (error) {
+          console.error("Error fetching dashboard data:", error);
+          setMachinesData([]);
           setTrendsData([]);
-        }
-      } catch (error) {
-        console.error("Error fetching dashboard data:", error);
-        setMachinesData([]);
-        setTrendsData([]);
-      } finally {
+          setOperatorsData([]);
+        } finally {
         setIsLoading(false);
       }
     };
@@ -439,13 +445,16 @@ export default function SupervisorDashboard() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50">
-                  {MOCK_OPERATORS.map(op => (
+                  {operatorsData.length > 0 ? operatorsData.map(op => (
                     <tr key={op.id} className="hover:bg-brand-secondary/5 transition-colors group">
                       <td className="px-8 py-5 font-bold text-brand-dark flex items-center gap-4">
                         <div className="w-10 h-10 rounded-xl bg-brand-primary/10 flex items-center justify-center text-sm text-brand-primary font-black shadow-inner">
-                          {op.name.charAt(0)}
+                          {op.name ? op.name.charAt(0).toUpperCase() : '?'}
                         </div>
-                        {op.name}
+                        <div className="flex flex-col">
+                          <span>{op.name}</span>
+                          <span className="text-[10px] text-brand-gray tracking-widest uppercase">{op.role}</span>
+                        </div>
                       </td>
                       <td className="px-8 py-5 text-brand-gray font-medium">{op.shift}</td>
                       <td className="px-8 py-5">
@@ -461,7 +470,13 @@ export default function SupervisorDashboard() {
                         </button>
                       </td>
                     </tr>
-                  ))}
+                  )) : (
+                    <tr>
+                      <td colSpan={4} className="px-8 py-10 text-center text-brand-gray font-bold">
+                        No hay operarios registrados o no se pudo conectar a la base de datos.
+                      </td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </div>

@@ -1,0 +1,7 @@
+{
+  "name": "IncubantMonitor",
+  "description": "App de monitoreo para planta de incubación avícola",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}

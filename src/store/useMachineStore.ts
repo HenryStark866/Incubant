@@ -1,0 +1,92 @@
+import { create } from 'zustand';
+import { persist, createJSONStorage } from 'zustand/middleware';
+
+export type MachineType = 'incubadora' | 'nacedora';
+export type MachineStatus = 'pending' | 'completed';
+
+export interface User {
+  id: string;
+  name: string;
+  role: string;
+}
+
+export interface MachineData {
+  tempPrincipalActual: string;
+  tempPrincipalConsigna: string;
+  co2Actual: string;
+  co2Consigna: string;
+  ventiladorVelocidad: string;
+  tempSecundariaActual: string;
+  tempSecundariaConsigna: string;
+  tempSuperiorActual: string;
+  tempSuperiorNA: boolean;
+  observaciones: string;
+}
+
+export interface Machine {
+  id: string;
+  type: MachineType;
+  number: number;
+  status: MachineStatus;
+  lastChecked: string | null;
+  data?: MachineData;
+  photoUrl?: string;
+}
+
+interface MachineState {
+  machines: Machine[];
+  activeMachineId: string | null;
+  capturedPhoto: string | null;
+  currentUser: User | null;
+  login: (user: User) => void;
+  logout: () => void;
+  setActiveMachine: (id: string | null) => void;
+  setCapturedPhoto: (photo: string | null) => void;
+  saveMachineData: (id: string, data: MachineData, photoUrl: string) => void;
+  resetHourlyStatus: () => void;
+}
+
+// Generar datos iniciales
+const generateInitialMachines = (): Machine[] => {
+  const machines: Machine[] = [];
+  for (let i = 1; i <= 24; i++) {
+    machines.push({ id: `inc-${i}`, type: 'incubadora', number: i, status: 'pending', lastChecked: null });
+  }
+  for (let i = 1; i <= 12; i++) {
+    machines.push({ id: `nac-${i}`, type: 'nacedora', number: i, status: 'pending', lastChecked: null });
+  }
+  return machines;
+};
+
+export const useMachineStore = create<MachineState>()(
+  persist(
+    (set) => ({
+      machines: generateInitialMachines(),
+      activeMachineId: null,
+      capturedPhoto: null,
+      currentUser: null,
+      login: (user) => set({ currentUser: user }),
+      logout: () => set({ currentUser: null }),
+      setActiveMachine: (id) => set({ activeMachineId: id, capturedPhoto: null }),
+      setCapturedPhoto: (photo) => set({ capturedPhoto: photo }),
+      saveMachineData: (id, data, photoUrl) => set((state) => ({
+        machines: state.machines.map(m => 
+          m.id === id 
+            ? { ...m, status: 'completed', lastChecked: new Date().toISOString(), data, photoUrl } 
+            : m
+        ),
+        activeMachineId: null,
+        capturedPhoto: null
+      })),
+      resetHourlyStatus: () => set((state) => ({
+        machines: state.machines.map(m => ({ ...m, status: 'pending', lastChecked: null, data: undefined, photoUrl: undefined }))
+      }))
+    }),
+    {
+      name: 'agrimonitor-storage',
+      storage: createJSONStorage(() => localStorage),
+      // Omitir el estado temporal de la persistencia
+      partialize: (state) => ({ machines: state.machines, currentUser: state.currentUser }),
+    }
+  )
+);

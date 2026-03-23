@@ -1,0 +1,58 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  OPERARIO
+  SUPERVISOR
+  JEFE
+}
+
+enum MachineType {
+  INCUBADORA
+  NACEDORA
+}
+
+model User {
+  id         String      @id @default(uuid())
+  nombre     String
+  pin_acceso String      @unique
+  rol        Role        @default(OPERARIO)
+  logs       HourlyLog[]
+}
+
+model Machine {
+  id             String      @id @default(uuid())
+  tipo           MachineType
+  numero_maquina Int
+  logs           HourlyLog[]
+}
+
+model HourlyLog {
+  id                       String   @id @default(uuid())
+  fecha_hora               DateTime @default(now())
+  user_id                  String
+  machine_id               String
+  photo_url                String?
+  
+  temp_principal_actual    Float
+  temp_principal_consigna  Float
+  co2_actual               Float
+  co2_consigna             Float
+  fan_speed                Float
+  temp_secundaria_actual   Float
+  temp_secundaria_consigna Float
+  
+  is_na                    Boolean  @default(false)
+  temp_superior_actual     Float?
+  
+  observaciones            String?
+
+  user    User    @relation(fields: [user_id], references: [id])
+  machine Machine @relation(fields: [machine_id], references: [id])
+}

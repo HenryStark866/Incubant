@@ -82,8 +82,6 @@ export default function LoginScreen() {
             </label>
             <input
               type="text"
-              inputMode="numeric"
-              pattern="[0-9]*"
               value={operatorId}
               onChange={(e) => setOperatorId(e.target.value)}
               placeholder=""
@@ -97,9 +95,6 @@ export default function LoginScreen() {
             </label>
             <input
               type="password"
-              inputMode="numeric"
-              pattern="[0-9]*"
-              maxLength={4}
               value={pin}
               onChange={(e) => setPin(e.target.value)}
               placeholder="****"

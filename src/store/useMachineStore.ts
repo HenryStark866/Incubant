@@ -6,7 +6,7 @@ export type MachineStatus = 'pending' | 'completed';
 
 export interface User {
   id: string;
-  name: string;
+  nombre: string;
   role: string;
 }
 

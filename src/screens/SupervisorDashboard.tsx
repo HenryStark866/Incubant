@@ -9,6 +9,7 @@ import {
 } from 'recharts';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { useMachineStore } from '../store/useMachineStore';
 
 // Operadores se cargarán dinámicamente desde la BD
 
@@ -21,6 +22,56 @@ export default function SupervisorDashboard() {
   const [trendsData, setTrendsData] = useState<any[]>([]);
   const [operatorsData, setOperatorsData] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  
+    // Modal states
+  const [showCreateOperator, setShowCreateOperator] = useState(false);
+  const [isCreatingOperator, setIsCreatingOperator] = useState(false);
+  const [newOperator, setNewOperator] = useState({
+    name: '',
+    pin: '',
+    role: 'OPERARIO'
+  });
+  
+  const currentUser = useMachineStore(state => state.currentUser);
+
+  const handleCreateOperatorSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    // Validar PIN
+    if (newOperator.pin.length !== 4 || !/^\d+$/.test(newOperator.pin)) {
+      alert('El PIN debe ser exactamente 4 dígitos numéricos');
+      return;
+    }
+
+    setIsCreatingOperator(true);
+    try {
+      const response = await fetch('/api/operators', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(newOperator),
+      });
+
+      if (response.ok) {
+        const createdOperator = await response.json();
+        // Actualizar la lista de operadores
+        setOperatorsData(prev => [...prev, createdOperator]);
+        // Reset form
+        setNewOperator({ name: '', pin: '', role: 'OPERARIO' });
+        setShowCreateOperator(false);
+        alert('Operario creado exitosamente');
+      } else {
+        const errorData = await response.json();
+        alert(`Error: ${errorData.error || 'Error desconocido'}`);
+      }
+    } catch (error) {
+      console.error('Error creating operator:', error);
+      alert('Error de conexión. Por favor intente nuevamente.');
+    } finally {
+      setIsCreatingOperator(false);
+    }
+  };
 
   useEffect(() => {
       const fetchData = async () => {
@@ -87,8 +138,8 @@ export default function SupervisorDashboard() {
       doc.setFontSize(10);
       doc.setTextColor(100, 100, 100);
       doc.setFont("helvetica", "normal");
-      doc.text(`Fecha de Reporte: ${new Date().toLocaleDateString()} a las ${new Date().toLocaleTimeString()}`, 14, 35);
-      doc.text(`Operario Responsable: Juan Pérez (Supervisor de Turno)`, 14, 40);
+       doc.text(`Fecha de Reporte: ${new Date().toLocaleDateString()} a las ${new Date().toLocaleTimeString()}`, 14, 35);
+       doc.text(`Operario Responsable: ${currentUser?.nombre || 'Supervisor de Turno'}`, 14, 40);
 
       // Preparar datos para las Incubadoras
       const incubadoras = machinesData.filter(m => m.type === 'incubadora');
@@ -235,22 +286,91 @@ export default function SupervisorDashboard() {
         </div>
       </div>
 
-      {/* Main Content */}
-      <div className="flex-1 flex flex-col overflow-hidden">
+       {/* Main Content */}
+       <div className="flex-1 flex flex-col overflow-hidden">
+       
+       {/* Create Operator Modal */}
+       <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 hidden" id="createOperatorModal">
+         <div className="bg-white rounded-2xl w-full max-w-md p-6 shadow-xl transform transition-all duration-300">
+           <div className="flex justify-between items-start mb-4">
+             <h2 className="text-xl font-black text-brand-dark">Registrar Nuevo Operario</h2>
+             <button onClick={() => setShowCreateOperator(false)} className="text-gray-500 hover:text-gray-700">
+               <X size={24} />
+             </button>
+           </div>
+           
+           <form onSubmit={handleCreateOperatorSubmit} className="space-y-4">
+             <div>
+               <label className="block text-sm font-medium text-brand-gray mb-2">Nombre Completo</label>
+               <input 
+                 type="text"
+                 value={newOperator.name}
+                 onChange={(e) => setNewOperator({...newOperator, name: e.target.value})}
+                 required
+                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-primary focus:border-transparent"
+               />
+             </div>
+             
+             <div>
+               <label className="block text-sm font-medium text-brand-gray mb-2">PIN de Acceso (4 dígitos)</label>
+                <input 
+                  type="password"
+                  value={newOperator.pin}
+                  onChange={(e) => setNewOperator({...newOperator, pin: e.target.value})}
+                  maxLength={4}
+                  required
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-primary focus:border-transparent"
+                />
+             </div>
+             
+             <div>
+               <label className="block text-sm font-medium text-brand-gray mb-2">Rol</label>
+               <select 
+                 value={newOperator.role}
+                 onChange={(e) => setNewOperator({...newOperator, role: e.target.value})}
+                 required
+                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-primary focus:border-transparent"
+               >
+                 <option value="">Seleccione un rol</option>
+                 <option value="OPERARIO">Operario</option>
+                 <option value="SUPERVISOR">Supervisor</option>
+                 <option value="JEFE">Jefe / Administrador</option>
+               </select>
+             </div>
+             
+             <div className="flex justify-end space-x-3">
+               <button 
+                 type="button"
+                 onClick={() => setShowCreateOperator(false)}
+                 className="px-5 py-3 border border-gray-300 rounded-lg hover:bg-gray-50"
+               >
+                 Cancelar
+               </button>
+               <button 
+                 type="submit"
+                 disabled={isCreatingOperator}
+                 className={`px-5 py-3 bg-brand-primary text-white rounded-lg hover:bg-[#E6951F] disabled:opacity-50 disabled:cursor-not-allowed transition-colors`}
+               >
+                 {isCreatingOperator ? 'Creando...' : 'Crear Operario'}
+               </button>
+             </div>
+           </form>
+         </div>
+       </div>
            {/* Top Bar - KPIs */}
         <header className="h-24 bg-white border-b border-gray-100 flex items-center justify-between px-10 shrink-0 z-10">
           
           {/* Operario Info */}
-          <div className="flex items-center gap-8">
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 rounded-2xl bg-brand-primary/10 flex items-center justify-center border border-brand-primary/20 shadow-inner">
-                <Users size={24} className="text-brand-primary" />
-              </div>
-              <div>
-                <p className="text-[10px] text-brand-gray font-black uppercase tracking-widest">Supervisor de Turno</p>
-                <p className="text-base font-black text-brand-dark">Juan Pérez</p>
-              </div>
-            </div>
+             <div className="flex items-center gap-8">
+               <div className="flex items-center gap-4">
+                 <div className="w-12 h-12 rounded-2xl bg-brand-primary/10 flex items-center justify-center border border-brand-primary/20 shadow-inner">
+                   <Users size={24} className="text-brand-primary" />
+                 </div>
+                 <div>
+                   <p className="text-[10px] text-brand-gray font-black uppercase tracking-widest">Supervisor de Turno</p>
+                   <p className="text-base font-black text-brand-dark">{currentUser?.nombre || 'Supervisor de Turno'}</p>
+                 </div>
+               </div>
             
             <div className="w-56">
               <div className="flex justify-between text-[10px] mb-2 font-bold uppercase tracking-widest">
@@ -427,13 +547,16 @@ export default function SupervisorDashboard() {
             /* Personal Tab */
             <div className="bg-white border border-gray-100 rounded-[2rem] overflow-hidden shadow-sm">
               <div className="p-8 border-b border-gray-50 flex items-center justify-between">
-                <div>
-                  <h2 className="text-xl font-black text-brand-dark">Gestión de Personal</h2>
-                  <p className="text-sm text-brand-gray font-medium">Administración de turnos y operarios en planta</p>
-                </div>
-                <button className="bg-brand-primary/10 text-brand-primary px-6 py-2.5 rounded-xl text-sm font-black hover:bg-brand-primary hover:text-white transition-all">
-                  + Registrar Operario
-                </button>
+               <div>
+                 <h2 className="text-xl font-black text-brand-dark">Gestión de Personal</h2>
+                 <p className="text-sm text-brand-gray font-medium">Administración de turnos y operarios en planta</p>
+               </div>
+               <button 
+                 onClick={() => setShowCreateOperator(true)}
+                 className="bg-brand-primary/10 text-brand-primary px-6 py-2.5 rounded-xl text-sm font-black hover:bg-brand-primary hover:text-white transition-all"
+               >
+                 + Registrar Operario
+               </button>
               </div>
               <table className="w-full text-left text-sm">
                 <thead className="bg-gray-50 text-brand-gray uppercase text-[10px] font-black tracking-[0.2em]">

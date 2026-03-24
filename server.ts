@@ -12,32 +12,56 @@ async function startServer() {
 
   app.use(express.json());
 
-  // 1. Endpoint de Autenticación
-  app.post('/api/login', async (req, res) => {
-    const { id, pin } = req.body;
+   // 1. Endpoint de Autenticación
+   app.post('/api/login', async (req, res) => {
+     const { id, pin } = req.body;
 
-    // Lógica real con Prisma
-    try {
-      // Buscar usuario en la base de datos por string de ID
-      const user = await prisma.user.findUnique({ where: { id } }); 
-      
-      // Validar si el usuario existe, el pin coincide y si es operario o supervisor
-      if (user && user.pin_acceso === pin && (user.rol === 'OPERARIO' || user.rol === 'SUPERVISOR' || user.rol === 'ADMIN')) {
-        return res.status(200).json({ 
-          user: { 
-            id: user.id, 
-            name: user.nombre, 
-            role: user.rol 
-          } 
-        });
-      }
-    } catch (e) {
-      console.error('Error al intentar inicio de sesión en BD:', e);
-    }
+     // Lista de usuarios predefinidos (fallback cuando no hay BD o para credenciales específicas)
+     const predefinedUsers = [
+       { id: 'admin-user', nombre: 'Administrador', pin_acceso: '4753', rol: 'JEFE' }, // admin
+       { id: 'elkin-user', nombre: 'Elkin Cavadia', pin_acceso: '11168', rol: 'JEFE' }, // Jefe de planta
+       { id: 'juanalejandro-user', nombre: 'Juan Alejandro', pin_acceso: '1111', rol: 'OPERARIO' }, // operario turno 1
+       { id: 'juansuaza-user', nombre: 'Juan Suaza', pin_acceso: '2222', rol: 'OPERARIO' }, // operario turno 2
+       { id: 'ferney-user', nombre: 'Ferney Tabares', pin_acceso: '3333', rol: 'OPERARIO' }, // operario turno 3
+       { id: 'turnero-user', nombre: 'Turnero', pin_acceso: '4444', rol: 'OPERARIO' }, // operario turno reemplazante
+       { id: 'jhon-user', nombre: 'Jhon Piedrahita', pin_acceso: 'jp2026', rol: 'SUPERVISOR' } // supervisor
+     ];
 
-    // Respuesta genérica de error si la validación falla
-    return res.status(401).json({ error: 'Credenciales inválidas' });
-  });
+     // Lógica real con Prisma (intento primario)
+     try {
+       // Buscar usuario en la base de datos por string de ID
+       const user = await prisma.user.findUnique({ where: { id } }); 
+       
+       // Validar si el usuario existe, el pin coincide y si tiene rol válido
+       if (user && user.pin_acceso === pin && (user.rol === 'OPERARIO' || user.rol === 'SUPERVISOR' || user.rol === 'JEFE')) {
+         return res.status(200).json({ 
+           user: { 
+             id: user.id, 
+             name: user.nombre, 
+             role: user.rol 
+           } 
+         });
+       }
+     } catch (e) {
+       console.error('Error al intentar inicio de sesión en BD:', e);
+       // Continuar a verificar usuarios predefinidos como fallback
+     }
+
+     // Verificar usuarios predefinidos (fallback)
+     const predefinedUser = predefinedUsers.find(u => u.id === id && u.pin_acceso === pin);
+     if (predefinedUser) {
+       return res.status(200).json({ 
+         user: { 
+           id: predefinedUser.id, 
+           name: predefinedUser.nombre, 
+           role: predefinedUser.rol 
+         } 
+       });
+     }
+
+      // Respuesta genérica de error si la validación falla
+      return res.status(401).json({ error: 'Credenciales inválidas' });
+    });
 
   // 2. Endpoint de Sincronización (El puente con la App)
   app.post('/api/sync-hourly', async (req, res) => {
@@ -191,29 +215,81 @@ async function startServer() {
     }
   });
 
-  app.get('/api/dashboard/operators', async (req, res) => {
-    try {
-      const users = await prisma.user.findMany({
-        select: {
-          id: true,
-          nombre: true,
-          rol: true
-        }
-      });
-      // Mapear rol a turno / estado por defecto si no existe info de turno
-      const mappedUsers = users.map(user => ({
-        id: user.id,
-        name: user.nombre,
-        role: user.rol,
-        shift: user.rol === 'SUPERVISOR' || user.rol === 'ADMIN' ? 'Gestión' : 'Rotativo',
-        status: 'Activo'
-      }));
-      res.json(mappedUsers);
-    } catch (error) {
-      console.error('Error fetching operators:', error);
-      res.status(500).json({ error: 'Failed to fetch operators' });
-    }
-  });
+   app.get('/api/dashboard/operators', async (req, res) => {
+     try {
+       const users = await prisma.user.findMany({
+         select: {
+           id: true,
+           nombre: true,
+           rol: true
+         }
+       });
+       // Mapear rol a turno / estado por defecto si no existe info de turno
+       const mappedUsers = users.map(user => ({
+         id: user.id,
+         name: user.nombre,
+         role: user.rol,
+         shift: user.rol === 'SUPERVISOR' || user.rol === 'JEFE' ? 'Gestión' : 'Rotativo',
+         status: 'Activo'
+       }));
+       res.json(mappedUsers);
+     } catch (error) {
+       console.error('Error fetching operators:', error);
+       res.status(500).json({ error: 'Failed to fetch operators' });
+     }
+   });
+
+   // Endpoint para crear un nuevo operario (solo para JEFE o SUPERVISOR)
+   app.post('/api/operators', async (req, res) => {
+     try {
+       const { nombre, pin, rol } = req.body;
+
+       // Validación básica
+       if (!nombre || !pin || !rol) {
+         return res.status(400).json({ error: 'Nombre, PIN y rol son requeridos' });
+       }
+
+       // Validar rol
+       const validRoles = ['OPERARIO', 'SUPERVISOR', 'JEFE'];
+       if (!validRoles.includes(rol)) {
+         return res.status(400).json({ error: 'Rol inválido' });
+       }
+
+       // Verificar si el PIN ya existe
+       const existingUser = await prisma.user.findUnique({ where: { pin_acceso: pin } });
+       if (existingUser) {
+         return res.status(400).json({ error: 'El PIN ya está en uso' });
+       }
+
+       // Crear nuevo usuario
+       const newUser = await prisma.user.create({
+         data: {
+           nombre,
+           pin_acceso: pin,
+           rol
+         },
+         select: {
+           id: true,
+           nombre: true,
+           rol: true
+         }
+       });
+
+       // Mapear respuesta
+       const mappedUser = {
+         id: newUser.id,
+         name: newUser.nombre,
+         role: newUser.rol,
+         shift: newUser.rol === 'SUPERVISOR' || newUser.rol === 'JEFE' ? 'Gestión' : 'Rotativo',
+         status: 'Activo'
+       };
+
+       res.status(201).json(mappedUser);
+     } catch (error) {
+       console.error('Error creating operator:', error);
+       res.status(500).json({ error: 'Failed to create operator' });
+     }
+   });
 
   // Vite middleware for development (Frontend)
   if (process.env.NODE_ENV !== "production") {

@@ -19,7 +19,7 @@
     },
     {
       "src": "/api/(.*)",
-      "dest": "/api/$1.ts"
+      "dest": "/api/index.ts"
     },
     {
       "src": "/(.*)",

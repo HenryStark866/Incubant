@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { useMachineStore } from '../store/useMachineStore';
+import { useMachineStore, type User } from '../store/useMachineStore';
 import { ThermometerSun, LogIn, AlertCircle, Loader2, Egg } from 'lucide-react';
 import { requestNotificationPermission, scheduleHourlyNotifications } from '../utils/notifications';
+import { authenticateFallbackUser } from '../lib/fallbackAuth';
 
 export default function LoginScreen() {
   const [operatorId, setOperatorId] = useState('');
@@ -10,6 +11,12 @@ export default function LoginScreen() {
   const [isLoading, setIsLoading] = useState(false);
   
   const login = useMachineStore(state => state.login);
+
+  const completeLogin = async (user: User) => {
+    await requestNotificationPermission();
+    scheduleHourlyNotifications();
+    login(user);
+  };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -32,16 +39,24 @@ export default function LoginScreen() {
       const data = await response.json();
 
       if (response.ok) {
-        // Request notification permission and schedule
-        await requestNotificationPermission();
-        scheduleHourlyNotifications();
-        
-        login(data.user);
+        await completeLogin(data.user);
       } else {
-        setError(data.error || 'Error de autenticación');
+        const fallbackUser = authenticateFallbackUser(operatorId, pin);
+
+        if (fallbackUser) {
+          await completeLogin(fallbackUser);
+        } else {
+          setError(data.error || 'Error de autenticación');
+        }
       }
     } catch (err) {
-      setError('Error de conexión con el servidor');
+      const fallbackUser = authenticateFallbackUser(operatorId, pin);
+
+      if (fallbackUser) {
+        await completeLogin(fallbackUser);
+      } else {
+        setError('Error de conexión con el servidor');
+      }
     } finally {
       setIsLoading(false);
     }

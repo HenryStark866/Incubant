@@ -10,6 +10,7 @@ import FormScreen from './screens/FormScreen';
 import LoginScreen from './screens/LoginScreen';
 import SupervisorDashboard from './screens/SupervisorDashboard';
 import { useMachineStore } from './store/useMachineStore';
+import { canUseSupervisorPanel } from './lib/fallbackAuth';
 import { Smartphone, Monitor, Loader2 } from 'lucide-react';
 
 export default function App() {
@@ -22,7 +23,7 @@ export default function App() {
   const login = useMachineStore(state => state.login);
   const logout = useMachineStore(state => state.logout);
 
-  const canAccessSupervisor = currentUser?.role === 'JEFE' || currentUser?.role === 'SUPERVISOR';
+  const canAccessSupervisor = canUseSupervisorPanel(currentUser?.role);
 
   useEffect(() => {
     let isMounted = true;
@@ -41,15 +42,14 @@ export default function App() {
           return;
         }
 
-        logout();
-        setViewMode('mobile');
+        if (response.status === 401) {
+          logout();
+          setViewMode('mobile');
+        }
       } catch {
         if (!isMounted) {
           return;
         }
-
-        logout();
-        setViewMode('mobile');
       } finally {
         if (isMounted) {
           setIsSessionReady(true);

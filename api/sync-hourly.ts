@@ -1,4 +1,4 @@
-import { parseRequestBody, requireSession } from '../backend/serverlessAuth';
+import { parseRequestBody, requireSession } from './_lib/serverlessAuth';
 
 export default function handler(req: any, res: any) {
   const user = requireSession(req, res);

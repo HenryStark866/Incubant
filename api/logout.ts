@@ -1,4 +1,4 @@
-import { clearSessionCookie } from '../backend/serverlessAuth';
+import { clearSessionCookie } from './_lib/serverlessAuth';
 
 export default function handler(_req: any, res: any) {
   res.setHeader('Set-Cookie', clearSessionCookie());

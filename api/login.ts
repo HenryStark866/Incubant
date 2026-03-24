@@ -1,4 +1,4 @@
-import { authenticateFallbackUser, createSessionCookie, parseRequestBody } from '../backend/serverlessAuth';
+import { authenticateFallbackUser, createSessionCookie, parseRequestBody } from './_lib/serverlessAuth';
 
 export default function handler(req: any, res: any) {
   if (req.method !== 'POST') {

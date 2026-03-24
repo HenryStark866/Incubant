@@ -1,4 +1,4 @@
-import { parseRequestBody, requireSupervisor } from '../backend/serverlessAuth';
+import { parseRequestBody, requireSupervisor } from './_lib/serverlessAuth';
 
 export default function handler(req: any, res: any) {
   const user = requireSupervisor(req, res);

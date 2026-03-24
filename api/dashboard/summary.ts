@@ -1,4 +1,4 @@
-import { requireSupervisor } from '../../backend/serverlessAuth';
+import { requireSupervisor } from '../_lib/serverlessAuth';
 
 export default function handler(req: any, res: any) {
   if (!requireSupervisor(req, res)) {

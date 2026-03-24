@@ -1,4 +1,4 @@
-import { readSessionUser } from '../backend/serverlessAuth';
+import { readSessionUser } from './_lib/serverlessAuth';
 
 export default function handler(req: any, res: any) {
   const user = readSessionUser(req);

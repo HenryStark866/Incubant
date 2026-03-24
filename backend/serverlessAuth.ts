@@ -1,6 +1,3 @@
-import { Buffer } from 'node:buffer';
-import { createHmac } from 'node:crypto';
-
 type UserRole = 'OPERARIO' | 'SUPERVISOR' | 'JEFE';
 
 export type SessionUser = {
@@ -24,7 +21,6 @@ type VercelResponseLike = {
 
 const SESSION_COOKIE_NAME = 'incubant_session';
 const SESSION_MAX_AGE_SECONDS = 60 * 60 * 12;
-const SESSION_SECRET = process.env.SESSION_SECRET || 'incubantmonitor-dev-session-secret';
 
 const fallbackUsers: Array<{ id: string; pin: string; user: SessionUser }> = [
   { id: 'admin', pin: '4753', user: { id: 'admin', name: 'Administrador', role: 'JEFE' } },
@@ -77,22 +73,18 @@ function parseCookies(cookieHeader: string) {
   }, {});
 }
 
-function signPayload(payload: string) {
-  return createHmac('sha256', SESSION_SECRET).update(payload).digest('base64url');
-}
-
 function buildCookie(token: string, maxAge: number) {
   const secureFlag = process.env.NODE_ENV === 'production' ? '; Secure' : '';
   return `${SESSION_COOKIE_NAME}=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAge}${secureFlag}`;
 }
 
 export function createSessionCookie(user: SessionUser) {
-  const payload = Buffer.from(JSON.stringify({
+  const payload = JSON.stringify({
     ...user,
     exp: Date.now() + SESSION_MAX_AGE_SECONDS * 1000,
-  })).toString('base64url');
+  });
 
-  return buildCookie(`${payload}.${signPayload(payload)}`, SESSION_MAX_AGE_SECONDS);
+  return buildCookie(payload, SESSION_MAX_AGE_SECONDS);
 }
 
 export function clearSessionCookie() {
@@ -107,14 +99,8 @@ export function readSessionUser(req: VercelRequestLike): SessionUser | null {
     return null;
   }
 
-  const [payload, signature] = token.split('.');
-
-  if (!payload || !signature || signature !== signPayload(payload)) {
-    return null;
-  }
-
   try {
-    const decoded = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8')) as SessionUser & { exp: number };
+    const decoded = JSON.parse(token) as SessionUser & { exp: number };
 
     if (!decoded.exp || decoded.exp < Date.now()) {
       return null;

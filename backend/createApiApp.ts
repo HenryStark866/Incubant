@@ -1,6 +1,6 @@
 import crypto from 'crypto';
 import express, { type Express, type NextFunction, type Request, type Response } from 'express';
-import { PrismaClient } from '@prisma/client';
+import type { PrismaClient } from '@prisma/client';
 
 type UserRole = 'OPERARIO' | 'SUPERVISOR' | 'JEFE';
 
@@ -55,8 +55,9 @@ const globalForPrisma = globalThis as typeof globalThis & {
   prisma?: PrismaClient;
 };
 
-function getPrismaClient() {
+async function getPrismaClient() {
   if (!globalForPrisma.prisma) {
+    const { PrismaClient } = await import('@prisma/client');
     globalForPrisma.prisma = new PrismaClient();
   }
 
@@ -221,7 +222,7 @@ function extractObservationValue(observaciones: string | null | undefined, label
 }
 
 async function resolveDatabaseUser(sessionUser: SessionUser) {
-  const prisma = getPrismaClient();
+  const prisma = await getPrismaClient();
   const byId = await prisma.user.findUnique({ where: { id: sessionUser.id } }).catch(() => null);
 
   if (byId) {
@@ -247,7 +248,7 @@ async function resolveDatabaseUser(sessionUser: SessionUser) {
 }
 
 async function resolveDatabaseMachine(machine: SubmittedMachine) {
-  const prisma = getPrismaClient();
+  const prisma = await getPrismaClient();
   const parsedMachine = parseLocalMachine(machine);
 
   if (!parsedMachine) {
@@ -300,7 +301,7 @@ export function createApiApp(): Express {
     }
 
     try {
-      const prisma = getPrismaClient();
+      const prisma = await getPrismaClient();
       const user = await prisma.user.findFirst({
         where: {
           OR: [{ id }, { nombre: id }],
@@ -348,7 +349,7 @@ export function createApiApp(): Express {
       const fallbackCount = completedMachines.length;
 
       try {
-        const prisma = getPrismaClient();
+        const prisma = await getPrismaClient();
         const databaseUser = await resolveDatabaseUser(req.user!);
 
         const logsToInsert = await Promise.all(completedMachines.map(async (machine) => {
@@ -401,7 +402,7 @@ export function createApiApp(): Express {
 
   app.get('/api/dashboard/summary', requireRoles(SUPERVISOR_ROLES), async (_req, res) => {
     try {
-      const prisma = getPrismaClient();
+      const prisma = await getPrismaClient();
       const reportCount = await prisma.hourlyLog.count();
       return res.json({ reportCount });
     } catch (error) {
@@ -412,7 +413,7 @@ export function createApiApp(): Express {
 
   app.get('/api/dashboard/status', requireRoles(SUPERVISOR_ROLES), async (_req, res) => {
     try {
-      const prisma = getPrismaClient();
+      const prisma = await getPrismaClient();
       const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000);
 
       const machines = await prisma.machine.findMany({
@@ -499,7 +500,7 @@ export function createApiApp(): Express {
 
   app.get('/api/dashboard/trends', requireRoles(SUPERVISOR_ROLES), async (_req, res) => {
     try {
-      const prisma = getPrismaClient();
+      const prisma = await getPrismaClient();
       const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
       const logs = await prisma.hourlyLog.findMany({
         where: { fecha_hora: { gte: twentyFourHoursAgo } },
@@ -534,7 +535,7 @@ export function createApiApp(): Express {
 
   app.get('/api/dashboard/operators', requireRoles(SUPERVISOR_ROLES), async (_req, res) => {
     try {
-      const prisma = getPrismaClient();
+      const prisma = await getPrismaClient();
       const users = await prisma.user.findMany({
         select: {
           id: true,
@@ -560,7 +561,7 @@ export function createApiApp(): Express {
 
   app.post('/api/operators', requireRoles(SUPERVISOR_ROLES), async (req, res) => {
     try {
-      const prisma = getPrismaClient();
+      const prisma = await getPrismaClient();
       const { nombre, pin, rol } = req.body;
 
       if (!nombre || !pin || !rol) {

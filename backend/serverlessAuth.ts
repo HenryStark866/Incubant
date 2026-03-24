@@ -1,4 +1,5 @@
-import crypto from 'crypto';
+import { Buffer } from 'node:buffer';
+import { createHmac } from 'node:crypto';
 
 type UserRole = 'OPERARIO' | 'SUPERVISOR' | 'JEFE';
 
@@ -77,7 +78,7 @@ function parseCookies(cookieHeader: string) {
 }
 
 function signPayload(payload: string) {
-  return crypto.createHmac('sha256', SESSION_SECRET).update(payload).digest('base64url');
+  return createHmac('sha256', SESSION_SECRET).update(payload).digest('base64url');
 }
 
 function buildCookie(token: string, maxAge: number) {

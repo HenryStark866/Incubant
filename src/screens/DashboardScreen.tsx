@@ -19,6 +19,16 @@ export default function DashboardScreen() {
   const completedCount = machines.filter(m => m.status === 'completed').length;
   const allCompleted = pendingCount === 0;
 
+  const handleLogout = async () => {
+    try {
+      await fetch('/api/logout', { method: 'POST' });
+    } catch (error) {
+      console.error('Error cerrando sesión:', error);
+    } finally {
+      logout();
+    }
+  };
+
   const handleMachineClick = (machineId: string, status: string) => {
     if (status === 'pending') {
       setActiveMachine(machineId);
@@ -58,7 +68,8 @@ export default function DashboardScreen() {
       });
 
       if (!response.ok) {
-        throw new Error('Error al guardar los datos en el servidor');
+        const errorData = await response.json().catch(() => null);
+        throw new Error(errorData?.error || 'Error al guardar los datos en el servidor');
       }
 
       setSyncSuccess(true);
@@ -69,7 +80,7 @@ export default function DashboardScreen() {
 
     } catch (error) {
       console.error("Error de sincronización:", error);
-      alert("Hubo un error al sincronizar los datos. Por favor, inténtalo de nuevo.");
+      alert(error instanceof Error ? error.message : 'Hubo un error al sincronizar los datos. Por favor, inténtalo de nuevo.');
     } finally {
       setIsSyncing(false);
     }
@@ -117,7 +128,7 @@ export default function DashboardScreen() {
             </div>
           </div>
           <button 
-            onClick={logout}
+            onClick={handleLogout}
             className="p-3 bg-[#F5F5F7] text-gray-500 rounded-xl hover:text-red-500 hover:bg-red-50 transition-colors active:scale-95"
           >
             <LogOut size={20} />
@@ -229,4 +240,3 @@ export default function DashboardScreen() {
     </div>
   );
 }
-

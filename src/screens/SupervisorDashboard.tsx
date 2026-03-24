@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { 
   Activity, AlertTriangle, Clock, Users, LayoutDashboard, 
   Settings, ChevronDown, X, Image as ImageIcon, CheckCircle2,
-  Download, Loader2, Egg
+  Download, Loader2, Egg, Menu, RefreshCw, LogOut
 } from 'lucide-react';
 import { 
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer 
@@ -14,13 +14,15 @@ import { useMachineStore } from '../store/useMachineStore';
 // Operadores se cargarán dinámicamente desde la BD
 
 export default function SupervisorDashboard() {
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'personal'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'personal' | 'settings'>('dashboard');
   const [selectedMachine, setSelectedMachine] = useState<any | null>(null);
   const [chartFilter, setChartFilter] = useState('Todas (Promedio)');
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   const [machinesData, setMachinesData] = useState<any[]>([]);
   const [trendsData, setTrendsData] = useState<any[]>([]);
   const [operatorsData, setOperatorsData] = useState<any[]>([]);
+  const [reportCount, setReportCount] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   
     // Modal states
@@ -33,6 +35,29 @@ export default function SupervisorDashboard() {
   });
   
   const currentUser = useMachineStore(state => state.currentUser);
+  const logout = useMachineStore(state => state.logout);
+  const resetHourlyStatus = useMachineStore(state => state.resetHourlyStatus);
+  const canAccessSupervisor = currentUser?.role === 'JEFE' || currentUser?.role === 'SUPERVISOR';
+
+  const handleTabChange = (tab: 'dashboard' | 'personal' | 'settings') => {
+    setActiveTab(tab);
+    setIsSidebarOpen(false);
+  };
+
+  const handleLogout = async () => {
+    try {
+      await fetch('/api/logout', { method: 'POST' });
+    } catch (error) {
+      console.error('Error cerrando sesión:', error);
+    } finally {
+      logout();
+    }
+  };
+
+  const handleResetLocalData = () => {
+    resetHourlyStatus();
+    alert('Se reiniciaron las revisiones locales del dispositivo.');
+  };
 
   const handleCreateOperatorSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -50,7 +75,11 @@ export default function SupervisorDashboard() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(newOperator),
+        body: JSON.stringify({
+          nombre: newOperator.name,
+          pin: newOperator.pin,
+          rol: newOperator.role,
+        }),
       });
 
       if (response.ok) {
@@ -76,15 +105,17 @@ export default function SupervisorDashboard() {
   useEffect(() => {
       const fetchData = async () => {
         try {
-          const [statusRes, trendsRes, operatorsRes] = await Promise.all([
+          const [statusRes, trendsRes, operatorsRes, summaryRes] = await Promise.all([
             fetch('/api/dashboard/status'),
             fetch('/api/dashboard/trends'),
-            fetch('/api/dashboard/operators')
+            fetch('/api/dashboard/operators'),
+            fetch('/api/dashboard/summary')
           ]);
           
           const statusJson = await statusRes.json();
           const trendsJson = await trendsRes.json();
           const operatorsJson = await operatorsRes.json();
+          const summaryJson = await summaryRes.json();
           
           if (statusRes.ok && Array.isArray(statusJson)) {
             setMachinesData(statusJson);
@@ -103,23 +134,41 @@ export default function SupervisorDashboard() {
           } else {
             setOperatorsData([]);
           }
+
+          if (summaryRes.ok && typeof summaryJson?.reportCount === 'number') {
+            setReportCount(summaryJson.reportCount);
+          } else {
+            setReportCount(0);
+          }
         } catch (error) {
           console.error("Error fetching dashboard data:", error);
           setMachinesData([]);
           setTrendsData([]);
           setOperatorsData([]);
+          setReportCount(0);
         } finally {
         setIsLoading(false);
       }
     };
 
-    fetchData();
-    // Refresh every minute
+    if (!canAccessSupervisor) {
+      setMachinesData([]);
+      setTrendsData([]);
+      setOperatorsData([]);
+      setReportCount(0);
+      setIsLoading(false);
+      return;
+    }
+
+    void fetchData();
     const interval = setInterval(fetchData, 60000);
     return () => clearInterval(interval);
-  }, []);
+  }, [canAccessSupervisor]);
 
   const activeAlarms = machinesData.filter(m => m.status === 'alarm').length;
+  const efficiency = machinesData.length > 0
+    ? Math.round((machinesData.filter(m => m.status === 'ok').length / machinesData.length) * 100)
+    : 0;
 
   const handleDownloadReport = () => {
     try {
@@ -139,7 +188,7 @@ export default function SupervisorDashboard() {
       doc.setTextColor(100, 100, 100);
       doc.setFont("helvetica", "normal");
        doc.text(`Fecha de Reporte: ${new Date().toLocaleDateString()} a las ${new Date().toLocaleTimeString()}`, 14, 35);
-       doc.text(`Operario Responsable: ${currentUser?.nombre || 'Supervisor de Turno'}`, 14, 40);
+       doc.text(`Operario Responsable: ${currentUser?.name || 'Sin responsable autenticado'}`, 14, 40);
 
       // Preparar datos para las Incubadoras
       const incubadoras = machinesData.filter(m => m.type === 'incubadora');
@@ -237,29 +286,63 @@ export default function SupervisorDashboard() {
     );
   }
 
-  return (
-    <div className="flex h-screen bg-gray-50 text-brand-dark font-sans overflow-hidden">
-      
-      {/* Sidebar */}
-      <div className="w-72 bg-white border-r border-gray-100 flex flex-col shadow-xl z-20">
-        <div className="p-8 flex flex-col items-center gap-4 border-b border-gray-50 bg-brand-secondary/5">
-        <div className="flex items-center gap-2 mb-2">
-          <div className="bg-brand-primary p-2 rounded-xl text-white shadow-md">
-            <Egg size={24} />
+  if (!canAccessSupervisor) {
+    return (
+      <div className="flex h-screen bg-gray-50 items-center justify-center p-6">
+        <div className="max-w-md w-full bg-white border border-red-100 rounded-3xl shadow-sm p-8 text-center">
+          <div className="mx-auto mb-4 w-14 h-14 rounded-2xl bg-red-50 flex items-center justify-center">
+            <AlertTriangle className="text-red-500" size={28} />
           </div>
-          <div className="flex flex-col">
-            <span className="text-2xl font-black text-brand-dark tracking-tight leading-none">INCUBANT</span>
-            <span className="text-[0.5rem] font-bold text-brand-gray tracking-widest uppercase mt-0.5">Antioqueña de Incubación S.A.S.</span>
-          </div>
+          <h1 className="text-2xl font-black text-brand-dark mb-2">Acceso restringido</h1>
+          <p className="text-sm text-brand-gray font-medium">
+            El panel administrativo solo está disponible para usuarios autenticados con rol de jefe o supervisor.
+          </p>
         </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="relative flex h-screen bg-gray-50 text-brand-dark font-sans overflow-hidden">
+      {isSidebarOpen && (
+        <button
+          type="button"
+          aria-label="Cerrar navegación"
+          onClick={() => setIsSidebarOpen(false)}
+          className="fixed inset-0 z-30 bg-brand-dark/40 backdrop-blur-sm lg:hidden"
+        />
+      )}
+
+      <div className={`fixed inset-y-0 left-0 z-40 w-72 bg-white border-r border-gray-100 flex flex-col shadow-xl transform transition-transform duration-300 lg:static lg:translate-x-0 ${
+        isSidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
+      }`}>
+        <div className="p-6 sm:p-8 flex flex-col items-center gap-4 border-b border-gray-50 bg-brand-secondary/5">
+          <div className="flex w-full items-start justify-between gap-4">
+            <div className="flex items-center gap-2 mb-2">
+              <div className="bg-brand-primary p-2 rounded-xl text-white shadow-md">
+                <Egg size={24} />
+              </div>
+              <div className="flex flex-col">
+                <span className="text-2xl font-black text-brand-dark tracking-tight leading-none">INCUBANT</span>
+                <span className="text-[0.5rem] font-bold text-brand-gray tracking-widest uppercase mt-0.5">Antioqueña de Incubación S.A.S.</span>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setIsSidebarOpen(false)}
+              className="lg:hidden p-2 rounded-xl bg-white border border-gray-100 text-brand-gray"
+            >
+              <X size={18} />
+            </button>
+          </div>
           <div className="text-center px-4 py-1 bg-brand-primary/10 rounded-full border border-brand-primary/20">
             <p className="text-[10px] text-brand-primary font-black uppercase tracking-[0.2em]">Sistema de Monitoreo</p>
           </div>
         </div>
         
-        <nav className="flex-1 p-6 space-y-3">
+        <nav className="flex-1 p-6 space-y-3 overflow-y-auto">
           <button 
-            onClick={() => setActiveTab('dashboard')}
+            onClick={() => handleTabChange('dashboard')}
             className={`w-full flex items-center gap-4 px-5 py-4 rounded-2xl transition-all ${
               activeTab === 'dashboard' ? 'bg-brand-primary text-white shadow-lg shadow-brand-primary/30 active:scale-95' : 'hover:bg-gray-50 text-brand-gray font-semibold'
             }`}
@@ -268,7 +351,7 @@ export default function SupervisorDashboard() {
             <span className="font-bold tracking-tight">Panel Control</span>
           </button>
           <button 
-            onClick={() => setActiveTab('personal')}
+            onClick={() => handleTabChange('personal')}
             className={`w-full flex items-center gap-4 px-5 py-4 rounded-2xl transition-all ${
               activeTab === 'personal' ? 'bg-brand-primary text-white shadow-lg shadow-brand-primary/30 active:scale-95' : 'hover:bg-gray-50 text-brand-gray font-semibold'
             }`}
@@ -279,161 +362,190 @@ export default function SupervisorDashboard() {
         </nav>
 
         <div className="p-6 border-t border-gray-50">
-          <button className="w-full flex items-center gap-4 px-5 py-4 rounded-2xl hover:bg-gray-50 text-brand-gray font-semibold transition-all">
+          <button
+            onClick={() => handleTabChange('settings')}
+            className={`w-full flex items-center gap-4 px-5 py-4 rounded-2xl transition-all ${
+              activeTab === 'settings' ? 'bg-brand-primary text-white shadow-lg shadow-brand-primary/30 active:scale-95' : 'hover:bg-gray-50 text-brand-gray font-semibold'
+            }`}
+          >
             <Settings size={20} />
             <span className="font-bold tracking-tight">Configuración</span>
           </button>
         </div>
       </div>
 
-       {/* Main Content */}
-       <div className="flex-1 flex flex-col overflow-hidden">
-       
-       {/* Create Operator Modal */}
-       <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 hidden" id="createOperatorModal">
-         <div className="bg-white rounded-2xl w-full max-w-md p-6 shadow-xl transform transition-all duration-300">
-           <div className="flex justify-between items-start mb-4">
-             <h2 className="text-xl font-black text-brand-dark">Registrar Nuevo Operario</h2>
-             <button onClick={() => setShowCreateOperator(false)} className="text-gray-500 hover:text-gray-700">
-               <X size={24} />
-             </button>
-           </div>
-           
-           <form onSubmit={handleCreateOperatorSubmit} className="space-y-4">
-             <div>
-               <label className="block text-sm font-medium text-brand-gray mb-2">Nombre Completo</label>
-               <input 
-                 type="text"
-                 value={newOperator.name}
-                 onChange={(e) => setNewOperator({...newOperator, name: e.target.value})}
-                 required
-                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-primary focus:border-transparent"
-               />
-             </div>
-             
-             <div>
-               <label className="block text-sm font-medium text-brand-gray mb-2">PIN de Acceso (4 dígitos)</label>
-                <input 
-                  type="password"
-                  value={newOperator.pin}
-                  onChange={(e) => setNewOperator({...newOperator, pin: e.target.value})}
-                  maxLength={4}
-                  required
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-primary focus:border-transparent"
-                />
-             </div>
-             
-             <div>
-               <label className="block text-sm font-medium text-brand-gray mb-2">Rol</label>
-               <select 
-                 value={newOperator.role}
-                 onChange={(e) => setNewOperator({...newOperator, role: e.target.value})}
-                 required
-                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-primary focus:border-transparent"
-               >
-                 <option value="">Seleccione un rol</option>
-                 <option value="OPERARIO">Operario</option>
-                 <option value="SUPERVISOR">Supervisor</option>
-                 <option value="JEFE">Jefe / Administrador</option>
-               </select>
-             </div>
-             
-             <div className="flex justify-end space-x-3">
-               <button 
-                 type="button"
-                 onClick={() => setShowCreateOperator(false)}
-                 className="px-5 py-3 border border-gray-300 rounded-lg hover:bg-gray-50"
-               >
-                 Cancelar
-               </button>
-               <button 
-                 type="submit"
-                 disabled={isCreatingOperator}
-                 className={`px-5 py-3 bg-brand-primary text-white rounded-lg hover:bg-[#E6951F] disabled:opacity-50 disabled:cursor-not-allowed transition-colors`}
-               >
-                 {isCreatingOperator ? 'Creando...' : 'Crear Operario'}
-               </button>
-             </div>
-           </form>
-         </div>
-       </div>
-           {/* Top Bar - KPIs */}
-        <header className="h-24 bg-white border-b border-gray-100 flex items-center justify-between px-10 shrink-0 z-10">
-          
-          {/* Operario Info */}
-             <div className="flex items-center gap-8">
-               <div className="flex items-center gap-4">
-                 <div className="w-12 h-12 rounded-2xl bg-brand-primary/10 flex items-center justify-center border border-brand-primary/20 shadow-inner">
-                   <Users size={24} className="text-brand-primary" />
-                 </div>
-                 <div>
-                   <p className="text-[10px] text-brand-gray font-black uppercase tracking-widest">Supervisor de Turno</p>
-                   <p className="text-base font-black text-brand-dark">{currentUser?.nombre || 'Supervisor de Turno'}</p>
-                 </div>
-               </div>
-            
-            <div className="w-56">
-              <div className="flex justify-between text-[10px] mb-2 font-bold uppercase tracking-widest">
-                <span className="text-brand-gray">Eficiencia de Planta</span>
-                <span className="text-brand-primary">80%</span>
+      <div className="flex-1 flex flex-col overflow-hidden min-w-0">
+        {showCreateOperator && (
+          <div
+            className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4"
+            id="createOperatorModal"
+            onClick={() => setShowCreateOperator(false)}
+          >
+            <div
+              className="bg-white rounded-2xl w-full max-w-md p-6 shadow-xl transform transition-all duration-300"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex justify-between items-start mb-4">
+                <h2 className="text-xl font-black text-brand-dark">Registrar Nuevo Operario</h2>
+                <button onClick={() => setShowCreateOperator(false)} className="text-gray-500 hover:text-gray-700">
+                  <X size={24} />
+                </button>
               </div>
-              <div className="h-2.5 bg-gray-100 rounded-full overflow-hidden shadow-inner">
-                <div className="h-full bg-brand-primary w-4/5 rounded-full shadow-[0_0_10px_rgba(245,166,35,0.5)]"></div>
-              </div>
+              
+              <form onSubmit={handleCreateOperatorSubmit} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-brand-gray mb-2">Nombre Completo</label>
+                  <input 
+                    type="text"
+                    value={newOperator.name}
+                    onChange={(e) => setNewOperator({...newOperator, name: e.target.value})}
+                    required
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-primary focus:border-transparent"
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-brand-gray mb-2">PIN de Acceso (4 dígitos)</label>
+                   <input 
+                    type="password"
+                    value={newOperator.pin}
+                    onChange={(e) => setNewOperator({...newOperator, pin: e.target.value})}
+                    maxLength={4}
+                    required
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-primary focus:border-transparent"
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-brand-gray mb-2">Rol</label>
+                  <select 
+                    value={newOperator.role}
+                    onChange={(e) => setNewOperator({...newOperator, role: e.target.value})}
+                    required
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-primary focus:border-transparent"
+                  >
+                    <option value="">Seleccione un rol</option>
+                    <option value="OPERARIO">Operario</option>
+                    <option value="SUPERVISOR">Supervisor</option>
+                    <option value="JEFE">Jefe / Administrador</option>
+                  </select>
+                </div>
+                
+                <div className="flex justify-end space-x-3">
+                  <button 
+                    type="button"
+                    onClick={() => setShowCreateOperator(false)}
+                    className="px-5 py-3 border border-gray-300 rounded-lg hover:bg-gray-50"
+                  >
+                    Cancelar
+                  </button>
+                  <button 
+                    type="submit"
+                    disabled={isCreatingOperator}
+                    className={`px-5 py-3 bg-brand-primary text-white rounded-lg hover:bg-[#E6951F] disabled:opacity-50 disabled:cursor-not-allowed transition-colors`}
+                  >
+                    {isCreatingOperator ? 'Creando...' : 'Crear Operario'}
+                  </button>
+                </div>
+              </form>
             </div>
           </div>
+        )}
 
-          {/* Quick Stats */}
-          <div className="flex items-center gap-4">
-            <button 
-              onClick={handleDownloadReport}
-              className="bg-brand-primary hover:bg-[#E6951F] text-white px-6 py-3 rounded-2xl flex items-center gap-3 text-sm font-black transition-all shadow-xl shadow-brand-primary/20 active:scale-95 uppercase tracking-widest"
-            >
-              <Download size={20} />
-              Reporte PDF
-            </button>
+        <header className="bg-white border-b border-gray-100 px-4 sm:px-6 lg:px-10 py-4 shrink-0 z-10">
+          <div className="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-4">
+            <div className="flex items-start sm:items-center justify-between gap-4">
+              <div className="flex items-start sm:items-center gap-3 sm:gap-8">
+                <button
+                  type="button"
+                  onClick={() => setIsSidebarOpen(true)}
+                  className="lg:hidden p-3 rounded-2xl bg-gray-50 border border-gray-100 text-brand-dark"
+                >
+                  <Menu size={20} />
+                </button>
 
-            <div className="bg-white border border-gray-100 shadow-sm rounded-2xl px-5 py-3 flex items-center gap-4">
-              <div className="p-2 bg-green-50 rounded-xl">
-                <CheckCircle2 className="text-green-500" size={20} />
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 rounded-2xl bg-brand-primary/10 flex items-center justify-center border border-brand-primary/20 shadow-inner">
+                    <Users size={24} className="text-brand-primary" />
+                  </div>
+                  <div>
+                    <p className="text-[10px] text-brand-gray font-black uppercase tracking-widest">Supervisor de Turno</p>
+                    <p className="text-base font-black text-brand-dark">{currentUser?.name || 'Sin responsable autenticado'}</p>
+                  </div>
+                </div>
+
+                <div className="hidden md:block w-56">
+                  <div className="flex justify-between text-[10px] mb-2 font-bold uppercase tracking-widest">
+                    <span className="text-brand-gray">Eficiencia de Planta</span>
+                    <span className="text-brand-primary">{efficiency}%</span>
+                  </div>
+                  <div className="h-2.5 bg-gray-100 rounded-full overflow-hidden shadow-inner">
+                    <div
+                      className="h-full bg-brand-primary rounded-full shadow-[0_0_10px_rgba(245,166,35,0.5)] transition-all"
+                      style={{ width: `${efficiency}%` }}
+                    ></div>
+                  </div>
+                </div>
               </div>
-              <div>
-                <p className="text-[9px] text-brand-gray uppercase font-black tracking-widest">Reportes</p>
-                <p className="text-xl font-black text-brand-dark leading-none">142</p>
-              </div>
+
+              <button
+                onClick={handleDownloadReport}
+                className="lg:hidden bg-brand-primary hover:bg-[#E6951F] text-white px-4 py-3 rounded-2xl flex items-center gap-2 text-xs font-black transition-all shadow-xl shadow-brand-primary/20 uppercase tracking-widest"
+              >
+                <Download size={18} />
+                PDF
+              </button>
             </div>
 
-            <div className={`border shadow-sm rounded-2xl px-5 py-3 flex items-center gap-4 transition-colors ${
-              activeAlarms > 0 ? 'bg-red-50 border-red-100' : 'bg-white border-gray-100'
-            }`}>
-              <div className={`p-2 rounded-xl ${activeAlarms > 0 ? 'bg-red-100' : 'bg-gray-50'}`}>
-                <AlertTriangle className={activeAlarms > 0 ? 'text-red-500' : 'text-brand-gray'} size={20} />
-              </div>
-              <div>
-                <p className="text-[9px] text-brand-gray uppercase font-black tracking-widest">Alarmas</p>
-                <p className={`text-xl font-black leading-none ${activeAlarms > 0 ? 'text-red-600' : 'text-brand-dark'}`}>
-                  {activeAlarms}
-                </p>
-              </div>
-            </div>
+            <div className="flex flex-wrap items-stretch gap-3 sm:gap-4">
+              <button 
+                onClick={handleDownloadReport}
+                className="hidden lg:flex bg-brand-primary hover:bg-[#E6951F] text-white px-6 py-3 rounded-2xl items-center gap-3 text-sm font-black transition-all shadow-xl shadow-brand-primary/20 active:scale-95 uppercase tracking-widest"
+              >
+                <Download size={20} />
+                Reporte PDF
+              </button>
 
-            <div className="bg-brand-secondary/10 border border-brand-secondary/30 rounded-2xl px-5 py-3 flex items-center gap-4 animate-pulse">
-              <div className="p-2 bg-white rounded-xl shadow-sm">
-                <Clock className="text-brand-primary" size={20} />
+              <div className="bg-white border border-gray-100 shadow-sm rounded-2xl px-5 py-3 flex items-center gap-4 min-w-[138px]">
+                <div className="p-2 bg-green-50 rounded-xl">
+                  <CheckCircle2 className="text-green-500" size={20} />
+                </div>
+                <div>
+                  <p className="text-[9px] text-brand-gray uppercase font-black tracking-widest">Reportes</p>
+                  <p className="text-xl font-black text-brand-dark leading-none">{reportCount}</p>
+                </div>
               </div>
-              <div>
-                <p className="text-[9px] text-brand-primary uppercase font-black tracking-widest">Cambio</p>
-                <p className="text-xl font-black text-brand-primary leading-none">14:00</p>
+
+              <div className={`border shadow-sm rounded-2xl px-5 py-3 flex items-center gap-4 min-w-[138px] transition-colors ${
+                activeAlarms > 0 ? 'bg-red-50 border-red-100' : 'bg-white border-gray-100'
+              }`}>
+                <div className={`p-2 rounded-xl ${activeAlarms > 0 ? 'bg-red-100' : 'bg-gray-50'}`}>
+                  <AlertTriangle className={activeAlarms > 0 ? 'text-red-500' : 'text-brand-gray'} size={20} />
+                </div>
+                <div>
+                  <p className="text-[9px] text-brand-gray uppercase font-black tracking-widest">Alarmas</p>
+                  <p className={`text-xl font-black leading-none ${activeAlarms > 0 ? 'text-red-600' : 'text-brand-dark'}`}>
+                    {activeAlarms}
+                  </p>
+                </div>
+              </div>
+
+              <div className="bg-brand-secondary/10 border border-brand-secondary/30 rounded-2xl px-5 py-3 flex items-center gap-4 min-w-[138px] animate-pulse">
+                <div className="p-2 bg-white rounded-xl shadow-sm">
+                  <Clock className="text-brand-primary" size={20} />
+                </div>
+                <div>
+                  <p className="text-[9px] text-brand-primary uppercase font-black tracking-widest">Cambio</p>
+                  <p className="text-xl font-black text-brand-primary leading-none">14:00</p>
+                </div>
               </div>
             </div>
           </div>
         </header>
 
-        <div className="flex-1 overflow-auto p-10 bg-gray-50/30">
+        <div className="flex-1 overflow-auto p-4 sm:p-6 lg:p-10 bg-gray-50/30">
           {activeTab === 'dashboard' ? (
-            <div className="space-y-10">
-              
-              {/* Heatmap Section */}
+            <div className="space-y-8 lg:space-y-10">
               <section>
                 <div className="flex items-center gap-4 mb-6">
                   <div className="w-1.5 h-8 bg-brand-primary rounded-full"></div>
@@ -442,25 +554,25 @@ export default function SupervisorDashboard() {
                   </h2>
                 </div>
                 
-                <div className="bg-white border border-gray-100 rounded-3xl p-8 shadow-sm">
-                  <div className="mb-6 flex gap-6 text-[10px] font-black uppercase tracking-widest text-brand-gray">
-                    <div className="flex items-center gap-2 pr-4 border-r border-gray-100"><span className="w-3 h-3 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.4)]"></span> Operación OK</div>
-                    <div className="flex items-center gap-2 pr-4 border-r border-gray-100"><span className="w-3 h-3 rounded-full bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.4)]"></span> Alarma Crítica</div>
+                <div className="bg-white border border-gray-100 rounded-3xl p-5 sm:p-8 shadow-sm">
+                  <div className="mb-6 flex flex-wrap gap-4 sm:gap-6 text-[10px] font-black uppercase tracking-widest text-brand-gray">
+                    <div className="flex items-center gap-2 sm:pr-4 sm:border-r sm:border-gray-100"><span className="w-3 h-3 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.4)]"></span> Operación OK</div>
+                    <div className="flex items-center gap-2 sm:pr-4 sm:border-r sm:border-gray-100"><span className="w-3 h-3 rounded-full bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.4)]"></span> Alarma Crítica</div>
                     <div className="flex items-center gap-2"><span className="w-3 h-3 rounded-full bg-gray-300"></span> Fuera de Línea</div>
                   </div>
 
-                  <div className="space-y-10">
+                  <div className="space-y-8 sm:space-y-10">
                     <div>
                       <h3 className="text-xs font-black text-brand-gray uppercase tracking-[0.2em] mb-4 flex items-center gap-2 opacity-60">
                         <div className="w-4 h-[2px] bg-brand-primary"></div>
                         Incubadoras (Planta A)
                       </h3>
-                      <div className="grid grid-cols-8 gap-4">
+                      <div className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-8 gap-4">
                         {machinesData.filter(m => m.type === 'incubadora').map(machine => (
                           <button
                             key={machine.id}
                             onClick={() => setSelectedMachine(machine)}
-                            className={`p-4 rounded-2xl border-2 flex flex-col items-center justify-center gap-1 transition-all hover:scale-110 active:scale-95 shadow-sm ${
+                            className={`p-4 rounded-2xl border-2 flex flex-col items-center justify-center gap-1 transition-all hover:scale-105 active:scale-95 shadow-sm ${
                               machine.status === 'alarm' ? 'bg-red-50 border-red-500/50 text-red-600' :
                               machine.status === 'maintenance' ? 'bg-gray-50 border-gray-200 text-gray-400' :
                               'bg-white border-brand-primary/10 hover:border-brand-primary text-brand-dark'
@@ -478,12 +590,12 @@ export default function SupervisorDashboard() {
                         <div className="w-4 h-[2px] bg-brand-primary"></div>
                         Nacedoras (Planta B)
                       </h3>
-                      <div className="grid grid-cols-6 gap-4">
+                      <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-4">
                         {machinesData.filter(m => m.type === 'nacedora').map(machine => (
                           <button
                             key={machine.id}
                             onClick={() => setSelectedMachine(machine)}
-                            className={`p-4 rounded-2xl border-2 flex flex-col items-center justify-center gap-1 transition-all hover:scale-110 active:scale-95 shadow-sm ${
+                            className={`p-4 rounded-2xl border-2 flex flex-col items-center justify-center gap-1 transition-all hover:scale-105 active:scale-95 shadow-sm ${
                               machine.status === 'alarm' ? 'bg-red-50 border-red-500/50 text-red-600' :
                               machine.status === 'maintenance' ? 'bg-gray-50 border-gray-200 text-gray-400' :
                               'bg-white border-brand-primary/10 hover:border-brand-primary text-brand-dark'
@@ -499,20 +611,19 @@ export default function SupervisorDashboard() {
                 </div>
               </section>
 
-              {/* Charts Section */}
               <section>
-                <div className="flex items-center justify-between mb-6">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
                   <div className="flex items-center gap-4">
                     <div className="w-1.5 h-8 bg-brand-primary rounded-full"></div>
                     <h2 className="text-xl font-black text-brand-dark flex items-center gap-3">
                       Tendencias y Analítica
                     </h2>
                   </div>
-                  <div className="relative">
+                  <div className="relative w-full sm:w-auto">
                     <select 
                       value={chartFilter}
                       onChange={(e) => setChartFilter(e.target.value)}
-                      className="appearance-none bg-white border-2 border-gray-100 text-brand-dark font-bold py-2.5 pl-6 pr-12 rounded-2xl focus:outline-none focus:border-brand-primary focus:ring-4 focus:ring-brand-primary/5 text-sm transition-all shadow-sm"
+                      className="appearance-none w-full bg-white border-2 border-gray-100 text-brand-dark font-bold py-2.5 pl-6 pr-12 rounded-2xl focus:outline-none focus:border-brand-primary focus:ring-4 focus:ring-brand-primary/5 text-sm transition-all shadow-sm"
                     >
                       <option>Ver: Planta Completa</option>
                       {machinesData.map(m => (
@@ -523,7 +634,7 @@ export default function SupervisorDashboard() {
                   </div>
                 </div>
 
-                <div className="bg-white border border-gray-100 rounded-3xl p-10 h-[450px] shadow-sm">
+                <div className="bg-white border border-gray-100 rounded-3xl p-4 sm:p-6 lg:p-10 h-[360px] sm:h-[450px] shadow-sm">
                   <ResponsiveContainer width="100%" height="100%">
                     <LineChart data={trendsData} margin={{ top: 10, right: 30, bottom: 10, left: 10 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
@@ -541,67 +652,120 @@ export default function SupervisorDashboard() {
                   </ResponsiveContainer>
                 </div>
               </section>
-
+            </div>
+          ) : activeTab === 'personal' ? (
+            <div className="bg-white border border-gray-100 rounded-[2rem] overflow-hidden shadow-sm">
+              <div className="p-6 sm:p-8 border-b border-gray-50 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                <div>
+                  <h2 className="text-xl font-black text-brand-dark">Gestión de Personal</h2>
+                  <p className="text-sm text-brand-gray font-medium">Administración de turnos y operarios en planta</p>
+                </div>
+                <button 
+                  onClick={() => setShowCreateOperator(true)}
+                  className="bg-brand-primary/10 text-brand-primary px-6 py-2.5 rounded-xl text-sm font-black hover:bg-brand-primary hover:text-white transition-all"
+                >
+                  + Registrar Operario
+                </button>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[680px] text-left text-sm">
+                  <thead className="bg-gray-50 text-brand-gray uppercase text-[10px] font-black tracking-[0.2em]">
+                    <tr>
+                      <th className="px-8 py-5">Operario</th>
+                      <th className="px-8 py-5">Turno Asignado</th>
+                      <th className="px-8 py-5">Estado</th>
+                      <th className="px-8 py-5 text-right">Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-50">
+                    {operatorsData.length > 0 ? operatorsData.map(op => (
+                      <tr key={op.id} className="hover:bg-brand-secondary/5 transition-colors group">
+                        <td className="px-8 py-5 font-bold text-brand-dark">
+                          <div className="flex items-center gap-4">
+                            <div className="w-10 h-10 rounded-xl bg-brand-primary/10 flex items-center justify-center text-sm text-brand-primary font-black shadow-inner">
+                              {op.name ? op.name.charAt(0).toUpperCase() : '?'}
+                            </div>
+                            <div className="flex flex-col">
+                              <span>{op.name}</span>
+                              <span className="text-[10px] text-brand-gray tracking-widest uppercase">{op.role}</span>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-8 py-5 text-brand-gray font-medium">{op.shift}</td>
+                        <td className="px-8 py-5">
+                          <span className={`px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest border ${
+                            op.status === 'Activo' ? 'bg-green-50 text-green-600 border-green-100' : 'bg-gray-100 text-brand-gray border-gray-200'
+                          }`}>
+                            {op.status}
+                          </span>
+                        </td>
+                        <td className="px-8 py-5 text-right">
+                          <button className="text-brand-primary hover:text-brand-dark font-black text-xs uppercase tracking-widest transition-colors">
+                            Modificar
+                          </button>
+                        </td>
+                      </tr>
+                    )) : (
+                      <tr>
+                        <td colSpan={4} className="px-8 py-10 text-center text-brand-gray font-bold">
+                          No hay operarios registrados o no se pudo conectar a la base de datos.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
           ) : (
-            /* Personal Tab */
-            <div className="bg-white border border-gray-100 rounded-[2rem] overflow-hidden shadow-sm">
-              <div className="p-8 border-b border-gray-50 flex items-center justify-between">
-               <div>
-                 <h2 className="text-xl font-black text-brand-dark">Gestión de Personal</h2>
-                 <p className="text-sm text-brand-gray font-medium">Administración de turnos y operarios en planta</p>
-               </div>
-               <button 
-                 onClick={() => setShowCreateOperator(true)}
-                 className="bg-brand-primary/10 text-brand-primary px-6 py-2.5 rounded-xl text-sm font-black hover:bg-brand-primary hover:text-white transition-all"
-               >
-                 + Registrar Operario
-               </button>
+            <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
+              <div className="bg-white border border-gray-100 rounded-[2rem] shadow-sm overflow-hidden">
+                <div className="p-6 sm:p-8 border-b border-gray-50">
+                  <h2 className="text-xl font-black text-brand-dark">Configuración del Panel</h2>
+                  <p className="text-sm text-brand-gray font-medium mt-2">Acciones seguras para mantener el panel sincronizado y estable.</p>
+                </div>
+                <div className="p-6 sm:p-8 grid gap-4 sm:grid-cols-2">
+                  <div className="rounded-3xl border border-gray-100 bg-gray-50/70 p-5">
+                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-gray mb-3">Usuario autenticado</p>
+                    <p className="text-xl font-black text-brand-dark">{currentUser?.name || 'Sin sesión'}</p>
+                    <p className="text-sm font-medium text-brand-gray mt-1">Rol actual: {currentUser?.role || 'N/A'}</p>
+                  </div>
+                  <div className="rounded-3xl border border-gray-100 bg-gray-50/70 p-5">
+                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-gray mb-3">Reportes reales en DB</p>
+                    <p className="text-3xl font-black text-brand-dark">{reportCount}</p>
+                    <p className="text-sm font-medium text-brand-gray mt-1">El contador ya no usa valores demo.</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => window.location.reload()}
+                    className="flex items-center justify-center gap-3 rounded-3xl border border-brand-primary/20 bg-brand-primary/10 p-5 text-brand-primary font-black hover:bg-brand-primary hover:text-white transition-all"
+                  >
+                    <RefreshCw size={18} />
+                    Recargar panel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleResetLocalData}
+                    className="rounded-3xl border border-gray-200 bg-white p-5 text-brand-dark font-black hover:bg-gray-50 transition-all"
+                  >
+                    Reiniciar revisiones locales
+                  </button>
+                </div>
               </div>
-              <table className="w-full text-left text-sm">
-                <thead className="bg-gray-50 text-brand-gray uppercase text-[10px] font-black tracking-[0.2em]">
-                  <tr>
-                    <th className="px-8 py-5">Operario</th>
-                    <th className="px-8 py-5">Turno Asignado</th>
-                    <th className="px-8 py-5">Estado</th>
-                    <th className="px-8 py-5 text-right">Acciones</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-50">
-                  {operatorsData.length > 0 ? operatorsData.map(op => (
-                    <tr key={op.id} className="hover:bg-brand-secondary/5 transition-colors group">
-                      <td className="px-8 py-5 font-bold text-brand-dark flex items-center gap-4">
-                        <div className="w-10 h-10 rounded-xl bg-brand-primary/10 flex items-center justify-center text-sm text-brand-primary font-black shadow-inner">
-                          {op.name ? op.name.charAt(0).toUpperCase() : '?'}
-                        </div>
-                        <div className="flex flex-col">
-                          <span>{op.name}</span>
-                          <span className="text-[10px] text-brand-gray tracking-widest uppercase">{op.role}</span>
-                        </div>
-                      </td>
-                      <td className="px-8 py-5 text-brand-gray font-medium">{op.shift}</td>
-                      <td className="px-8 py-5">
-                        <span className={`px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest border ${
-                          op.status === 'Activo' ? 'bg-green-50 text-green-600 border-green-100' : 'bg-gray-100 text-brand-gray border-gray-200'
-                        }`}>
-                          {op.status}
-                        </span>
-                      </td>
-                      <td className="px-8 py-5 text-right">
-                        <button className="text-brand-primary hover:text-brand-dark font-black text-xs uppercase tracking-widest transition-colors">
-                          Modificar
-                        </button>
-                      </td>
-                    </tr>
-                  )) : (
-                    <tr>
-                      <td colSpan={4} className="px-8 py-10 text-center text-brand-gray font-bold">
-                        No hay operarios registrados o no se pudo conectar a la base de datos.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
+
+              <div className="bg-white border border-gray-100 rounded-[2rem] shadow-sm p-6 sm:p-8 flex flex-col gap-4">
+                <h3 className="text-lg font-black text-brand-dark">Sesión y acceso</h3>
+                <p className="text-sm text-brand-gray font-medium">
+                  Usa esta opción para cerrar la sesión del panel administrativo y evitar accesos no autorizados.
+                </p>
+                <button
+                  type="button"
+                  onClick={handleLogout}
+                  className="mt-auto flex items-center justify-center gap-3 rounded-2xl bg-red-500 text-white px-5 py-4 font-black hover:bg-red-600 transition-all"
+                >
+                  <LogOut size={18} />
+                  Cerrar sesión
+                </button>
+              </div>
             </div>
           )}
         </div>
@@ -609,12 +773,18 @@ export default function SupervisorDashboard() {
 
       {/* Machine Detail Modal */}
       {selectedMachine && (
-        <div className="fixed inset-0 z-50 bg-brand-dark/40 backdrop-blur-md flex items-center justify-center p-6">
-          <div className="bg-white border-2 border-brand-primary/10 rounded-[2.5rem] w-full max-w-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-in fade-in zoom-in duration-300">
+        <div
+          className="fixed inset-0 z-50 bg-brand-dark/40 backdrop-blur-md flex items-center justify-center p-3 sm:p-6"
+          onClick={() => setSelectedMachine(null)}
+        >
+          <div
+            className="bg-white border-2 border-brand-primary/10 rounded-[2.5rem] w-full max-w-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-in fade-in zoom-in duration-300"
+            onClick={(e) => e.stopPropagation()}
+          >
             
-            <div className="p-8 border-b border-gray-50 flex items-center justify-between bg-brand-secondary/5">
+            <div className="p-5 sm:p-8 border-b border-gray-50 flex items-center justify-between gap-4 bg-brand-secondary/5">
               <div>
-                <h2 className="text-3xl font-black text-brand-dark flex items-center gap-4">
+                <h2 className="text-2xl sm:text-3xl font-black text-brand-dark flex flex-wrap items-center gap-3 sm:gap-4">
                   {selectedMachine.name}
                   <span className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-[0.2em] border ${
                     selectedMachine.status === 'alarm' ? 'bg-red-50 text-red-600 border-red-100' :
@@ -634,7 +804,7 @@ export default function SupervisorDashboard() {
               </button>
             </div>
 
-            <div className="p-8 overflow-y-auto flex-1 grid grid-cols-2 gap-10">
+            <div className="p-5 sm:p-8 overflow-y-auto flex-1 grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-10">
               
               {/* Data Section */}
               <div className="space-y-8">
@@ -647,12 +817,12 @@ export default function SupervisorDashboard() {
                         {selectedMachine.data?.temperatura || selectedMachine.temp || '--'}°C
                       </p>
                     </div>
-                    <div className="bg-gray-50/50 p-5 rounded-3xl border border-gray-100 shadow-inner">
-                      <p className="text-[10px] font-bold text-brand-gray mb-1 uppercase tracking-widest">Humedad</p>
-                      <p className="text-2xl font-black text-brand-primary">
-                        {selectedMachine.data?.humedad || selectedMachine.humidity || '--'}%
-                      </p>
-                    </div>
+                     <div className="bg-gray-50/50 p-5 rounded-3xl border border-gray-100 shadow-inner">
+                       <p className="text-[10px] font-bold text-brand-gray mb-1 uppercase tracking-widest">Humedad</p>
+                       <p className="text-2xl font-black text-brand-primary">
+                         {selectedMachine.data?.humedadRelativa || selectedMachine.humidity || '--'}%
+                       </p>
+                     </div>
                     <div className="bg-gray-50/50 p-5 rounded-3xl border border-gray-100 shadow-inner">
                       <p className="text-[10px] font-bold text-brand-gray mb-1 uppercase tracking-widest">Día</p>
                       <p className="text-2xl font-black text-brand-primary">
@@ -660,25 +830,23 @@ export default function SupervisorDashboard() {
                       </p>
                     </div>
                     {selectedMachine.type === 'incubadora' && (
-                      <div className="bg-gray-50/50 p-5 rounded-3xl border border-gray-100 shadow-inner">
-                        <p className="text-[10px] font-bold text-brand-gray mb-1 uppercase tracking-widest">Volteos</p>
-                        <p className="text-2xl font-black text-brand-primary">
-                          {selectedMachine.data?.numeroVolteos || '--'}
-                        </p>
-                      </div>
-                    )}
+                       <div className="bg-gray-50/50 p-5 rounded-3xl border border-gray-100 shadow-inner">
+                         <p className="text-[10px] font-bold text-brand-gray mb-1 uppercase tracking-widest">Volteos</p>
+                         <p className="text-2xl font-black text-brand-primary">
+                           {selectedMachine.data?.volteoNumero || '--'}
+                         </p>
+                       </div>
+                     )}
                   </div>
                 </div>
 
                 <div>
                   <h3 className="text-[10px] font-black text-brand-gray uppercase tracking-[0.3em] mb-4 opacity-50">Bitácora de Operario</h3>
-                  <div className="bg-brand-secondary/5 p-6 rounded-3xl border border-brand-secondary/20 text-sm text-brand-dark font-medium leading-relaxed italic">
-                    "{selectedMachine.observaciones || (selectedMachine.status === 'alarm' 
-                      ? "Variación térmica fuera de rango. Requiere inspección inmediata." 
-                      : "Operación estable. Sin requerimientos especiales.")}"
-                  </div>
-                </div>
-              </div>
+                   <div className="bg-brand-secondary/5 p-6 rounded-3xl border border-brand-secondary/20 text-sm text-brand-dark font-medium leading-relaxed italic">
+                     "{selectedMachine.observaciones || 'Sin observaciones registradas.'}" 
+                   </div>
+                 </div>
+               </div>
 
               {/* Evidence Section */}
               <div>
@@ -686,29 +854,27 @@ export default function SupervisorDashboard() {
                   <ImageIcon size={14} className="text-brand-primary" />
                   Registro Visual
                 </h3>
-                <div className="bg-gray-100 border-2 border-dashed border-gray-200 rounded-[2rem] aspect-[3/4] flex flex-col items-center justify-center text-slate-600 relative overflow-hidden shadow-inner">
-                  {selectedMachine.photoUrl ? (
-                    <img 
-                      src={selectedMachine.photoUrl} 
-                      alt="Evidencia" 
-                      className="absolute inset-0 w-full h-full object-cover"
-                      referrerPolicy="no-referrer"
-                    />
-                  ) : (
-                    <img 
-                      src={`https://picsum.photos/seed/${selectedMachine.id}/400/600`} 
-                      alt="Evidencia Simulada" 
-                      className="absolute inset-0 w-full h-full object-cover grayscale opacity-50"
-                      referrerPolicy="no-referrer"
-                    />
-                  )}
-                  <div className="absolute inset-0 bg-gradient-to-t from-brand-dark/60 via-transparent to-transparent"></div>
-                  <div className="absolute bottom-6 left-6 right-6">
-                    <p className="text-[10px] text-white font-black uppercase tracking-widest bg-brand-primary/80 py-2 px-3 rounded-lg backdrop-blur-md inline-block">
-                      {new Date().toISOString().substring(0, 10)} | Juan Pérez
-                    </p>
-                  </div>
-                </div>
+                 <div className="bg-gray-100 border-2 border-dashed border-gray-200 rounded-[2rem] aspect-[3/4] flex flex-col items-center justify-center text-slate-600 relative overflow-hidden shadow-inner">
+                   {selectedMachine.photoUrl ? (
+                     <img 
+                       src={selectedMachine.photoUrl} 
+                       alt="Evidencia" 
+                       className="absolute inset-0 w-full h-full object-cover"
+                       referrerPolicy="no-referrer"
+                     />
+                   ) : (
+                     <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 px-6 text-center">
+                       <ImageIcon size={42} className="text-gray-300" />
+                       <p className="text-sm font-bold text-brand-gray">Sin evidencia visual registrada</p>
+                     </div>
+                   )}
+                   <div className="absolute inset-0 bg-gradient-to-t from-brand-dark/60 via-transparent to-transparent"></div>
+                   <div className="absolute bottom-6 left-6 right-6">
+                     <p className="text-[10px] text-white font-black uppercase tracking-widest bg-brand-primary/80 py-2 px-3 rounded-lg backdrop-blur-md inline-block">
+                       {(selectedMachine.updatedBy || 'Sin responsable registrado') + ' | ' + selectedMachine.lastUpdate}
+                     </p>
+                   </div>
+                 </div>
               </div>
 
             </div>

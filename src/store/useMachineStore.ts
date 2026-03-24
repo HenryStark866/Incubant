@@ -3,11 +3,12 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 
 export type MachineType = 'incubadora' | 'nacedora';
 export type MachineStatus = 'pending' | 'completed';
+export type UserRole = 'OPERARIO' | 'SUPERVISOR' | 'JEFE';
 
 export interface User {
   id: string;
-  nombre: string;
-  role: string;
+  name: string;
+  role: UserRole;
 }
 
 export interface MachineData {

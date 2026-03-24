@@ -24,6 +24,7 @@ export default function SupervisorDashboard() {
   const [operatorsData, setOperatorsData] = useState<any[]>([]);
   const [reportCount, setReportCount] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
+  const [dbError, setDbError] = useState<string | null>(null);
   
     // Modal states
   const [showCreateOperator, setShowCreateOperator] = useState(false);
@@ -31,8 +32,12 @@ export default function SupervisorDashboard() {
   const [newOperator, setNewOperator] = useState({
     name: '',
     pin: '',
-    role: 'OPERARIO'
+    role: 'OPERARIO',
+    turno: 'Turno 1',
   });
+
+  const [editingOperator, setEditingOperator] = useState<any | null>(null);
+  const [isUpdatingOperator, setIsUpdatingOperator] = useState(false);
   
   const currentUser = useMachineStore(state => state.currentUser);
   const logout = useMachineStore(state => state.logout);
@@ -102,6 +107,38 @@ export default function SupervisorDashboard() {
     }
   };
 
+  const handleUpdateOperatorSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingOperator) return;
+
+    setIsUpdatingOperator(true);
+    try {
+      const response = await fetch(`/api/operators/${editingOperator.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          turno: editingOperator.shift,
+          estado: editingOperator.status,
+        }),
+      });
+
+      if (response.ok) {
+        const updated = await response.json();
+        setOperatorsData(prev => prev.map(op => op.id === updated.id ? updated : op));
+        setEditingOperator(null);
+        alert('Operario actualizado exitosamente');
+      } else {
+        const errorData = await response.json();
+        alert(`Error: ${errorData.error || 'Error desconocido'}`);
+      }
+    } catch (error) {
+      console.error('Error updating operator:', error);
+      alert('Error de conexión. Por favor intente nuevamente.');
+    } finally {
+      setIsUpdatingOperator(false);
+    }
+  };
+
   useEffect(() => {
       const fetchData = async () => {
         try {
@@ -133,6 +170,7 @@ export default function SupervisorDashboard() {
             setOperatorsData(operatorsJson);
           } else {
             setOperatorsData([]);
+            if (operatorsJson?.error) setDbError(operatorsJson.error);
           }
 
           if (summaryRes.ok && typeof summaryJson?.reportCount === 'number') {
@@ -142,6 +180,7 @@ export default function SupervisorDashboard() {
           }
         } catch (error) {
           console.error("Error fetching dashboard data:", error);
+          setDbError("Verifica la conexión a la base de datos (Supabase IPv4 Pooler).");
           setMachinesData([]);
           setTrendsData([]);
           setOperatorsData([]);
@@ -452,6 +491,75 @@ export default function SupervisorDashboard() {
           </div>
         )}
 
+        {editingOperator && (
+          <div
+            className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4"
+            onClick={() => setEditingOperator(null)}
+          >
+            <div
+              className="bg-white rounded-2xl w-full max-w-md p-6 shadow-xl transform transition-all duration-300"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex justify-between items-start mb-4">
+                <h2 className="text-xl font-black text-brand-dark">Modificar Operario / Turno</h2>
+                <button onClick={() => setEditingOperator(null)} className="text-gray-500 hover:text-gray-700">
+                  <X size={24} />
+                </button>
+              </div>
+              
+              <form onSubmit={handleUpdateOperatorSubmit} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-brand-gray mb-2">Nombre Completo</label>
+                  <input type="text" value={editingOperator.name} disabled className="w-full px-4 py-3 bg-gray-100 border border-gray-300 rounded-lg text-gray-500" />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-brand-gray mb-2">Asignar Turno / Horario</label>
+                  <select 
+                    value={editingOperator.shift}
+                    onChange={(e) => setEditingOperator({...editingOperator, shift: e.target.value})}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-primary"
+                  >
+                    <option value="Turno 1">Turno 1 (Mañana)</option>
+                    <option value="Turno 2">Turno 2 (Tarde)</option>
+                    <option value="Turno 3">Turno 3 (Noche)</option>
+                    <option value="Gestión">Gestión Administrativa</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-brand-gray mb-2">Estado del Operario</label>
+                  <select 
+                    value={editingOperator.status}
+                    onChange={(e) => setEditingOperator({...editingOperator, status: e.target.value})}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-primary"
+                  >
+                    <option value="Activo">Activo</option>
+                    <option value="Inactivo">Inactivo / Suspendido</option>
+                  </select>
+                </div>
+                
+                <div className="flex justify-end space-x-3 mt-6">
+                  <button 
+                    type="button"
+                    onClick={() => setEditingOperator(null)}
+                    className="px-5 py-3 border border-gray-300 rounded-lg hover:bg-gray-50"
+                  >
+                    Cancelar
+                  </button>
+                  <button 
+                    type="submit"
+                    disabled={isUpdatingOperator}
+                    className={`px-5 py-3 bg-brand-primary text-white rounded-lg hover:bg-[#E6951F] disabled:opacity-50`}
+                  >
+                    {isUpdatingOperator ? 'Guardando...' : 'Guardar Cambios'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
         <header className="bg-white border-b border-gray-100 px-4 sm:px-6 lg:px-10 py-4 shrink-0 z-10">
           <div className="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-4">
             <div className="flex items-start sm:items-center justify-between gap-4">
@@ -650,6 +758,13 @@ export default function SupervisorDashboard() {
                       <Line yAxisId="right" type="monotone" dataKey="humidity" name="Humedad (%)" stroke="#ffd05b" strokeWidth={4} dot={{ r: 0 }} activeDot={{ r: 8, fill: '#ffd05b', stroke: '#fff', strokeWidth: 3 }} />
                     </LineChart>
                   </ResponsiveContainer>
+                  {trendsData.length === 0 && (
+                    <div className="absolute inset-0 flex items-center justify-center flex-col bg-white/80 p-6 text-center">
+                      <AlertTriangle className="text-brand-primary mb-2" size={32} />
+                      <p className="font-bold text-brand-dark">{dbError || "No hay datos de tendencias."}</p>
+                      <p className="text-xs text-brand-gray mt-1">Inténtelo más tarde o verifique la base de datos.</p>
+                    </div>
+                  )}
                 </div>
               </section>
             </div>
@@ -678,7 +793,7 @@ export default function SupervisorDashboard() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-50">
-                    {operatorsData.length > 0 ? operatorsData.map(op => (
+                    {operatorsData.length > 0 && operatorsData.map(op => (
                       <tr key={op.id} className="hover:bg-brand-secondary/5 transition-colors group">
                         <td className="px-8 py-5 font-bold text-brand-dark">
                           <div className="flex items-center gap-4">
@@ -700,15 +815,24 @@ export default function SupervisorDashboard() {
                           </span>
                         </td>
                         <td className="px-8 py-5 text-right">
-                          <button className="text-brand-primary hover:text-brand-dark font-black text-xs uppercase tracking-widest transition-colors">
+                          <button 
+                            onClick={() => setEditingOperator(op)}
+                            className="text-brand-primary hover:text-brand-dark font-black text-xs uppercase tracking-widest transition-colors"
+                          >
                             Modificar
                           </button>
                         </td>
                       </tr>
-                    )) : (
+                    ))}
+                    {operatorsData.length === 0 && (
                       <tr>
-                        <td colSpan={4} className="px-8 py-10 text-center text-brand-gray font-bold">
-                          No hay operarios registrados o no se pudo conectar a la base de datos.
+                        <td colSpan={4} className="px-8 py-10 text-center flex-col items-center">
+                          <p className="text-brand-dark font-bold mb-2">
+                            {dbError || "No hay operarios registrados."}
+                          </p>
+                          <p className="text-brand-gray text-xs">
+                            Si se trata de un error de conexión, por favor verifica que la URL de base de datos usa IPv4 / Pooler.
+                          </p>
                         </td>
                       </tr>
                     )}

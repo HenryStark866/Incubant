@@ -23,6 +23,8 @@ model User {
   nombre     String
   pin_acceso String      @unique
   rol        Role        @default(OPERARIO)
+  turno      String      @default("Turno 1")
+  estado     String      @default("Activo")
   logs       HourlyLog[]
 }
 

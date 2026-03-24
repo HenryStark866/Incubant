@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { useMachineStore, type User } from '../store/useMachineStore';
 import { ThermometerSun, LogIn, AlertCircle, Loader2, Egg } from 'lucide-react';
 import { requestNotificationPermission, scheduleHourlyNotifications } from '../utils/notifications';
-import { authenticateFallbackUser } from '../lib/fallbackAuth';
 
 export default function LoginScreen() {
   const [operatorId, setOperatorId] = useState('');
@@ -41,22 +40,10 @@ export default function LoginScreen() {
       if (response.ok) {
         await completeLogin(data.user);
       } else {
-        const fallbackUser = authenticateFallbackUser(operatorId, pin);
-
-        if (fallbackUser) {
-          await completeLogin(fallbackUser);
-        } else {
-          setError(data.error || 'Error de autenticación');
-        }
+        setError(data.error || 'Error de autenticación');
       }
     } catch (err) {
-      const fallbackUser = authenticateFallbackUser(operatorId, pin);
-
-      if (fallbackUser) {
-        await completeLogin(fallbackUser);
-      } else {
-        setError('Error de conexión con el servidor');
-      }
+      setError('Error de conexión con el servidor. BD inactiva o error de red.');
     } finally {
       setIsLoading(false);
     }

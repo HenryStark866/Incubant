@@ -97,15 +97,17 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-900 flex items-center justify-center p-4 relative">
+    <div className="min-h-screen bg-gray-900 flex flex-col items-center justify-center p-4 relative">
       {canAccessSupervisor && (
-        <button 
-          onClick={() => setViewMode('supervisor')}
-          className="absolute top-6 right-6 bg-slate-800 hover:bg-slate-700 text-white px-6 py-3 rounded-xl shadow-xl flex items-center gap-3 font-bold z-50 transition-all border border-slate-700"
-        >
-          <Monitor size={20} className="text-blue-400" />
-          Panel Supervisor
-        </button>
+        <div className="w-full max-w-[400px] flex justify-end mb-4 z-50">
+          <button 
+            onClick={() => setViewMode('supervisor')}
+            className="bg-slate-800 hover:bg-slate-700 text-white px-5 py-2.5 rounded-xl shadow-xl flex items-center gap-2 font-bold transition-all border border-slate-700"
+          >
+            <Monitor size={18} className="text-blue-400" />
+            Panel Supervisor
+          </button>
+        </div>
       )}
 
       <div className="w-full max-w-[400px] h-[800px] max-h-[90vh] bg-black rounded-[3rem] p-2 shadow-2xl relative overflow-hidden ring-4 ring-gray-800">

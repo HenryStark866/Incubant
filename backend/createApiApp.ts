@@ -316,17 +316,8 @@ export function createApiApp(): Express {
         });
       }
     } catch (error) {
-      console.warn('BD no disponible para login, usando credenciales de respaldo:', error instanceof Error ? error.message : error);
-    }
-
-    const predefinedUser = predefinedUsers.find((candidate) => candidate.id === id && candidate.pin_acceso === pin);
-
-    if (predefinedUser) {
-      return sendAuthenticatedUser(res, {
-        id: predefinedUser.id,
-        name: predefinedUser.nombre,
-        role: predefinedUser.rol,
-      });
+      console.warn('Error de BD en login:', error instanceof Error ? error.message : error);
+      return res.status(500).json({ error: 'Fallo al comunicarse con la base de datos' });
     }
 
     return res.status(401).json({ error: 'Credenciales inválidas' });
@@ -388,11 +379,8 @@ export function createApiApp(): Express {
           count: result.count,
         });
       } catch (dbError) {
-        console.warn('No se pudo conectar a la base de datos, simulando éxito:', dbError);
-        return res.status(200).json({
-          message: 'Sincronización simulada exitosa (Sin BD)',
-          count: fallbackCount,
-        });
+        console.error('Error al sincronizar con la base de datos:', dbError);
+        return res.status(500).json({ error: 'No se pudo conectar a la base de datos para guardar los registros' });
       }
     } catch (error) {
       console.error('Error en sync-hourly:', error);
@@ -541,6 +529,8 @@ export function createApiApp(): Express {
           id: true,
           nombre: true,
           rol: true,
+          turno: true,
+          estado: true,
         },
       });
 
@@ -548,21 +538,21 @@ export function createApiApp(): Express {
         id: user.id,
         name: user.nombre,
         role: user.rol,
-        shift: user.rol === 'SUPERVISOR' || user.rol === 'JEFE' ? 'Gestión' : 'Rotativo',
-        status: 'Activo',
+        shift: user.turno,
+        status: user.estado,
       }));
 
       return res.json(mappedUsers);
     } catch (error) {
       console.error('Error fetching operators:', error);
-      return res.json([]);
+      return res.status(500).json({ error: 'Fallo de conexión a la Base de Datos.' });
     }
   });
 
   app.post('/api/operators', requireRoles(SUPERVISOR_ROLES), async (req, res) => {
     try {
       const prisma = await getPrismaClient();
-      const { nombre, pin, rol } = req.body;
+      const { nombre, pin, rol, turno } = req.body;
 
       if (!nombre || !pin || !rol) {
         return res.status(400).json({ error: 'Nombre, PIN y rol son requeridos' });
@@ -585,11 +575,15 @@ export function createApiApp(): Express {
           nombre,
           pin_acceso: pin,
           rol,
+          turno: turno || 'Turno 1',
+          estado: 'Activo'
         },
         select: {
           id: true,
           nombre: true,
           rol: true,
+          turno: true,
+          estado: true,
         },
       });
 
@@ -597,12 +591,47 @@ export function createApiApp(): Express {
         id: newUser.id,
         name: newUser.nombre,
         role: newUser.rol,
-        shift: newUser.rol === 'SUPERVISOR' || newUser.rol === 'JEFE' ? 'Gestión' : 'Rotativo',
-        status: 'Activo',
+        shift: newUser.turno,
+        status: newUser.estado,
       });
     } catch (error) {
       console.error('Error creating operator:', error);
-      return res.status(500).json({ error: 'No fue posible crear el operario' });
+      return res.status(500).json({ error: 'No fue posible conectar con la Base de Datos. Revisa DATABASE_URL.' });
+    }
+  });
+
+  app.put('/api/operators/:id', requireRoles(SUPERVISOR_ROLES), async (req, res) => {
+    try {
+      const prisma = await getPrismaClient();
+      const { id } = req.params;
+      const { turno, estado } = req.body;
+
+      const dataToUpdate: any = {};
+      if (turno) dataToUpdate.turno = turno;
+      if (estado) dataToUpdate.estado = estado;
+
+      const updatedUser = await prisma.user.update({
+        where: { id },
+        data: dataToUpdate,
+        select: {
+          id: true,
+          nombre: true,
+          rol: true,
+          turno: true,
+          estado: true,
+        },
+      });
+
+      return res.json({
+        id: updatedUser.id,
+        name: updatedUser.nombre,
+        role: updatedUser.rol,
+        shift: updatedUser.turno,
+        status: updatedUser.estado,
+      });
+    } catch (error) {
+      console.error('Error updating operator:', error);
+      return res.status(500).json({ error: 'Error de conexión a la Base de Datos al modificar el operario.' });
     }
   });
 

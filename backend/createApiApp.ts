@@ -635,5 +635,16 @@ export function createApiApp(): Express {
     }
   });
 
+  app.get('/health-db', async (req, res) => {
+    try {
+      const prisma = await getPrismaClient();
+      await prisma.$executeRaw`SELECT 1`;
+      return res.status(200).json({ status: 'Connected! Supabase DB reached.' });
+    } catch (error: any) {
+      console.error('DB Error Health Check:', error);
+      return res.status(500).json({ status: 'Failed', error: error.message || 'Error de conexion' });
+    }
+  });
+
   return app;
 }

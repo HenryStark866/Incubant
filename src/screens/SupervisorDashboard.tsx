@@ -10,6 +10,7 @@ import {
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { useMachineStore } from '../store/useMachineStore';
+import { listEvidences } from '../lib/supabase';
 
 // Operadores se cargarán dinámicamente desde la BD
 
@@ -38,6 +39,10 @@ export default function SupervisorDashboard() {
 
   const [editingOperator, setEditingOperator] = useState<any | null>(null);
   const [isUpdatingOperator, setIsUpdatingOperator] = useState(false);
+
+  const [showEvidencesModal, setShowEvidencesModal] = useState(false);
+  const [evidencesList, setEvidencesList] = useState<any[]>([]);
+  const [isLoadingEvidences, setIsLoadingEvidences] = useState(false);
   
   const currentUser = useMachineStore(state => state.currentUser);
   const logout = useMachineStore(state => state.logout);
@@ -57,6 +62,14 @@ export default function SupervisorDashboard() {
     } finally {
       logout();
     }
+  };
+
+  const handleOpenEvidences = async () => {
+    setShowEvidencesModal(true);
+    setIsLoadingEvidences(true);
+    const files = await listEvidences('reportes');
+    setEvidencesList(files);
+    setIsLoadingEvidences(false);
   };
 
   const handleResetLocalData = () => {
@@ -639,6 +652,63 @@ export default function SupervisorDashboard() {
           </div>
         )}
 
+        {showEvidencesModal && (
+          <div className="fixed inset-0 z-[70] bg-brand-dark/40 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-300" onClick={() => setShowEvidencesModal(false)}>
+            <div className="bg-white border-2 border-brand-primary/10 rounded-[2.5rem] w-full max-w-2xl max-h-[85vh] flex flex-col shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300" onClick={e => e.stopPropagation()}>
+              <div className="p-6 border-b border-gray-50 flex items-center justify-between bg-brand-secondary/5 shrink-0">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-blue-100 text-blue-600 rounded-xl shadow-sm">
+                    <ImageIcon size={24} />
+                  </div>
+                  <h2 className="text-xl font-black text-brand-dark">Bóveda de Evidencias en Nube</h2>
+                </div>
+                <button onClick={() => setShowEvidencesModal(false)} className="p-2 hover:bg-white rounded-xl text-brand-gray transition-colors border border-transparent hover:border-gray-100 shadow-sm">
+                  <X size={24} />
+                </button>
+              </div>
+              <div className="p-6 overflow-y-auto flex-1 bg-gray-50/50">
+                {isLoadingEvidences ? (
+                  <div className="flex flex-col items-center justify-center py-12">
+                     <Loader2 size={40} className="text-brand-primary animate-spin mb-4" />
+                     <p className="font-bold text-brand-gray">Cargando evidencias seguras...</p>
+                     <p className="text-[10px] text-gray-400 mt-2 uppercase tracking-widest">Conectando a Supabase Storage</p>
+                  </div>
+                ) : evidencesList.length === 0 ? (
+                  <div className="text-center py-12 bg-white rounded-2xl border border-dashed border-gray-200">
+                    <ImageIcon size={48} className="text-gray-300 mx-auto mb-4" />
+                    <p className="font-bold text-brand-dark">No hay documentos en la bóveda</p>
+                    <p className="text-[10px] text-gray-400 mt-2 uppercase tracking-widest">Los reportes PDF se agregarán aquí autómaticamente</p>
+                  </div>
+                ) : (
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    {evidencesList.map((file, i) => (
+                      <div key={i} className="bg-white p-4 rounded-2xl border border-gray-100 shadow-[0_2px_10px_rgba(0,0,0,0.02)] flex flex-col justify-between hover:border-brand-primary/30 hover:shadow-md transition-all">
+                        <div className="flex items-start gap-4 mb-4">
+                          <div className="p-2 bg-red-50 text-red-500 rounded-xl">
+                            <Download size={20} />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="font-bold text-brand-dark text-sm truncate">{file.name}</p>
+                            <p className="text-[10px] font-black text-brand-gray uppercase tracking-widest mt-1">
+                              {new Date(file.created_at).toLocaleString()}
+                            </p>
+                          </div>
+                        </div>
+                        <a 
+                          href={file.publicUrl} target="_blank" rel="noopener noreferrer"
+                          className="w-full py-3 bg-[#F5F5F7] text-brand-dark hover:bg-brand-primary hover:text-white text-xs font-black uppercase tracking-widest text-center rounded-xl transition-all"
+                        >
+                          Ver y Descargar
+                        </a>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
         <header className="bg-white border-b border-gray-100 px-4 sm:px-6 lg:px-10 py-4 shrink-0 z-10">
           <div className="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-4">
             <div className="flex items-start sm:items-center justify-between gap-4">
@@ -677,11 +747,11 @@ export default function SupervisorDashboard() {
 
               <div className="flex gap-2">
                 <button
-                  onClick={() => window.open('https://drive.google.com/drive/', '_blank')}
+                  onClick={handleOpenEvidences}
                   className="lg:hidden bg-blue-600 hover:bg-blue-700 text-white px-4 py-3 rounded-2xl flex items-center gap-2 text-xs font-black transition-all shadow-xl shadow-blue-600/20 uppercase tracking-widest"
                 >
                   <ImageIcon size={18} />
-                  Drive
+                  Bóveda
                 </button>
                 <button
                   onClick={handleDownloadReport}
@@ -695,7 +765,7 @@ export default function SupervisorDashboard() {
 
             <div className="flex flex-wrap items-stretch gap-3 sm:gap-4">
               <button 
-                onClick={() => window.open('https://drive.google.com/drive/', '_blank')}
+                onClick={handleOpenEvidences}
                 className="hidden lg:flex bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-2xl items-center gap-3 text-sm font-black transition-all shadow-xl shadow-blue-600/20 active:scale-95 uppercase tracking-widest"
               >
                 <ImageIcon size={20} />

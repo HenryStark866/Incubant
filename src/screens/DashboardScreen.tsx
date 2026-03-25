@@ -104,7 +104,7 @@ export default function DashboardScreen() {
     }
   };
 
-  const generatePDF = (syncedMachines: Machine[]) => {
+  const generatePDF = async (syncedMachines: Machine[]) => {
     try {
       const doc = new jsPDF();
       
@@ -219,7 +219,11 @@ export default function DashboardScreen() {
         }
       });
 
+      const pdfBlob = doc.output('blob');
       doc.save(`Reporte_Incubant_${new Date().toISOString().split('T')[0]}.pdf`);
+      
+      const { uploadEvidencePDF } = await import('../lib/supabase');
+      await uploadEvidencePDF(pdfBlob, currentUser?.name || 'Sistema');
     } catch (err) {
       console.error('PDF Error:', err);
     }
@@ -298,7 +302,7 @@ export default function DashboardScreen() {
 
       // 3. Generar y Descargar PDF
       setSyncPhase('pdf');
-      generatePDF(machinesWithUploadedPhotos);
+      await generatePDF(machinesWithUploadedPhotos);
 
       setSyncSuccess(true);
       setTimeout(() => {

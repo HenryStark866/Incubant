@@ -55,3 +55,65 @@ export async function uploadEvidenceImage(base64Image: string, machineId: string
     return base64Image; // Fallback
   }
 }
+
+export async function uploadEvidencePDF(pdfBlob: Blob, operario: string): Promise<string | null> {
+  if (!supabase) return null;
+
+  try {
+    const fileName = `Reporte_${operario.replace(/\s+/g, '_')}_${Date.now()}.pdf`;
+
+    const { data, error } = await supabase.storage
+      .from('evidencias')
+      .upload(`reportes/${fileName}`, pdfBlob, {
+        contentType: 'application/pdf',
+        upsert: false
+      });
+
+    if (error) {
+      console.error('Error uploading PDF to Supabase:', error);
+      return null;
+    }
+
+    const { data: publicUrlData } = supabase.storage
+      .from('evidencias')
+      .getPublicUrl(`reportes/${fileName}`);
+
+    return publicUrlData.publicUrl;
+  } catch (error) {
+    console.error('Exception uploading PDF:', error);
+    return null;
+  }
+}
+
+export async function listEvidences(folder: string = '') {
+  if (!supabase) return [];
+  
+  try {
+    const { data, error } = await supabase.storage
+      .from('evidencias')
+      .list(folder, {
+        limit: 100,
+        offset: 0,
+        sortBy: { column: 'created_at', order: 'desc' },
+      });
+
+    if (error) {
+      console.error('Error listing evidences:', error);
+      return [];
+    }
+
+    return data.map(file => {
+      const { data: publicUrlData } = supabase.storage
+        .from('evidencias')
+        .getPublicUrl(`${folder ? folder + '/' : ''}${file.name}`);
+      
+      return {
+        ...file,
+        publicUrl: publicUrlData.publicUrl
+      };
+    });
+  } catch (error) {
+    console.error('Error fetching evidences list:', error);
+    return [];
+  }
+}

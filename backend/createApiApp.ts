@@ -1,5 +1,7 @@
 import crypto from 'crypto';
+import cron from 'node-cron';
 import express, { type Express, type NextFunction, type Request, type Response } from 'express';
+import cors from 'cors';
 import type { PrismaClient } from '@prisma/client';
 
 type UserRole = 'OPERARIO' | 'SUPERVISOR' | 'JEFE';
@@ -96,8 +98,66 @@ async function getPrismaClient() {
 }
 
 // ==========================================================================
-// SESSION HELPERS
+// SSE - REAL TIME EVENTS
 // ==========================================================================
+let clients: Response[] = [];
+
+function sendEventToAll(data: any) {
+  const payload = `data: ${JSON.stringify(data)}\n\n`;
+  clients.forEach(c => c.write(payload));
+}
+
+function sendEventToUser(userId: string, data: any) {
+  // En un sistema real usaríamos un Map para eficiencia. 
+  // Para esta escala, filtramos o enviamos a todos con el ID del destinatario.
+  const payload = `data: ${JSON.stringify({ ...data, targetUserId: userId })}\n\n`;
+  clients.forEach(c => c.write(payload));
+}
+
+// ==========================================================================
+// SESSION HELPERS (Database Backed)
+// ==========================================================================
+async function getSession(token: string): Promise<SessionUser | null> {
+  try {
+    const prisma = await getPrismaClient();
+    const session = await prisma.session.findUnique({
+      where: { token },
+      include: { user: true }
+    });
+
+    if (!session || session.expiresAt < new Date()) {
+      if (session) await prisma.session.delete({ where: { id: session.id } }).catch(() => null);
+      return null;
+    }
+
+    return {
+      id: session.user.id,
+      name: session.user.nombre,
+      role: session.user.rol as UserRole,
+      shift: session.user.turno,
+    };
+  } catch (error) {
+    console.warn('[Session] Error querying DB:', error);
+    return null;
+  }
+}
+
+async function createSession(user_id: string, maxAge: number) {
+  const prisma = await getPrismaClient();
+  const token = crypto.randomUUID();
+  const expiresAt = new Date(Date.now() + maxAge);
+  
+  await prisma.session.create({
+    data: {
+      token,
+      user_id,
+      expiresAt
+    }
+  });
+  
+  return token;
+}
+
 function parseCookies(cookieHeader?: string): Record<string, string> {
   if (!cookieHeader) {
     return {};
@@ -115,13 +175,10 @@ function parseCookies(cookieHeader?: string): Record<string, string> {
   }, {});
 }
 
-function signSessionPayload(payload: string) {
-  return crypto.createHmac('sha256', SESSION_SECRET).update(payload).digest('base64url');
-}
-
 function buildSessionCookie(token: string) {
   const secureFlag = process.env.NODE_ENV === 'production' ? '; Secure' : '';
-  return `${SESSION_COOKIE_NAME}=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${SESSION_MAX_AGE_SECONDS}${secureFlag}`;
+  const maxAge = 12 * 60 * 60; // 12 horas
+  return `${SESSION_COOKIE_NAME}=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAge}${secureFlag}`;
 }
 
 function clearSessionCookie() {
@@ -129,49 +186,16 @@ function clearSessionCookie() {
   return `${SESSION_COOKIE_NAME}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${secureFlag}`;
 }
 
-function createSessionToken(user: SessionUser) {
-  const payload = Buffer.from(JSON.stringify({
-    ...user,
-    exp: Date.now() + SESSION_MAX_AGE_SECONDS * 1000,
-  })).toString('base64url');
-
-  return `${payload}.${signSessionPayload(payload)}`;
-}
-
-function getSessionUserFromRequest(req: Request): SessionUser | null {
+async function attachSessionUser(req: AuthenticatedRequest, _res: Response, next: NextFunction) {
   const cookies = parseCookies(req.headers.cookie);
   const token = cookies[SESSION_COOKIE_NAME];
 
   if (!token) {
-    return null;
+    req.user = null as any;
+    return next();
   }
 
-  const [payload, signature] = token.split('.');
-
-  if (!payload || !signature || signature !== signSessionPayload(payload)) {
-    return null;
-  }
-
-  try {
-    const decoded = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8')) as SessionUser & { exp: number };
-
-    if (!decoded.exp || decoded.exp < Date.now()) {
-      return null;
-    }
-
-    return {
-      id: decoded.id,
-      name: decoded.name,
-      role: decoded.role,
-      shift: decoded.shift,
-    };
-  } catch {
-    return null;
-  }
-}
-
-function attachSessionUser(req: AuthenticatedRequest, _res: Response, next: NextFunction) {
-  req.user = getSessionUserFromRequest(req);
+  req.user = (await getSession(token)) as any;
   next();
 }
 
@@ -197,9 +221,18 @@ function requireRoles(roles: UserRole[]) {
   };
 }
 
-function sendAuthenticatedUser(res: Response, user: SessionUser) {
-  res.setHeader('Set-Cookie', buildSessionCookie(createSessionToken(user)));
-  return res.status(200).json({ user });
+async function sendAuthenticatedUser(res: Response, user: { id: string, nombre: string, rol: string, turno: string }) {
+  const maxAge = 12 * 60 * 60 * 1000;
+  const token = await createSession(user.id, maxAge);
+  res.setHeader('Set-Cookie', buildSessionCookie(token));
+  return res.status(200).json({ 
+    user: {
+      id: user.id,
+      name: user.nombre,
+      role: user.rol,
+      shift: user.turno
+    }
+  });
 }
 
 // ==========================================================================
@@ -290,6 +323,7 @@ async function resolveDatabaseUser(sessionUser: SessionUser) {
       rol: sessionUser.role,
       turno: sessionUser.shift || predefined?.turno || 'Turno 1',
       estado: 'Activo',
+      ultimo_acceso: new Date()
     },
   });
 }
@@ -358,10 +392,35 @@ export function createApiApp(): Express {
   const app = express();
 
   app.use(express.json({ limit: '10mb' }));
+  
+  // CORS Configuration
+  const allowedOrigins = [
+    'https://incubant.vercel.app',
+    'http://localhost:3000',
+    'http://localhost:3001',
+    'http://localhost:5173'
+  ];
+
+  app.use(cors({
+    origin: (origin, callback) => {
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error('Not allowed by CORS'));
+      }
+    },
+    credentials: true
+  }));
+
   app.use(attachSessionUser);
 
   // Intentar semillado al arrancar (no bloquea el arranque)
   void seedPredefinedUsers();
+
+  // ── Health Check ──────────────────────────────────────────────────────────
+  app.get('/api/health', (_req, res) => {
+    res.json({ status: 'ok', timestamp: new Date().toISOString() });
+  });
 
   // ── Session ──────────────────────────────────────────────────────────────
   app.get('/api/session', (req: AuthenticatedRequest, res) => {
@@ -372,7 +431,13 @@ export function createApiApp(): Express {
     return res.json({ user: req.user });
   });
 
-  app.post('/api/logout', (_req, res) => {
+  app.post('/api/logout', async (req: AuthenticatedRequest, res) => {
+    const cookies = parseCookies(req.headers.cookie);
+    const token = cookies[SESSION_COOKIE_NAME];
+    if (token) {
+       const prisma = await getPrismaClient();
+       await prisma.session.delete({ where: { token } }).catch(() => null);
+    }
     res.setHeader('Set-Cookie', clearSessionCookie());
     res.status(204).end();
   });
@@ -399,11 +464,15 @@ export function createApiApp(): Express {
 
       if (user && user.pin_acceso === String(pin) && ['OPERARIO', 'SUPERVISOR', 'JEFE'].includes(user.rol)) {
         console.log(`[Login] Autenticado desde BD: ${user.nombre}`);
+        await prisma.user.update({
+          where: { id: user.id },
+          data: { ultimo_acceso: new Date() }
+        });
         return sendAuthenticatedUser(res, {
           id: user.id,
-          name: user.nombre,
-          role: user.rol as UserRole,
-          shift: user.turno,
+          nombre: user.nombre,
+          rol: user.rol,
+          turno: user.turno,
         });
       }
     } catch (error) {
@@ -439,13 +508,103 @@ export function createApiApp(): Express {
 
       return sendAuthenticatedUser(res, {
         id: localUser.id,
-        name: localUser.nombre,
-        role: localUser.rol,
-        shift: localUser.turno,
+        nombre: localUser.nombre,
+        rol: localUser.rol,
+        turno: localUser.turno,
       });
     }
 
-    return res.status(401).json({ error: 'Credenciales inválidas' });
+    return res.status(401).json({ error: 'PIN o usuario incorrectos' });
+  });
+
+  // ── Operator Management ──────────────────────────────────────────────────
+  app.get('/api/dashboard/operators', requireRoles(SUPERVISOR_ROLES), async (_req, res) => {
+    try {
+      const prisma = await getPrismaClient();
+      const users = await prisma.user.findMany({
+        where: { estado: 'Activo' },
+        orderBy: { nombre: 'asc' }
+      });
+      // Mapear al formato que espera el frontend
+      const mapped = users.map(u => ({
+        id: u.id,
+        name: u.nombre,
+        role: u.rol,
+        shift: u.turno,
+        status: u.estado
+      }));
+      return res.json(mapped);
+    } catch (error) {
+      console.error('[Admin] Error listing operators:', error);
+      return res.status(500).json({ error: 'Error al listar personal' });
+    }
+  });
+
+  app.post('/api/operators', requireRoles(SUPERVISOR_ROLES), async (req, res) => {
+    try {
+      const { nombre, pin, rol } = req.body;
+      const prisma = await getPrismaClient();
+      
+      const slug = (nombre as string).toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+      const id = `${slug}-${Math.floor(1000 + Math.random() * 9000)}`;
+
+      const user = await prisma.user.create({
+        data: {
+          id,
+          nombre,
+          pin_acceso: String(pin),
+          rol,
+          turno: 'Turno 1',
+          estado: 'Activo'
+        }
+      });
+
+      return res.status(201).json({
+        id: user.id,
+        name: user.nombre,
+        role: user.rol,
+        shift: user.turno,
+        status: user.estado
+      });
+    } catch (error) {
+      return res.status(500).json({ error: 'Error al crear operario' });
+    }
+  });
+
+  app.put('/api/operators/:id', requireRoles(SUPERVISOR_ROLES), async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { turno, estado } = req.body;
+      const prisma = await getPrismaClient();
+      const user = await prisma.user.update({
+        where: { id },
+        data: { turno, estado }
+      });
+      return res.json({
+        id: user.id,
+        name: user.nombre,
+        role: user.rol,
+        shift: user.turno,
+        status: user.estado
+      });
+    } catch (error) {
+      return res.status(500).json({ error: 'Error al actualizar operario' });
+    }
+  });
+
+  app.delete('/api/operators/:id', requireRoles(SUPERVISOR_ROLES), async (req, res) => {
+    try {
+      const { id } = req.params;
+      const prisma = await getPrismaClient();
+      // Soft delete: cambiar estado a Inactivo
+      await prisma.user.update({
+        where: { id },
+        data: { estado: 'Inactivo' }
+      });
+      return res.status(204).end();
+    } catch (error) {
+      return res.status(500).json({ error: 'Error al eliminar operario' });
+    }
   });
 
   // ── Sync Hourly ──────────────────────────────────────────────────────────
@@ -936,7 +1095,149 @@ export function createApiApp(): Express {
     }
   });
 
+  // ── Advanced Shifts & Schedules (Admin) ──────────────────────────────────
+  app.get('/api/admin/shifts', requireRoles(SUPERVISOR_ROLES), async (_req, res) => {
+    try {
+      const prisma = await getPrismaClient();
+      const shifts = await prisma.shift.findMany();
+      return res.json(shifts);
+    } catch (error) {
+      return res.status(500).json({ error: 'Error cargando turnos' });
+    }
+  });
+
+  app.post('/api/admin/shifts', requireRoles(['JEFE']), async (req, res) => {
+    try {
+      const { nombre, hora_inicio, hora_fin, color } = req.body;
+      const prisma = await getPrismaClient();
+      const shift = await prisma.shift.create({
+        data: { nombre, hora_inicio, hora_fin, color }
+      });
+      sendEventToAll({ type: 'SHIFT_UPDATE', message: 'Se han actualizado los catálogos de turnos.' });
+      return res.status(201).json(shift);
+    } catch (error) {
+      return res.status(500).json({ error: 'No se pudo crear el turno' });
+    }
+  });
+
+  app.get('/api/admin/assignments', requireRoles(SUPERVISOR_ROLES), async (req, res) => {
+    try {
+      const { date } = req.query;
+      const prisma = await getPrismaClient();
+      const assignments = await prisma.scheduleAssignment.findMany({
+        where: date ? { fecha: new Date(date as string) } : undefined,
+        include: {
+          user: { select: { nombre: true, id: true } },
+          shift: true
+        }
+      });
+      return res.json(assignments);
+    } catch (error) {
+      return res.status(500).json({ error: 'Error cargando asignaciones' });
+    }
+  });
+
+  app.post('/api/admin/assignments', requireRoles(SUPERVISOR_ROLES), async (req, res) => {
+    try {
+      const { user_id, shift_id, fecha } = req.body;
+      const prisma = await getPrismaClient();
+      const assignment = await prisma.scheduleAssignment.upsert({
+        where: { user_id_fecha: { user_id, fecha: new Date(fecha) } },
+        update: { shift_id },
+        create: { user_id, shift_id, fecha: new Date(fecha) }
+      });
+      
+      const shift = await prisma.shift.findUnique({ where: { id: shift_id } });
+      sendEventToUser(user_id, { 
+        type: 'NEW_ASSIGNMENT', 
+        message: `Tu horario para el ${new Date(fecha).toLocaleDateString()} ha sido actualizado al turno "${shift?.nombre}".`,
+        assignment 
+      });
+
+      return res.json(assignment);
+    } catch (error) {
+      return res.status(500).json({ error: 'Fallo al asignar turno' });
+    }
+  });
+
+  // ── Operator Perspective ─────────────────────────────────────────────────
+  app.get('/api/my-schedule', requireAuthenticatedUser, async (req: AuthenticatedRequest, res) => {
+    try {
+      const prisma = await getPrismaClient();
+      const dbUser = await resolveDatabaseUser(req.user!);
+      const assignments = await prisma.scheduleAssignment.findMany({
+        where: { user_id: dbUser.id, fecha: { gte: new Date() } },
+        include: { shift: true },
+        orderBy: { fecha: 'asc' },
+        take: 7
+      });
+      return res.json(assignments);
+    } catch (error) {
+       return res.status(500).json({ error: 'Error al consultar mi horario' });
+    }
+  });
+
+  // ── CRON JOBS: Alert System ──────────────────────────────────────────────
+  // Se ejecuta cada 1 minuto
+  cron.schedule('* * * * *', async () => {
+    try {
+      const prisma = await getPrismaClient();
+      const now = new Date();
+      const timeStr = now.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', hour12: false });
+      
+      // 1. Alertas de 15 minutos antes
+      const targetTime = new Date(now.getTime() + 15 * 60 * 1000);
+      const targetTimeStr = targetTime.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', hour12: false });
+      
+      const assignmentsStartingSoon = await prisma.scheduleAssignment.findMany({
+        where: { 
+          fecha: { gte: new Date(now.toDateString()), lt: new Date(now.getTime() + 24*60*60*1000) },
+          shift: { hora_inicio: targetTimeStr }
+        },
+        include: { user: true, shift: true }
+      });
+
+      assignmentsStartingSoon.forEach(asm => {
+        sendEventToUser(asm.user_id, {
+          type: 'SHIFT_REMINDER',
+          title: '¡Prepárate!',
+          message: `Tu turno "${asm.shift.nombre}" comienza en 15 minutos (${asm.shift.hora_inicio}).`
+        });
+      });
+
+      // 2. Recordatorios cada 5 minutos si no ha iniciado sesión
+      if (now.getMinutes() % 5 === 0) {
+        // En un escenario real verificaríamos logs de "check-in". 
+        // Simplificamos: si su ultimo_acceso fue hace más de 10 min y debería estar trabajando.
+        const workInProgress = await prisma.scheduleAssignment.findMany({
+          where: {
+            fecha: new Date(now.toDateString()),
+            shift: {
+              hora_inicio: { lte: timeStr },
+              hora_fin: { gte: timeStr }
+            }
+          },
+          include: { user: true }
+        });
+
+        workInProgress.forEach(asm => {
+          const lastAccess = asm.user.ultimo_acceso;
+          if (!lastAccess || (now.getTime() - lastAccess.getTime()) > 10 * 60 * 1000) {
+            sendEventToUser(asm.user_id, {
+              type: 'LOGIN_REMINDER',
+              title: 'Pendiente Ingreso',
+              message: 'Tu turno ya comenzó. No olvides registrar tu ingreso en la app.'
+            });
+          }
+        });
+      }
+    } catch (err) {
+      console.error('[CRON] Error evaluando turnos:', err);
+    }
+  });
+
   // ── Health Check ─────────────────────────────────────────────────────────
+
   app.get('/api/health-db', async (_req, res) => {
     try {
       const prisma = await getPrismaClient();
@@ -954,5 +1255,124 @@ export function createApiApp(): Express {
     return res.json({ message: `${predefinedUsers.length} usuarios sincronizados.` });
   });
 
+  // ── Shifts & Schedule Management ──────────────────────────────────────────
+  app.get('/api/admin/shifts', requireRoles(SUPERVISOR_ROLES), async (_req, res) => {
+    try {
+      const prisma = await getPrismaClient();
+      const shifts = await prisma.shift.findMany({ orderBy: { hora_inicio: 'asc' } });
+      return res.json(shifts);
+    } catch (error) {
+      return res.status(500).json({ error: 'Error al obtener turnos' });
+    }
+  });
+
+  app.post('/api/admin/shifts', requireRoles(SUPERVISOR_ROLES), async (req, res) => {
+    try {
+      const { nombre, hora_inicio, hora_fin, color } = req.body;
+      const prisma = await getPrismaClient();
+      const shift = await prisma.shift.create({
+        data: { nombre, hora_inicio, hora_fin, color }
+      });
+      return res.status(201).json(shift);
+    } catch (error) {
+      return res.status(500).json({ error: 'Error al crear turno' });
+    }
+  });
+
+  app.get('/api/admin/assignments', requireRoles(SUPERVISOR_ROLES), async (_req, res) => {
+    try {
+      const prisma = await getPrismaClient();
+      const assignments = await (prisma as any).scheduleAssignment.findMany({
+        include: { user: true, shift: true },
+        orderBy: { fecha: 'desc' },
+        take: 50
+      });
+      return res.json(assignments);
+    } catch (error) {
+      return res.status(500).json({ error: 'Error al obtener asignaciones' });
+    }
+  });
+
+  app.post('/api/admin/assignments', requireRoles(SUPERVISOR_ROLES), async (req, res) => {
+    try {
+      const { user_id, shift_id, fecha } = req.body;
+      const prisma = await getPrismaClient();
+      
+      const assignment = await (prisma as any).scheduleAssignment.upsert({
+        where: {
+          user_id_fecha: {
+            user_id,
+            fecha: new Date(fecha)
+          }
+        },
+        update: { shift_id },
+        create: {
+          user_id,
+          shift_id,
+          fecha: new Date(fecha)
+        },
+        include: { user: true, shift: true }
+      });
+
+      // Notificar al usuario vía SSE
+      sendEventToUser(user_id, {
+        type: 'NEW_ASSIGNMENT',
+        message: `Se te ha asignado el turno ${assignment.shift.nombre} para el día ${fecha}`,
+        assignment
+      });
+
+      return res.status(201).json(assignment);
+    } catch (error) {
+      console.error('[Admin] Error assigning shift:', error);
+      return res.status(500).json({ error: 'Error al asignar turno' });
+    }
+  });
+
+  app.delete('/api/admin/assignments/:id', requireRoles(SUPERVISOR_ROLES), async (req, res) => {
+    try {
+      const { id } = req.params;
+      const prisma = await getPrismaClient();
+      await (prisma as any).scheduleAssignment.delete({ where: { id } });
+      return res.status(204).end();
+    } catch (error) {
+      return res.status(500).json({ error: 'Error al eliminar asignación' });
+    }
+  });
+
+  app.get('/api/my-schedule', requireAuthenticatedUser, async (req: AuthenticatedRequest, res) => {
+    try {
+      const prisma = await getPrismaClient();
+      const assignments = await (prisma as any).scheduleAssignment.findMany({
+        where: { user_id: req.user!.id },
+        include: { shift: true },
+        orderBy: { fecha: 'asc' },
+        take: 14 // Próximas 2 semanas
+      });
+      return res.json(assignments);
+    } catch (error) {
+      return res.status(500).json({ error: 'Error al obtener tu horario' });
+    }
+  });
+
+  app.get('/api/admin/users', requireRoles(SUPERVISOR_ROLES), async (_req, res) => {
+    try {
+      const prisma = await getPrismaClient();
+      const users = await prisma.user.findMany({ 
+        where: { estado: 'Activo' },
+        orderBy: { nombre: 'asc' }
+      });
+      return res.json(users);
+    } catch (err) {
+      return res.status(500).json({ error: 'Fallo al obtener usuarios' });
+    }
+  });
+
   return app;
+}
+
+function getShiftName(date: Date) {
+  const hour = date.getHours();
+  if (hour >= 6 && hour < 14) return 'Turno 1';
+  if (hour >= 14 && hour < 22) return 'Turno 2';
+  return 'Turno 3';
 }

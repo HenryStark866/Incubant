@@ -11,11 +11,12 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { useMachineStore } from '../store/useMachineStore';
 import { listEvidences } from '../lib/supabase';
+import { getApiUrl } from '../lib/api';
 
-// Operadores se cargarán dinámicamente desde la BD
+import ShiftManager from '../components/Admin/ShiftManager';
 
 export default function SupervisorDashboard() {
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'personal' | 'settings'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'personal' | 'horarios' | 'settings'>('dashboard');
   const [selectedMachine, setSelectedMachine] = useState<any | null>(null);
   const [chartFilter, setChartFilter] = useState('Ver: Planta Completa');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -100,14 +101,14 @@ export default function SupervisorDashboard() {
     .map(o => (o.name || 'Sin nombre').split(' ')[0]) // Primer Nombre usando name
     .join(', ') || 'N/A';
 
-  const handleTabChange = (tab: 'dashboard' | 'personal' | 'settings') => {
+  const handleTabChange = (tab: 'dashboard' | 'personal' | 'horarios' | 'settings') => {
     setActiveTab(tab);
     setIsSidebarOpen(false);
   };
 
   const handleLogout = async () => {
     try {
-      await fetch('/api/logout', { method: 'POST' });
+      await fetch(getApiUrl('/api/logout'), { method: 'POST' });
     } catch (error) {
       console.error('Error cerrando sesión:', error);
     } finally {
@@ -139,7 +140,7 @@ export default function SupervisorDashboard() {
 
     setIsCreatingOperator(true);
     try {
-      const response = await fetch('/api/operators', {
+      const response = await fetch(getApiUrl('/api/operators'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -177,7 +178,7 @@ export default function SupervisorDashboard() {
 
     setIsUpdatingOperator(true);
     try {
-      const response = await fetch(`/api/operators/${editingOperator.id}`, {
+      const response = await fetch(getApiUrl(`/api/operators/${editingOperator.id}`), {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -207,7 +208,7 @@ export default function SupervisorDashboard() {
     if (!window.confirm('¿Estás seguro de eliminar este operario? Si tiene registros asociados, se desactivará en lugar de borrarse.')) return;
     
     try {
-      const response = await fetch(`/api/operators/${id}`, {
+      const response = await fetch(getApiUrl(`/api/operators/${id}`), {
         method: 'DELETE',
       });
       
@@ -226,10 +227,10 @@ export default function SupervisorDashboard() {
       const fetchData = async () => {
         try {
           const [statusRes, trendsRes, operatorsRes, summaryRes] = await Promise.all([
-            fetch('/api/dashboard/status'),
-            fetch('/api/dashboard/trends'),
-            fetch('/api/dashboard/operators'),
-            fetch('/api/dashboard/summary')
+            fetch(getApiUrl('/api/dashboard/status')),
+            fetch(getApiUrl('/api/dashboard/trends')),
+            fetch(getApiUrl('/api/dashboard/operators')),
+            fetch(getApiUrl('/api/dashboard/summary'))
           ]);
           
           const statusJson = await statusRes.json();
@@ -301,7 +302,7 @@ export default function SupervisorDashboard() {
     if (canAccessSupervisor) {
       const fetchData = async () => {
         try {
-          const trendsRes = await fetch(`/api/dashboard/trends?machine=${encodeURIComponent(chartFilter)}`);
+          const trendsRes = await fetch(getApiUrl(`/api/dashboard/trends?machine=${encodeURIComponent(chartFilter)}`));
           const trendsJson = await trendsRes.json();
           if (trendsRes.ok && Array.isArray(trendsJson)) {
             setTrendsData(trendsJson);
@@ -324,179 +325,124 @@ export default function SupervisorDashboard() {
   const handleDownloadReport = async () => {
     try {
       const doc = new jsPDF();
+      const timestamp = new Date().toLocaleString();
       
-      // Header y Logo corporativo (texto figurativo)
-      doc.setFontSize(22);
-      doc.setTextColor(245, 166, 35); // Naranja Incubant
+      // Header y Logo corporativo
+      doc.setFillColor(245, 166, 35); // Naranja Incubant
+      doc.rect(0, 0, 210, 40, 'F');
+      
+      doc.setFontSize(24);
+      doc.setTextColor(255, 255, 255);
       doc.setFont("helvetica", "bold");
       doc.text('INCUBANT MONITOR', 14, 20);
       
-      doc.setFontSize(12);
-      doc.setTextColor(50, 50, 50);
-      doc.text('REPORTE Y CONTROL DIARIO DE MÁQUINAS (INCUBADORAS Y NACEDORAS)', 14, 28);
+      doc.setFontSize(10);
+      doc.text('V0.1.0 "Incubant Integral" | MINUTA DE TURNO', 14, 30);
       
       doc.setFontSize(10);
-      doc.setTextColor(100, 100, 100);
+      doc.setTextColor(50, 50, 50);
       doc.setFont("helvetica", "normal");
-       doc.text(`Fecha de Reporte: ${new Date().toLocaleDateString()} a las ${new Date().toLocaleTimeString()}`, 14, 35);
-       doc.text(`Operario Responsable: ${currentUser?.name || 'Sin responsable autenticado'}`, 14, 40);
+      doc.text(`Fecha y Hora de Cierre: ${timestamp}`, 14, 50);
+      doc.text(`Supervisor Responsable: ${currentUser?.name || 'Sistema'}`, 14, 55);
+      doc.text(`Turno Operativo: ${summaryData.currentShift}`, 14, 60);
 
       // Preparar datos para las Incubadoras
       const tableDataIncubadoras = machinesData
         .filter(m => m.type === 'incubadora')
         .map(m => {
           const obs = m.data?.observaciones || m.observaciones || '';
-          const time = m.data?.tiempoIncubacion 
-            ? `${m.data.tiempoIncubacion.dias}d ${m.data.tiempoIncubacion.horas}h ${m.data.tiempoIncubacion.minutos}m`
-            : (obs.match(/Tiempo:\s*([^|]+)/)?.[1]?.trim() || '--');
-            
           return [
             m.name.replace('Incubadora ', ''),
-            m.status === 'alarm' ? 'Alarma' : m.status === 'maintenance' ? 'Mantenim.' : 'OK',
-            time,
+            m.status === 'alarm' ? 'ALARMA' : 'OK',
             m.data?.tempOvoscan || m.temp || '--',
-            m.data?.tempAire || (obs.match(/Temp Aire:\s*([^|]+)/)?.[1]?.trim() || '--'),
+            m.data?.tempAire || '--',
             m.data?.humedadRelativa || m.humidity || '--',
-            m.data?.co2 || (obs.match(/CO2:\s*([^|]+)/)?.[1]?.trim() || '--'),
-            m.data?.volteoNumero || (obs.match(/Volteos:\s*([^|]+)/)?.[1]?.trim() || '--'),
-            m.data?.volteoPosicion || (obs.match(/Posicion:\s*([^|]+)/)?.[1]?.trim() || '--'),
-            m.data?.alarma || (obs.match(/Alarma:\s*([^|]+)/)?.[1]?.trim() || 'No'),
-            m.photoUrl ? 'VER FOTO' : '--',
-            obs.substring(0, 30)
+            m.data?.volteoNumero || '--',
+            m.data?.volteoPosicion || '--'
           ];
         });
 
       doc.setFontSize(14);
-      doc.setTextColor(0, 0, 0);
+      doc.setTextColor(245, 166, 35);
       doc.setFont("helvetica", "bold");
-      doc.text('CONTROL DIARIO INCUBADORAS', 14, 55);
+      doc.text('DATOS TÉCNICOS: INCUBADORAS', 14, 75);
 
       autoTable(doc, {
-        startY: 60,
-        head: [['N°', 'Estado', 'Tiempo', 'T.Ovo', 'T.Aire', 'Hum %', 'CO2', 'V/N°', 'V/Pos', 'Alarma', 'Evid.', 'Obs']],
+        startY: 80,
+        head: [['Máquina', 'Estado', 'T.Ovo', 'T.Aire', 'Hum %', 'V/N°', 'V/Pos']],
         body: tableDataIncubadoras,
-        theme: 'grid',
-        headStyles: { fillColor: [245, 166, 35] as [number, number, number], textColor: 255, fontSize: 8, fontStyle: 'bold' },
-        styles: { fontSize: 7, cellPadding: 2 },
-        alternateRowStyles: { fillColor: [245, 245, 245] as [number, number, number] },
-        didDrawCell: (data) => {
-          if (data.section === 'body' && data.column.index === 10 && data.cell.text[0] === 'VER FOTO') {
-            const rowIdx = data.row.index;
-            const machine = machinesData.filter(m => m.type === 'incubadora')[rowIdx];
-            if (machine?.photoUrl) {
-              doc.link(data.cell.x + 2, data.cell.y + 2, data.cell.width - 4, data.cell.height - 4, { url: machine.photoUrl });
-            }
-          }
-        },
-        willDrawCell: (data) => {
-          if (data.section === 'body' && data.column.index === 10 && data.cell.text[0] === 'VER FOTO') {
-            doc.setTextColor(0, 0, 255);
-          }
-        }
+        theme: 'striped',
+        headStyles: { fillColor: [245, 166, 35], textColor: 255, fontStyle: 'bold' },
+        styles: { fontSize: 8 }
       });
 
       // Preparar datos para las Nacedoras
-      const currentY = (doc as any).lastAutoTable.finalY + 15;
+      const lastY = (doc as any).lastAutoTable.finalY + 15;
       const tableDataNacedoras = machinesData
         .filter(m => m.type === 'nacedora')
-        .map(m => {
-          const obs = m.data?.observaciones || m.observaciones || '';
-          const time = m.data?.tiempoIncubacion 
-            ? `${m.data.tiempoIncubacion.dias}d ${m.data.tiempoIncubacion.horas}h ${m.data.tiempoIncubacion.minutos}m`
-            : (obs.match(/Tiempo:\s*([^|]+)/)?.[1]?.trim() || '--');
+        .map(m => [
+          m.name.replace('Nacedora ', ''),
+          m.status === 'alarm' ? 'ALARMA' : 'OK',
+          m.data?.temperatura || m.temp || '--',
+          m.data?.humedadRelativa || m.humidity || '--',
+          m.data?.co2 || '--'
+        ]);
 
-          return [
-            m.name.replace('Nacedora ', ''),
-            m.status === 'alarm' ? 'Alarma' : m.status === 'maintenance' ? 'Mantenim.' : 'OK',
-            time,
-            m.data?.temperatura || m.temp || '--',
-            m.data?.humedadRelativa || m.humidity || '--',
-            m.data?.co2 || (obs.match(/CO2:\s*([^|]+)/)?.[1]?.trim() || '--'),
-            m.photoUrl ? 'VER FOTO' : '--',
-            obs.substring(0, 40)
-          ];
-        });
-
-      // Comprobar si hay espacio para las nacedoras, o crear nueva página
-      if (currentY > 250) {
-        doc.addPage();
-        doc.text('CONTROL DIARIO NACEDORAS', 14, 20);
-        autoTable(doc, {
-          startY: 25,
-          head: [['N°', 'Estado', 'Día Inc.', 'Temp °C', 'Hum %', 'CO2', 'Observaciones']],
-          body: tableDataNacedoras,
-          theme: 'grid',
-          headStyles: { fillColor: [100, 100, 100], textColor: 255, fontSize: 8, fontStyle: 'bold' },
-          styles: { fontSize: 8, cellPadding: 2 },
-          alternateRowStyles: { fillColor: [245, 245, 245] },
-        });
-      } else {
-        doc.text('CONTROL DIARIO NACEDORAS', 14, currentY);
-        autoTable(doc, {
-          startY: currentY + 5,
-          head: [['N°', 'Estado', 'Tiempo', 'Temp', 'Hum %', 'CO2', 'Evid.', 'Observaciones']],
-          body: tableDataNacedoras,
-          theme: 'grid',
-          headStyles: { fillColor: [100, 100, 100] as [number, number, number], textColor: 255, fontSize: 8, fontStyle: 'bold' },
-          styles: { fontSize: 8, cellPadding: 2 },
-          alternateRowStyles: { fillColor: [245, 245, 245] as [number, number, number] },
-          didDrawCell: (data) => {
-            if (data.section === 'body' && data.column.index === 6 && data.cell.text[0] === 'VER FOTO') {
-              const rowIdx = data.row.index;
-              const machine = machinesData.filter(m => m.type === 'nacedora')[rowIdx];
-              if (machine?.photoUrl) {
-                doc.link(data.cell.x + 2, data.cell.y + 2, data.cell.width - 4, data.cell.height - 4, { url: machine.photoUrl });
-              }
-            }
-          },
-          willDrawCell: (data) => {
-            if (data.section === 'body' && data.column.index === 6 && data.cell.text[0] === 'VER FOTO') {
-              doc.setTextColor(0, 0, 255);
-            }
-          }
-        });
-      }
+      doc.text('DATOS TÉCNICOS: NACEDORAS', 14, lastY);
+      autoTable(doc, {
+        startY: lastY + 5,
+        head: [['Máquina', 'Estado', 'Temp °C', 'Hum %', 'CO2']],
+        body: tableDataNacedoras,
+        theme: 'striped',
+        headStyles: { fillColor: [100, 100, 100], textColor: 255, fontStyle: 'bold' },
+        styles: { fontSize: 8 }
+      });
 
       // Seccion de Alarmas e Incidentes (Minuta Integrada)
-      doc.addPage();
-      const incidentY = 20;
-      doc.setFontSize(14);
+      const incidentY = (doc as any).lastAutoTable.finalY + 15;
       doc.setTextColor(245, 166, 35);
-      doc.text('INCIDENTES Y ALARMAS DURANTE EL TURNO', 14, incidentY);
+      doc.text('BITÁCORA DE INCIDENTES Y ALARMAS', 14, incidentY);
       
       try {
-        const incRes = await fetch('/api/dashboard/incidents?limit=10');
+        const incRes = await fetch(getApiUrl('/api/dashboard/incidents?limit=15'));
         const incidents = await incRes.json();
         
-        let subY = currentY + 10;
         if (incidents.length > 0) {
-          incidents.forEach((inc: any) => {
-            doc.setFontSize(10);
-            doc.setTextColor(50, 50, 50);
-            const time = new Date(inc.fecha_hora).toLocaleTimeString();
-            doc.text(`[${time}] ${inc.titulo}`, 14, subY);
-            doc.setFontSize(8);
-            doc.text(inc.descripcion, 14, subY + 5, { maxWidth: 180 });
-            subY += 15;
+          const body = incidents.map((inc: any) => [
+            new Date(inc.fecha_hora).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}),
+            inc.titulo,
+            inc.descripcion
+          ]);
+          autoTable(doc, {
+            startY: incidentY + 5,
+            head: [['Hora', 'Incidente', 'Descripción']],
+            body: body,
+            theme: 'grid',
+            headStyles: { fillColor: [239, 68, 68] },
+            styles: { fontSize: 7 }
           });
         } else {
-          doc.setFontSize(10);
+          doc.setFontSize(9);
           doc.setTextColor(150, 150, 150);
-          doc.text('No se registraron incidentes ni alarmas manuales en este turno.', 14, subY);
+          doc.text('No se registraron alarmas manuales o incidentes críticos en este turno.', 14, incidentY + 10);
         }
       } catch (err) {
-        doc.text('Fallo al recuperar bitácora de incidentes.', 14, currentY + 10);
+        doc.text('Fallo al conectar con la bitácora de incidentes.', 14, incidentY + 10);
       }
 
-      // Pie de página con Enlace a Evidencias
-      doc.setFontSize(10);
-      doc.setTextColor(0, 0, 255);
-      doc.textWithLink('>>> VER EVIDENCIAS FOTOGRÁFICAS EN LA NUBE <<<', 14, 280, { url: window.location.origin });
+      // Footer con Enlace a Evidencias
+      const footerY = 285;
+      doc.setFontSize(9);
+      doc.setTextColor(100, 100, 100);
+      doc.text('Este documento es una copia electrónica generada automáticamente por Incubant Monitor v0.1.0', 14, footerY - 10);
       
-      doc.save(`Minuta_Incubant_${new Date().toISOString().split('T')[0]}.pdf`);
+      doc.setTextColor(0, 0, 255);
+      doc.textWithLink('>>> VER EVIDENCIAS FOTOGRÁFICAS EN LA NUBE <<<', 14, footerY, { url: window.location.origin });
+      
+      doc.save(`Minuta_Incubant_${new Date().toISOString().split('T')[0]}_Turno.pdf`);
     } catch (error) {
       console.error('Error al generar PDF:', error);
-      alert('Error al compilar el documento. Verifica si hay datos disponibles.');
+      alert('Error al compilar el reporte integral.');
     }
   };
 
@@ -581,6 +527,15 @@ export default function SupervisorDashboard() {
           >
             <Users size={20} />
             <span className="font-bold tracking-tight">Personal Planta</span>
+          </button>
+          <button 
+            onClick={() => handleTabChange('horarios')}
+            className={`w-full flex items-center gap-4 px-5 py-4 rounded-2xl transition-all ${
+              activeTab === 'horarios' ? 'bg-brand-primary text-white shadow-lg shadow-brand-primary/30 active:scale-95' : 'hover:bg-gray-50 text-brand-gray font-semibold'
+            }`}
+          >
+            <Clock size={20} />
+            <span className="font-bold tracking-tight">Horarios</span>
           </button>
         </nav>
 
@@ -905,22 +860,27 @@ export default function SupervisorDashboard() {
                 </div>
               </div>
 
-              {/* CARD CAMBIO RESTORATION */}
-              <div className="bg-white border-2 border-brand-primary/10 shadow-sm rounded-2xl px-5 py-3 flex items-center gap-4 min-w-[180px] hover:border-brand-primary/30 transition-all">
-                <div className="p-2 bg-brand-primary/5 rounded-xl text-brand-primary">
-                  <Clock size={20} />
+              {/* CARD CAMBIO - RELOJ Y ESTADO ACTIVO */}
+              <div className="bg-white border-2 border-brand-primary/10 shadow-sm rounded-2xl px-5 py-3 flex items-center gap-4 min-w-[200px] hover:border-brand-primary/30 transition-all">
+                <div className="p-2 bg-brand-primary/10 rounded-xl text-brand-primary shadow-inner">
+                  <Clock size={20} className="animate-pulse" />
                 </div>
                 <div>
-                  <p className="text-[9px] text-brand-gray uppercase font-black tracking-widest leading-none mb-1">
-                    Turno: {summaryData.activeOperatorsCount} Activos
+                  <p className="text-[10px] text-brand-primary font-black uppercase tracking-widest leading-none mb-1">
+                    CAMBIO, {currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                   </p>
-                  <h3 className="text-lg font-black text-brand-dark flex items-center gap-2">
-                    {summaryData.currentShift}
-                    <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></span>
+                  <h3 className="text-sm font-black text-brand-dark flex flex-col">
+                    <span>{summaryData.currentShift}</span>
+                    <span className="text-[9px] text-brand-gray font-bold lowercase">
+                      {summaryData.activeOperatorsCount} operarios activos
+                    </span>
                   </h3>
-                  <p className="text-[8px] text-brand-primary font-black mt-1 uppercase">
-                    Ult: {summaryData.lastReportTime ? new Date(summaryData.lastReportTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'N/A'}
-                  </p>
+                  <div className="mt-2 pt-1 border-t border-gray-100 flex items-center gap-2">
+                    <CheckCircle2 size={10} className="text-green-500" />
+                    <p className="text-[9px] text-brand-gray font-black uppercase tracking-tight">
+                      Ult. Reporte: {summaryData.lastReportTime ? new Date(summaryData.lastReportTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'N/A'}
+                    </p>
+                  </div>
                 </div>
               </div>
 
@@ -1057,6 +1017,8 @@ export default function SupervisorDashboard() {
                 </div>
               </section>
             </div>
+          ) : activeTab === 'horarios' ? (
+            <ShiftManager />
           ) : activeTab === 'personal' ? (
             <div className="bg-white border border-gray-100 rounded-[2rem] overflow-hidden shadow-sm">
               <div className="p-6 sm:p-8 border-b border-gray-50 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">

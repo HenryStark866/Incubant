@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useMachineStore, type User } from '../store/useMachineStore';
+import { getApiUrl } from '../lib/api';
 import { ThermometerSun, LogIn, AlertCircle, Loader2, Egg } from 'lucide-react';
 import { requestNotificationPermission, scheduleHourlyNotifications } from '../utils/notifications';
 
@@ -35,7 +36,7 @@ export default function LoginScreen() {
     setIsLoading(true);
 
     try {
-      const response = await fetch('/api/login', {
+      const response = await fetch(getApiUrl('/api/login'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id: operatorId, pin })

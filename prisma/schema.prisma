@@ -25,9 +25,14 @@ model User {
   pin_acceso String      @unique
   rol        Role        @default(OPERARIO)
   turno      String      @default("Turno 1")
-  estado     String      @default("Activo")
-  logs       HourlyLog[]
-  incidents  Incident[]
+  estado            String      @default("Activo")
+  ultimo_acceso     DateTime?
+  session_expires   DateTime?
+  
+  logs              HourlyLog[]
+  incidents         Incident[]
+  assignments       ScheduleAssignment[]
+  sessions          Session[]
 }
 
 model Machine {
@@ -72,4 +77,35 @@ model Incident {
   
   user    User     @relation(fields: [user_id], references: [id])
   machine Machine? @relation(fields: [machine_id], references: [id])
+}
+
+model Shift {
+  id        String   @id @default(uuid())
+  nombre    String   @unique // Ej: "Turno 1", "Turno 2"
+  hora_inicio String // "HH:mm"
+  hora_fin    String // "HH:mm"
+  color       String? @default("#f5a623")
+
+  assignments ScheduleAssignment[]
+}
+
+model ScheduleAssignment {
+  id       String   @id @default(uuid())
+  user_id  String
+  shift_id String
+  fecha    DateTime // El día específico de la asignación
+
+  user  User  @relation(fields: [user_id], references: [id])
+  shift Shift @relation(fields: [shift_id], references: [id])
+
+  @@unique([user_id, fecha])
+}
+
+model Session {
+  id        String   @id @default(uuid())
+  token     String   @unique
+  user_id   String
+  expiresAt DateTime
+
+  user User @relation(fields: [user_id], references: [id])
 }

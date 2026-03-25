@@ -1,0 +1,2 @@
+﻿[dotenv@17.3.1] injecting env (6) from .env -- tip: ÔÜÖ´©Å  specify custom .env file path with { path: '/custom/path/.env' }
+Probando conexi├│n a: db.uhbtivaepyhwfdvtpfjq.supabase.co:6543/postgres?pgbouncer=true&connection_limit=10

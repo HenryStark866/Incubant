@@ -27,6 +27,7 @@ model User {
   turno      String      @default("Turno 1")
   estado     String      @default("Activo")
   logs       HourlyLog[]
+  incidents  Incident[]
 }
 
 model Machine {
@@ -34,6 +35,7 @@ model Machine {
   tipo           MachineType
   numero_maquina Int
   logs           HourlyLog[]
+  incidents      Incident[]
 }
 
 model HourlyLog {
@@ -58,4 +60,16 @@ model HourlyLog {
 
   user    User    @relation(fields: [user_id], references: [id])
   machine Machine @relation(fields: [machine_id], references: [id])
+}
+model Incident {
+  id          String   @id @default(uuid())
+  fecha_hora  DateTime @default(now())
+  user_id     String
+  machine_id  String?
+  titulo      String
+  descripcion String
+  tipo        String   // 'ALARM' | 'INCIDENT' | 'MAINTENANCE'
+  
+  user    User     @relation(fields: [user_id], references: [id])
+  machine Machine? @relation(fields: [machine_id], references: [id])
 }

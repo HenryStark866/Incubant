@@ -24,6 +24,11 @@ export default function SupervisorDashboard() {
   const [trendsData, setTrendsData] = useState<any[]>([]);
   const [operatorsData, setOperatorsData] = useState<any[]>([]);
   const [reportCount, setReportCount] = useState(0);
+  const [summaryData, setSummaryData] = useState<{
+    lastReportTime: string | null;
+    activeOperatorsCount: number;
+    currentShift: string;
+  }>({ lastReportTime: null, activeOperatorsCount: 0, currentShift: 'Turno 1' });
   const [isLoading, setIsLoading] = useState(true);
   const [dbError, setDbError] = useState<string | null>(null);
   
@@ -198,6 +203,25 @@ export default function SupervisorDashboard() {
     }
   };
 
+  const handleDeleteOperator = async (id: string) => {
+    if (!window.confirm('¿Estás seguro de eliminar este operario? Si tiene registros asociados, se desactivará en lugar de borrarse.')) return;
+    
+    try {
+      const response = await fetch(`/api/operators/${id}`, {
+        method: 'DELETE',
+      });
+      
+      if (response.ok) {
+        setOperatorsData(prev => prev.filter(op => op.id !== id));
+      } else {
+        const err = await response.json();
+        alert(err.error || 'Error eliminando el usuario.');
+      }
+    } catch (error) {
+      alert('Error de conexión a la Base de Datos.');
+    }
+  };
+
   useEffect(() => {
       const fetchData = async () => {
         try {
@@ -234,6 +258,11 @@ export default function SupervisorDashboard() {
 
           if (summaryRes.ok && typeof summaryJson?.reportCount === 'number') {
             setReportCount(summaryJson.reportCount);
+            setSummaryData({
+              lastReportTime: summaryJson.lastReportTime,
+              activeOperatorsCount: summaryJson.activeOperatorsCount,
+              currentShift: summaryJson.currentShift
+            });
           } else {
             setReportCount(0);
           }
@@ -292,7 +321,7 @@ export default function SupervisorDashboard() {
     ? Math.round((machinesData.filter(m => m.status === 'ok').length / machinesData.length) * 100)
     : 0;
 
-  const handleDownloadReport = () => {
+  const handleDownloadReport = async () => {
     try {
       const doc = new jsPDF();
       
@@ -428,17 +457,43 @@ export default function SupervisorDashboard() {
         });
       }
 
-      // Pie de página
-      const pageCount = (doc.internal as any).getNumberOfPages();
-      for (let i = 1; i <= pageCount; i++) {
-        doc.setPage(i);
-        doc.setFontSize(8);
-        doc.setTextColor(150, 150, 150);
-        doc.text(`Documento Confidencial - Incubant © ${new Date().getFullYear()} | Página ${i} de ${pageCount}`, 14, 290);
+      // Seccion de Alarmas e Incidentes (Minuta Integrada)
+      doc.addPage();
+      const incidentY = 20;
+      doc.setFontSize(14);
+      doc.setTextColor(245, 166, 35);
+      doc.text('INCIDENTES Y ALARMAS DURANTE EL TURNO', 14, incidentY);
+      
+      try {
+        const incRes = await fetch('/api/dashboard/incidents?limit=10');
+        const incidents = await incRes.json();
+        
+        let subY = currentY + 10;
+        if (incidents.length > 0) {
+          incidents.forEach((inc: any) => {
+            doc.setFontSize(10);
+            doc.setTextColor(50, 50, 50);
+            const time = new Date(inc.fecha_hora).toLocaleTimeString();
+            doc.text(`[${time}] ${inc.titulo}`, 14, subY);
+            doc.setFontSize(8);
+            doc.text(inc.descripcion, 14, subY + 5, { maxWidth: 180 });
+            subY += 15;
+          });
+        } else {
+          doc.setFontSize(10);
+          doc.setTextColor(150, 150, 150);
+          doc.text('No se registraron incidentes ni alarmas manuales en este turno.', 14, subY);
+        }
+      } catch (err) {
+        doc.text('Fallo al recuperar bitácora de incidentes.', 14, currentY + 10);
       }
 
-      // Forzar la descarga en el cliente
-      doc.save(`Control_Diario_${new Date().toISOString().split('T')[0]}.pdf`);
+      // Pie de página con Enlace a Evidencias
+      doc.setFontSize(10);
+      doc.setTextColor(0, 0, 255);
+      doc.textWithLink('>>> VER EVIDENCIAS FOTOGRÁFICAS EN LA NUBE <<<', 14, 280, { url: window.location.origin });
+      
+      doc.save(`Minuta_Incubant_${new Date().toISOString().split('T')[0]}.pdf`);
     } catch (error) {
       console.error('Error al generar PDF:', error);
       alert('Error al compilar el documento. Verifica si hay datos disponibles.');
@@ -850,6 +905,25 @@ export default function SupervisorDashboard() {
                 </div>
               </div>
 
+              {/* CARD CAMBIO RESTORATION */}
+              <div className="bg-white border-2 border-brand-primary/10 shadow-sm rounded-2xl px-5 py-3 flex items-center gap-4 min-w-[180px] hover:border-brand-primary/30 transition-all">
+                <div className="p-2 bg-brand-primary/5 rounded-xl text-brand-primary">
+                  <Clock size={20} />
+                </div>
+                <div>
+                  <p className="text-[9px] text-brand-gray uppercase font-black tracking-widest leading-none mb-1">
+                    Turno: {summaryData.activeOperatorsCount} Activos
+                  </p>
+                  <h3 className="text-lg font-black text-brand-dark flex items-center gap-2">
+                    {summaryData.currentShift}
+                    <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></span>
+                  </h3>
+                  <p className="text-[8px] text-brand-primary font-black mt-1 uppercase">
+                    Ult: {summaryData.lastReportTime ? new Date(summaryData.lastReportTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'N/A'}
+                  </p>
+                </div>
+              </div>
+
               <div className="bg-brand-secondary/10 border border-brand-secondary/30 rounded-2xl px-5 py-3 flex flex-col justify-center min-w-[200px]">
                 <div className="flex items-center gap-2 mb-1">
                   <Clock className="text-brand-primary" size={14} />
@@ -1030,12 +1104,20 @@ export default function SupervisorDashboard() {
                           </span>
                         </td>
                         <td className="px-8 py-5 text-right">
-                          <button 
-                            onClick={() => setEditingOperator(op)}
-                            className="text-brand-primary hover:text-brand-dark font-black text-xs uppercase tracking-widest transition-colors"
-                          >
-                            Modificar
-                          </button>
+                          <div className="flex justify-end gap-3 sm:gap-4">
+                            <button 
+                              onClick={() => setEditingOperator(op)}
+                              className="text-brand-primary hover:text-brand-dark font-black text-[10px] sm:text-xs uppercase tracking-widest transition-colors py-2 px-3 hover:bg-brand-primary/5 rounded-lg"
+                            >
+                              Modificar
+                            </button>
+                            <button 
+                              onClick={() => handleDeleteOperator(op.id)}
+                              className="text-red-500 hover:text-red-700 font-black text-[10px] sm:text-xs uppercase tracking-widest transition-colors py-2 px-3 hover:bg-red-50 rounded-lg"
+                            >
+                              Borrar
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))}

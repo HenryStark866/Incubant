@@ -79,11 +79,14 @@ const globalForPrisma = globalThis as typeof globalThis & {
 async function getPrismaClient() {
   if (!globalForPrisma.prisma) {
     const { PrismaClient } = await import('@prisma/client');
+    // Sanitización robusta de la URL para evitar errores DNS por caracteres ocultos (\r)
+    const dbUrl = (process.env.DATABASE_URL || '').replace(/\r/g, '').trim();
+    
     globalForPrisma.prisma = new PrismaClient({
       log: process.env.NODE_ENV === 'development' ? ['error', 'warn'] : ['error'],
       datasources: {
         db: {
-          url: process.env.DATABASE_URL,
+          url: dbUrl,
         },
       },
     });
@@ -474,6 +477,19 @@ export function createApiApp(): Express {
           const co2 = toNumberOrNull(d.co2) ?? 0;
           const humidity = toNumberOrNull(d.humedadRelativa) ?? 0;
 
+          // Crear incidente automático si hay alarma
+          if (d.alarma === 'Si') {
+            await prisma.incident.create({
+              data: {
+                user_id: databaseUser.id,
+                machine_id: resolvedMachine.id,
+                titulo: `Alarma en ${machine.id}`,
+                descripcion: d.observaciones || 'Alarma detectada en reporte horario',
+                tipo: 'ALARM'
+              }
+            });
+          }
+
           return {
             user_id: databaseUser.id,
             machine_id: resolvedMachine.id,
@@ -515,12 +531,37 @@ export function createApiApp(): Express {
     try {
       const prisma = await getPrismaClient();
       const reportCount = await prisma.hourlyLog.count();
-      return res.json({ reportCount });
+      const lastLog = await prisma.hourlyLog.findFirst({
+        orderBy: { fecha_hora: 'desc' },
+        select: { fecha_hora: true }
+      });
+
+      // Operadores activos en este turno
+      const currentTime = new Date();
+      const currentShift = getShiftName(currentTime);
+      const activeOps = await prisma.user.count({
+        where: { turno: currentShift, estado: 'Activo' }
+      });
+
+      return res.json({ 
+        reportCount, 
+        lastReportTime: lastLog?.fecha_hora || null,
+        activeOperatorsCount: activeOps,
+        currentShift
+      });
     } catch (error) {
-      console.error('[Dashboard] Error al consultar conteo de reportes:', error);
-      return res.json({ reportCount: 0 });
+      console.error('[Dashboard] Error al consultar resumen:', error);
+      return res.json({ reportCount: 0, lastReportTime: null, activeOperatorsCount: 0 });
     }
   });
+
+  // Helper para determinar turno en el backend
+  function getShiftName(date: Date): string {
+    const hour = date.getHours();
+    if (hour >= 6 && hour < 14) return 'Turno 1';
+    if (hour >= 14 && hour < 22) return 'Turno 2';
+    return 'Turno 3';
+  }
 
   // ── Dashboard: Status ────────────────────────────────────────────────────
   app.get('/api/dashboard/status', requireRoles(SUPERVISOR_ROLES), async (_req, res) => {
@@ -578,6 +619,7 @@ export function createApiApp(): Express {
             volteoNumero,
             alarma: alarmaActiva,
             ventiladorPrincipal: ventilador,
+            timestamp: log.fecha_hora.toISOString() // Añadimos el tiempo real del reporte
           };
 
           if (alarmaActiva === 'Si' || Math.abs(log.temp_principal_actual - log.temp_principal_consigna) > 0.5) {
@@ -799,6 +841,32 @@ export function createApiApp(): Express {
     }
   });
 
+  // ── Delete Operator ──────────────────────────────────────────────────────
+  app.delete('/api/operators/:id', requireRoles(['JEFE']), async (req, res) => {
+    try {
+      const prisma = await getPrismaClient();
+      const { id } = req.params;
+
+      // Verificar si tiene logs asociados para evitar errores de integridad
+      const logsCount = await prisma.hourlyLog.count({ where: { user_id: id } });
+      
+      if (logsCount > 0) {
+        // En lugar de borrar, desactivamos para mantener historial
+        await prisma.user.update({
+          where: { id },
+          data: { estado: 'Inactivo' }
+        });
+        return res.json({ message: 'Usuario desactivado por tener registros asociados.' });
+      }
+
+      await prisma.user.delete({ where: { id } });
+      return res.status(204).end();
+    } catch (error) {
+      console.error('[Operators] Error deleting operator:', error);
+      return res.status(500).json({ error: 'No se pudo eliminar el usuario.' });
+    }
+  });
+
   // ── My Shift Report ──────────────────────────────────────────────────────
   app.get('/api/my-shift-report', requireAuthenticatedUser, async (req: AuthenticatedRequest, res) => {
     try {
@@ -823,6 +891,48 @@ export function createApiApp(): Express {
     } catch (error) {
       console.error('[Report] Error fetching shift reports:', error);
       return res.status(500).json({ error: 'Error interno obteniendo reporte de turno' });
+    }
+  });
+
+  // ── Incidents ────────────────────────────────────────────────────────────
+  app.get('/api/dashboard/incidents', requireRoles(SUPERVISOR_ROLES), async (req, res) => {
+    try {
+      const { limit = '20' } = req.query;
+      const prisma = await getPrismaClient();
+      const incidents = await prisma.incident.findMany({
+        take: parseInt(limit as string),
+        orderBy: { fecha_hora: 'desc' },
+        include: {
+          user: { select: { nombre: true } },
+          machine: { select: { tipo: true, numero_maquina: true } }
+        }
+      });
+      return res.json(incidents);
+    } catch (error) {
+      console.error('[Incidents] Error:', error);
+      return res.status(500).json({ error: 'Fallo al obtener incidentes' });
+    }
+  });
+
+  app.post('/api/dashboard/incidents', requireAuthenticatedUser, async (req: AuthenticatedRequest, res) => {
+    try {
+      const { titulo, descripcion, tipo, machine_id } = req.body;
+      const prisma = await getPrismaClient();
+      const databaseUser = await resolveDatabaseUser(req.user!);
+
+      const incident = await prisma.incident.create({
+        data: {
+          user_id: databaseUser.id,
+          machine_id: machine_id || null,
+          titulo,
+          descripcion,
+          tipo: tipo || 'INCIDENT'
+        }
+      });
+      return res.status(201).json(incident);
+    } catch (error) {
+      console.error('[Incidents] Error creating:', error);
+      return res.status(500).json({ error: 'No se pudo registrar el incidente' });
     }
   });
 

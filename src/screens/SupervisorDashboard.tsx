@@ -178,16 +178,21 @@ export default function SupervisorDashboard() {
           } else {
             setReportCount(0);
           }
-        } catch (error) {
+
+          // Reset error if success
+          setDbError(null);
+        } catch (error: any) {
           console.error("Error fetching dashboard data:", error);
-          setDbError("Verifica la conexión a la base de datos (Supabase IPv4 Pooler).");
+          setDbError(error.message?.includes('JSON') 
+            ? "Error de formato en la respuesta del servidor." 
+            : "No fue posible conectar con la Base de Datos. Revisa DATABASE_URL en Vercel.");
           setMachinesData([]);
           setTrendsData([]);
           setOperatorsData([]);
           setReportCount(0);
         } finally {
-        setIsLoading(false);
-      }
+          setIsLoading(false);
+        }
     };
 
     if (!canAccessSupervisor) {

@@ -158,6 +158,34 @@ const AlarmToggle = ({ value, onChange, error }: { value: 'Si' | 'No' | '', onCh
   </div>
 );
 
+// Generic Select for Si/No
+const YesNoToggle = ({ label, icon: Icon, value, onChange, error }: { label: string, icon: any, value: 'Si' | 'No' | '', onChange: (v: 'Si' | 'No') => void, error?: boolean }) => (
+  <div className={`bg-white rounded-3xl p-5 border-2 transition-all shadow-[0_2px_10px_rgba(0,0,0,0.02)] flex items-center justify-between ${
+    error ? 'border-red-400 bg-red-50/10' : 'border-gray-100'
+  }`}>
+    <div className="flex items-center gap-3 max-w-[50%]">
+      <div className="p-2 rounded-xl bg-gray-50 text-brand-dark">
+        <Icon size={18} />
+      </div>
+      <label className="text-[10px] font-black text-brand-dark uppercase tracking-widest opacity-80 leading-tight">{label}</label>
+    </div>
+    <div className="flex gap-1.5 bg-gray-50 p-1.5 rounded-2xl border border-gray-100">
+      <button 
+        onClick={() => onChange('Si')} 
+        className={`px-4 py-2.5 rounded-xl text-xs font-black transition-all ${value === 'Si' ? 'bg-brand-primary text-white shadow-md shadow-brand-primary/20' : 'text-gray-400 hover:text-gray-600'}`}
+      >
+        SÍ
+      </button>
+      <button 
+        onClick={() => onChange('No')} 
+        className={`px-4 py-2.5 rounded-xl text-xs font-black transition-all ${value === 'No' ? 'bg-brand-primary text-white shadow-md shadow-brand-primary/20' : 'text-gray-400 hover:text-gray-600'}`}
+      >
+        NO
+      </button>
+    </div>
+  </div>
+);
+
 export default function FormScreen() {
   const activeMachineId = useMachineStore(state => state.activeMachineId);
   const capturedPhoto = useMachineStore(state => state.capturedPhoto);
@@ -178,7 +206,8 @@ export default function FormScreen() {
     temperatura: '',
     humedadRelativa: '',
     co2: '',
-    observaciones: ''
+    observaciones: '',
+    ventiladorPrincipal: '' as any
   });
 
   const [errors, setErrors] = useState<Partial<Record<keyof MachineData, boolean>>>({});
@@ -220,8 +249,10 @@ export default function FormScreen() {
       if (!formData.tempAire) { newErrors.tempAire = true; hasErrors = true; }
       if (!formData.volteoNumero) { newErrors.volteoNumero = true; hasErrors = true; }
       if (!formData.volteoPosicion) { newErrors.volteoPosicion = true; hasErrors = true; }
+      if (!formData.ventiladorPrincipal) { newErrors.ventiladorPrincipal = true; hasErrors = true; }
     } else {
       if (!formData.temperatura) { newErrors.temperatura = true; hasErrors = true; }
+      if (!formData.ventiladorPrincipal) { newErrors.ventiladorPrincipal = true; hasErrors = true; }
     }
 
     if (hasErrors) {
@@ -360,6 +391,14 @@ export default function FormScreen() {
                 onChange={(v) => handleInputChange('alarma', v)}
                 error={errors.alarma}
               />
+
+              <YesNoToggle
+                label="Ventilador/EcoDrive OK"
+                icon={Wind}
+                value={formData.ventiladorPrincipal || ''}
+                onChange={(v) => handleInputChange('ventiladorPrincipal', v)}
+                error={errors.ventiladorPrincipal}
+              />
             </>
           ) : (
             <>
@@ -390,6 +429,14 @@ export default function FormScreen() {
                 unit="%" 
                 icon={Activity}
                 error={errors.co2}
+              />
+
+              <YesNoToggle
+                label="Ventilador/EcoDrive OK"
+                icon={Wind}
+                value={formData.ventiladorPrincipal || ''}
+                onChange={(v) => handleInputChange('ventiladorPrincipal', v)}
+                error={errors.ventiladorPrincipal}
               />
             </>
           )}

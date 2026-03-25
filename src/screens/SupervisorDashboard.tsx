@@ -675,16 +675,33 @@ export default function SupervisorDashboard() {
                 </div>
               </div>
 
-              <button
-                onClick={handleDownloadReport}
-                className="lg:hidden bg-brand-primary hover:bg-[#E6951F] text-white px-4 py-3 rounded-2xl flex items-center gap-2 text-xs font-black transition-all shadow-xl shadow-brand-primary/20 uppercase tracking-widest"
-              >
-                <Download size={18} />
-                PDF
-              </button>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => window.open('https://drive.google.com/drive/', '_blank')}
+                  className="lg:hidden bg-blue-600 hover:bg-blue-700 text-white px-4 py-3 rounded-2xl flex items-center gap-2 text-xs font-black transition-all shadow-xl shadow-blue-600/20 uppercase tracking-widest"
+                >
+                  <ImageIcon size={18} />
+                  Drive
+                </button>
+                <button
+                  onClick={handleDownloadReport}
+                  className="lg:hidden bg-brand-primary hover:bg-[#E6951F] text-white px-4 py-3 rounded-2xl flex items-center gap-2 text-xs font-black transition-all shadow-xl shadow-brand-primary/20 uppercase tracking-widest"
+                >
+                  <Download size={18} />
+                  PDF
+                </button>
+              </div>
             </div>
 
             <div className="flex flex-wrap items-stretch gap-3 sm:gap-4">
+              <button 
+                onClick={() => window.open('https://drive.google.com/drive/', '_blank')}
+                className="hidden lg:flex bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-2xl items-center gap-3 text-sm font-black transition-all shadow-xl shadow-blue-600/20 active:scale-95 uppercase tracking-widest"
+              >
+                <ImageIcon size={20} />
+                Ver Evidencias
+              </button>
+
               <button 
                 onClick={handleDownloadReport}
                 className="hidden lg:flex bg-brand-primary hover:bg-[#E6951F] text-white px-6 py-3 rounded-2xl items-center gap-3 text-sm font-black transition-all shadow-xl shadow-brand-primary/20 active:scale-95 uppercase tracking-widest"

@@ -143,6 +143,7 @@ export default function DashboardScreen() {
           d?.volteoNumero || '--',
           d?.volteoPosicion || '--',
           d?.alarma || 'No',
+          d?.ventiladorPrincipal || '--',
           m.photoUrl ? 'VER FOTO' : '--',
           d?.observaciones || ''
         ];
@@ -155,13 +156,13 @@ export default function DashboardScreen() {
 
       autoTable(doc, {
         startY: 60,
-        head: [['N°', 'Est.', 'Tiempo', 'T.Ovo', 'T.Aire', 'Hum%', 'CO2', 'V/N', 'V/P', 'Alm', 'Evid.', 'Obs']],
+        head: [['N°', 'Est.', 'Tiempo', 'T.Ovo', 'T.Aire', 'Hum%', 'CO2', 'V/N', 'V/P', 'Alm', 'Vent', 'Evid.', 'Obs']],
         body: incData,
         theme: 'grid',
         headStyles: { fillColor: [245, 166, 35] as [number, number, number], textColor: 255, fontSize: 8 },
         styles: { fontSize: 7 },
         didDrawCell: (data) => {
-          if (data.section === 'body' && data.column.index === 10 && data.cell.text[0] === 'VER FOTO') {
+          if (data.section === 'body' && data.column.index === 11 && data.cell.text[0] === 'VER FOTO') {
             const machine = incs[data.row.index];
             if (machine.photoUrl) {
               doc.link(data.cell.x + 2, data.cell.y + 2, data.cell.width - 4, data.cell.height - 4, { url: machine.photoUrl });
@@ -169,7 +170,7 @@ export default function DashboardScreen() {
           }
         },
         willDrawCell: (data) => {
-          if (data.section === 'body' && data.column.index === 10 && data.cell.text[0] === 'VER FOTO') {
+          if (data.section === 'body' && data.column.index === 11 && data.cell.text[0] === 'VER FOTO') {
             doc.setTextColor(0, 0, 255);
           }
         }
@@ -187,6 +188,7 @@ export default function DashboardScreen() {
           d?.temperatura || '--',
           d?.humedadRelativa || '--',
           d?.co2 || '--',
+          d?.ventiladorPrincipal || '--',
           m.photoUrl ? 'VER FOTO' : '--',
           d?.observaciones || ''
         ];
@@ -197,13 +199,13 @@ export default function DashboardScreen() {
 
       autoTable(doc, {
         startY: currentY + 5,
-        head: [['N°', 'Est.', 'Tiempo', 'Temp', 'Hum%', 'CO2', 'Evid.', 'Obs']],
+        head: [['N°', 'Est.', 'Tiempo', 'Temp', 'Hum%', 'CO2', 'Vent', 'Evid.', 'Obs']],
         body: nacData,
         theme: 'grid',
         headStyles: { fillColor: [80, 80, 80] as [number, number, number], textColor: 255, fontSize: 8 },
         styles: { fontSize: 8 },
         didDrawCell: (data) => {
-          if (data.section === 'body' && data.column.index === 6 && data.cell.text[0] === 'VER FOTO') {
+          if (data.section === 'body' && data.column.index === 7 && data.cell.text[0] === 'VER FOTO') {
             const machine = nacs[data.row.index];
             if (machine.photoUrl) {
               doc.link(data.cell.x + 2, data.cell.y + 2, data.cell.width - 4, data.cell.height - 4, { url: machine.photoUrl });
@@ -211,7 +213,7 @@ export default function DashboardScreen() {
           }
         },
         willDrawCell: (data) => {
-          if (data.section === 'body' && data.column.index === 6 && data.cell.text[0] === 'VER FOTO') {
+          if (data.section === 'body' && data.column.index === 7 && data.cell.text[0] === 'VER FOTO') {
             doc.setTextColor(0, 0, 255);
           }
         }
@@ -253,7 +255,8 @@ export default function DashboardScreen() {
               observaciones: 'MÁQUINA APAGADA (Sin registro operario)',
               alarma: 'No' as const,
               volteoPosicion: '' as const,
-              volteoNumero: '0'
+              volteoNumero: '0',
+              ventiladorPrincipal: 'No' as const
             }
           };
         }
@@ -441,13 +444,19 @@ export default function DashboardScreen() {
               key={machine.id}
               onClick={() => handleMachineClick(machine.id, machine.status)}
               disabled={machine.status === 'completed'}
-              className={`relative p-4 rounded-2xl border flex flex-row items-center justify-between transition-all active:scale-95 ${
+              className={`relative p-4 rounded-2xl border flex flex-row items-center justify-between transition-all active:scale-95 overflow-hidden ${
                 machine.status === 'completed'
                   ? 'bg-green-50/50 border-green-200 text-green-700'
                   : 'bg-white border-gray-200 text-[#1A1A1A] shadow-sm hover:border-[#F5A623]/50'
               }`}
             >
-              <div className="flex flex-col items-start gap-1">
+              {/* Background Image Layer */}
+              <div 
+                className="absolute inset-0 z-0 opacity-15 mix-blend-multiply bg-cover bg-center"
+                style={{ backgroundImage: 'url(/imagen1.png)' }}
+              />
+              
+              <div className="flex flex-col items-start gap-1 z-10 relative">
                 <span className="text-2xl font-black tracking-tight">{machine.number}</span>
                 <span className={`text-[10px] font-bold uppercase tracking-wider ${
                   machine.status === 'completed' ? 'text-green-600' : 'text-gray-400'
@@ -456,13 +465,15 @@ export default function DashboardScreen() {
                 </span>
               </div>
               
-              {machine.status === 'completed' ? (
-                <div className="bg-white rounded-full p-1 shadow-sm border border-green-100">
-                  <CheckCircle2 size={16} className="text-green-500" strokeWidth={3} />
-                </div>
-              ) : (
-                <ChevronRight size={20} className="text-gray-300" />
-              )}
+              <div className="z-10 relative">
+                {machine.status === 'completed' ? (
+                  <div className="bg-white rounded-full p-1 shadow-sm border border-green-100">
+                    <CheckCircle2 size={16} className="text-green-500" strokeWidth={3} />
+                  </div>
+                ) : (
+                  <ChevronRight size={20} className="text-gray-400 bg-white/50 rounded-full backdrop-blur-sm p-0.5" />
+                )}
+              </div>
             </button>
           ))}
         </div>

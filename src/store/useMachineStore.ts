@@ -28,6 +28,7 @@ export interface MachineData {
   humedadRelativa: string;
   co2: string;
   observaciones: string;
+  ventiladorPrincipal?: 'Si' | 'No';
 }
 
 export interface Machine {

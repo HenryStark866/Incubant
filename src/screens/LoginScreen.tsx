@@ -70,7 +70,7 @@ export default function LoginScreen() {
             <span className="text-[0.55rem] font-bold text-brand-gray tracking-[0.2em] uppercase mt-1">Antioqueña de Incubación</span>
           </div>
         </div>
-        <h1 className="text-lg font-bold text-brand-dark tracking-tight relative z-10 text-center uppercase px-4">Panel de Control de Incubación</h1>
+        <h1 className="text-lg font-bold text-brand-dark tracking-tight relative z-10 text-center uppercase px-4">Panel de Control - v0.1.0 Integral</h1>
         <p className="text-brand-gray font-semibold mt-1 relative z-10 text-xs">Acceso Restringido</p>
       </div>
 

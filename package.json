@@ -5,10 +5,10 @@
   "type": "module",
   "scripts": {
     "dev": "tsx server.ts",
-    "build": "prisma generate && prisma db push --accept-data-loss && vite build",
+    "build": "prisma generate && vite build",
+    "db:push": "prisma db push --accept-data-loss",
     "preview": "vite preview",
     "clean": "rm -rf dist",
-    "lint": "tsc --noEmit",
     "postinstall": "prisma generate",
     "start": "tsx server.ts"
   },

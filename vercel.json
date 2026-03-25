@@ -18,10 +18,6 @@
       "handle": "filesystem"
     },
     {
-      "src": "/api/(.*)",
-      "dest": "/api/index.ts"
-    },
-    {
       "src": "/(.*)",
       "dest": "/index.html"
     }

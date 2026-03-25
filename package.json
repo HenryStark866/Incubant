@@ -9,6 +9,7 @@
     "preview": "vite preview",
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit",
+    "postinstall": "prisma generate",
     "start": "node server.ts"
   },
   "dependencies": {

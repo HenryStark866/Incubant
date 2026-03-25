@@ -325,7 +325,16 @@ export function createApiApp(): Express {
       }
     } catch (error) {
       console.warn('Error de BD en login:', error instanceof Error ? error.message : error);
-      return res.status(500).json({ error: 'Fallo al comunicarse con la base de datos' });
+    }
+
+    const localUser = predefinedUsers.find((u) => (u.id === id || u.nombre === id) && u.pin_acceso === pin);
+    if (localUser) {
+      console.log('Login exitoso con usuario predefinido (fallback):', localUser.nombre);
+      return sendAuthenticatedUser(res, {
+        id: localUser.id,
+        name: localUser.nombre,
+        role: localUser.rol,
+      });
     }
 
     return res.status(401).json({ error: 'Credenciales inválidas' });

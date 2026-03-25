@@ -13,7 +13,7 @@ const IS_PROD = import.meta.env.PROD;
 const VITE_API_BASE_URL = import.meta.env.VITE_API_URL || '';
 
 export const API_BASE_URL = IS_PROD 
-  ? (VITE_API_BASE_URL || 'https://incubant.onrender.com') 
+  ? (import.meta.env.VITE_API_URL || 'https://incubant.onrender.com') 
   : '';
 
 /**

@@ -447,14 +447,14 @@ export function createApiApp(): Express {
           updatedBy = log.user?.nombre || null;
 
           const humedadRelativa = extractObservationValue(observaciones, 'Humedad');
-          const diaIncubacion = extractObservationValue(observaciones, 'Dia');
+          const tiempoIncubacion = extractObservationValue(observaciones, 'Tiempo');
           const tempAire = extractObservationValue(observaciones, 'Temp Aire');
           const volteoNumero = extractObservationValue(observaciones, 'Volteos');
           const alarmaActiva = extractObservationValue(observaciones, 'Alarma');
 
           humidity = humedadRelativa || log.co2_actual.toFixed(1);
           data = {
-            diaIncubacion,
+            tiempoIncubacion,
             humedadRelativa,
             temperatura: temp,
             tempAire,

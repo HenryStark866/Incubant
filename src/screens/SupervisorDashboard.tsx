@@ -49,6 +49,28 @@ export default function SupervisorDashboard() {
   const resetHourlyStatus = useMachineStore(state => state.resetHourlyStatus);
   const canAccessSupervisor = currentUser?.role === 'JEFE' || currentUser?.role === 'SUPERVISOR';
 
+  // Request notification permissions for admin alerts
+  useEffect(() => {
+    if (canAccessSupervisor && 'Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission();
+    }
+  }, [canAccessSupervisor]);
+
+  // Alerta inmediata de Nuevo Reporte a los administradores
+  const [previousReportCount, setPreviousReportCount] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (previousReportCount !== null && reportCount > previousReportCount) {
+      if ('Notification' in window && Notification.permission === 'granted') {
+        new Notification('¡Incubant: Nuevo Reporte!', {
+          body: `Un operario acaba de sincronizar datos de su rutina.`,
+          icon: '/pwa-192x192.png'
+        });
+      }
+    }
+    setPreviousReportCount(reportCount);
+  }, [reportCount]);
+
   const handleTabChange = (tab: 'dashboard' | 'personal' | 'settings') => {
     setActiveTab(tab);
     setIsSidebarOpen(false);

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useMachineStore, MachineType, Machine } from '../store/useMachineStore';
 import { CheckCircle2, Clock, UploadCloud, Loader2, LogOut, ChevronRight, Egg, AlertTriangle, X, Download, FileText } from 'lucide-react';
 import jsPDF from 'jspdf';
@@ -79,7 +79,44 @@ export default function DashboardScreen() {
   const setActiveMachine = useMachineStore(state => state.setActiveMachine);
   const resetHourlyStatus = useMachineStore(state => state.resetHourlyStatus);
   const currentUser = useMachineStore(state => state.currentUser);
+  const login = useMachineStore(state => state.login);
   const logout = useMachineStore(state => state.logout);
+
+  // Poll de estado en tiempo real para ser alertado si el Jefe cambia el turno
+  useEffect(() => {
+    if (!currentUser) return;
+    
+    // Check permission
+    if ('Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission();
+    }
+
+    const checkRealtimeStatus = async () => {
+      try {
+        const res = await fetch('/api/session');
+        if (res.ok) {
+          const { user } = await res.json();
+          if (user && user.shift !== currentUser.shift) {
+            // El Jefe acaba de actualizar el turno de este operario en la DB!
+            if ('Notification' in window && Notification.permission === 'granted') {
+              new Notification('¡Atención: Cambio de Turno!', {
+                body: `Un Administrador te ha reasignado al ${user.shift}. Se actualizará tu panel automáticamente.`,
+                icon: '/pwa-192x192.png'
+              });
+            } else {
+              alert(`¡ATENCIÓN! Un Supervisor te asigó a un nuevo horario: ${user.shift}.`);
+            }
+            login(user); // Refrescamos DB -> App state
+          }
+        }
+      } catch (e) {
+        // Silencioso, puede fallar por problemas de red esporádicos
+      }
+    };
+
+    const interval = setInterval(checkRealtimeStatus, 15000); // Check cada 15 segundos
+    return () => clearInterval(interval);
+  }, [currentUser, login]);
 
   const filteredMachines = machines.filter(m => m.type === activeTab);
 

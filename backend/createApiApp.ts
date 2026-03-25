@@ -8,6 +8,7 @@ type SessionUser = {
   id: string;
   name: string;
   role: UserRole;
+  shift?: string;
 };
 
 type AuthenticatedRequest = Request & {
@@ -133,6 +134,7 @@ function getSessionUserFromRequest(req: Request): SessionUser | null {
       id: decoded.id,
       name: decoded.name,
       role: decoded.role,
+      shift: decoded.shift,
     };
   } catch {
     return null;
@@ -321,6 +323,7 @@ export function createApiApp(): Express {
           id: user.id,
           name: user.nombre,
           role: user.rol,
+          shift: user.turno,
         });
       }
     } catch (error) {
@@ -334,6 +337,7 @@ export function createApiApp(): Express {
         id: localUser.id,
         name: localUser.nombre,
         role: localUser.rol,
+        shift: 'Turno 1',
       });
     }
 
@@ -656,6 +660,32 @@ export function createApiApp(): Express {
     } catch (error) {
       console.error('Error updating operator:', error);
       return res.status(500).json({ error: 'Error de conexión a la Base de Datos al modificar el operario.' });
+    }
+  });
+
+  app.get('/api/my-shift-report', requireAuthenticatedUser, async (req: AuthenticatedRequest, res) => {
+    try {
+      const prisma = await getPrismaClient();
+      const twelveHoursAgo = new Date(Date.now() - 12 * 60 * 60 * 1000);
+      
+      const logs = await prisma.hourlyLog.findMany({
+        where: {
+          user_id: req.user!.id,
+          fecha_hora: { gte: twelveHoursAgo }
+        },
+        include: {
+          machine: true
+        },
+        orderBy: [
+          { machine: { numero_maquina: 'asc' } },
+          { fecha_hora: 'asc' }
+        ]
+      });
+
+      return res.json(logs);
+    } catch (error) {
+      console.error('Error fetching shift reports:', error);
+      return res.status(500).json({ error: 'Error interno obteniendo reporte de turno' });
     }
   });
 

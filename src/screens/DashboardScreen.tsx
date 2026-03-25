@@ -89,11 +89,65 @@ export default function DashboardScreen() {
   const allCompleted = pendingCount === 0;
 
   const handleLogout = async () => {
+    if (!window.confirm('¿Estás seguro de que deseas cerrar turno? Se generará y guardará tu Reporte de Cierre de Turno en la Bóveda.')) {
+      return;
+    }
+
     try {
+      setIsSyncing(true);
+      setSyncPhase('pdf');
+
+      // Generar Reporte de Fin de Turno
+      const res = await fetch('/api/my-shift-report');
+      if (res.ok) {
+        const logs = await res.json();
+        
+        if (logs.length > 0) {
+          const doc = new jsPDF('landscape');
+          doc.setFontSize(16);
+          doc.setTextColor(245, 166, 35);
+          doc.text(`INCUBANT - REPORTE CIERRE DE TURNO`, 14, 15);
+          
+          doc.setFontSize(10);
+          doc.setTextColor(40, 40, 40);
+          doc.text(`Operario: ${currentUser?.name} | Turno: ${currentUser?.shift || 'Turno 1'}`, 14, 22);
+          doc.text(`Fecha de Cierre: ${new Date().toLocaleString()}`, 14, 27);
+          doc.text(`Total de registros: ${logs.length}`, 14, 32);
+
+          const tableData = logs.map((log: any) => [
+            new Date(log.fecha_hora).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            `${log.machine.tipo === 'INCUBADORA' ? 'INC' : 'NAC'}-${log.machine.numero_maquina.toString().padStart(2, '0')}`,
+            log.temp_principal_actual.toFixed(1),
+            log.temp_secundaria_actual.toFixed(1),
+            log.co2_actual.toFixed(1),
+            log.observaciones || 'OK - Sin Novedad'
+          ]);
+
+          autoTable(doc, {
+            startY: 38,
+            head: [['Hora', 'Máquina', 'T. Ovoscan (F)', 'T. Aire (F)', 'Humedad / CO2', 'Observaciones']],
+            body: tableData,
+            styles: { fontSize: 8, cellPadding: 3 },
+            headStyles: { fillColor: [245, 166, 35], textColor: 255, fontStyle: 'bold' },
+            alternateRowStyles: { fillColor: [250, 250, 250] },
+          });
+
+          // Guardar PDF localmente y en Supabase (Nube)
+          const pdfBlob = doc.output('blob');
+          doc.save(`Cierre_Turno_${currentUser?.name?.replace(/\s+/g,'_')}.pdf`);
+          
+          const { uploadEvidencePDF } = await import('../lib/supabase');
+          await uploadEvidencePDF(pdfBlob, `${currentUser?.name}_CIERRE_TURNO_${new Date().getTime()}`);
+        } else {
+          alert('Tu turno no tiene ningún registro de temperatura. Se cerrará la sesión directamente.');
+        }
+      }
+
       await fetch('/api/logout', { method: 'POST' });
     } catch (error) {
       console.error('Error cerrando sesión:', error);
     } finally {
+      setIsSyncing(false);
       logout();
     }
   };
@@ -377,7 +431,10 @@ export default function DashboardScreen() {
             <div className="h-8 w-px bg-gray-200"></div>
             <div>
               <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">Operario Activo</p>
-              <p className="text-sm font-bold text-[#1A1A1A]">{currentUser?.name}</p>
+              <p className="text-sm font-black text-brand-primary">
+                {currentUser?.name} 
+                <span className="text-xs text-gray-400 ml-1 font-bold">({currentUser?.shift || 'Turno 1'})</span>
+              </p>
             </div>
           </div>
           <button 

@@ -996,7 +996,7 @@ export default function SupervisorDashboard() {
                   </div>
                 </div>
 
-                <div className="bg-white border border-gray-100 rounded-3xl p-4 sm:p-6 lg:p-10 h-[360px] sm:h-[450px] shadow-sm">
+                <div className="bg-white border border-gray-100 rounded-3xl p-4 sm:p-6 lg:p-10 h-[360px] sm:h-[450px] shadow-sm relative">
                   <ResponsiveContainer width="100%" height="100%">
                     <LineChart data={trendsData} margin={{ top: 10, right: 30, bottom: 10, left: 10 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />

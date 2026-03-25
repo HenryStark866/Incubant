@@ -659,7 +659,7 @@ export function createApiApp(): Express {
     }
   });
 
-  app.get('/health-db', async (req, res) => {
+  app.get('/api/health-db', async (req, res) => {
     try {
       const prisma = await getPrismaClient();
       await prisma.$executeRaw`SELECT 1`;

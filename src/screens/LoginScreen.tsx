@@ -26,6 +26,12 @@ export default function LoginScreen() {
       return;
     }
 
+    if (pin.length < 4 || pin.length > 8) {
+      setError('El PIN debe tener entre 4 y 8 caracteres.');
+      setIsLoading(false);
+      return;
+    }
+
     setIsLoading(true);
 
     try {

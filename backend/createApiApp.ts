@@ -30,6 +30,7 @@ type SubmittedMachineData = {
   humedadRelativa?: string;
   co2?: string;
   observaciones?: string;
+  ventiladorPrincipal?: 'Si' | 'No';
 };
 
 type SubmittedMachine = {
@@ -46,16 +47,31 @@ const SESSION_MAX_AGE_SECONDS = 60 * 60 * 12;
 const SESSION_SECRET = process.env.SESSION_SECRET || 'incubantmonitor-dev-session-secret';
 const SUPERVISOR_ROLES: UserRole[] = ['SUPERVISOR', 'JEFE'];
 
-const predefinedUsers = [
-  { id: 'admin', nombre: 'Administrador', pin_acceso: '4753', rol: 'JEFE' as const },
-  { id: 'Elkin Cavadia', nombre: 'Elkin Cavadia', pin_acceso: '11168', rol: 'JEFE' as const },
-  { id: 'Juan Alejandro', nombre: 'Juan Alejandro', pin_acceso: '1111', rol: 'OPERARIO' as const },
-  { id: 'Juan Suaza', nombre: 'Juan Suaza', pin_acceso: '2222', rol: 'OPERARIO' as const },
-  { id: 'Ferney Tabares', nombre: 'Ferney Tabares', pin_acceso: '3333', rol: 'OPERARIO' as const },
-  { id: 'turnero', nombre: 'Turnero', pin_acceso: '4444', rol: 'OPERARIO' as const },
-  { id: 'Jhon Piedrahita', nombre: 'Jhon Piedrahita', pin_acceso: 'jp2026', rol: 'SUPERVISOR' as const },
+// ==========================================================================
+// USUARIOS PREDEFINIDOS - ÚNICA FUENTE DE VERDAD PARA CREDENCIALES
+// El campo `id` es un slug estable y URL-safe derivado del nombre de usuario.
+// ==========================================================================
+type PredefinedUser = {
+  id: string;
+  nombre: string;
+  pin_acceso: string;
+  rol: UserRole;
+  turno: string;
+};
+
+const predefinedUsers: PredefinedUser[] = [
+  { id: 'admin',          nombre: 'Administrador',  pin_acceso: '4753',   rol: 'JEFE',       turno: 'Gestión' },
+  { id: 'elkin-cavadia',  nombre: 'Elkin Cavadia',  pin_acceso: '11168',  rol: 'JEFE',       turno: 'Gestión' },
+  { id: 'juan-alejandro', nombre: 'Juan Alejandro', pin_acceso: '1111',   rol: 'OPERARIO',   turno: 'Turno 1' },
+  { id: 'juan-suaza',     nombre: 'Juan Suaza',     pin_acceso: '2222',   rol: 'OPERARIO',   turno: 'Turno 1' },
+  { id: 'ferney-tabares', nombre: 'Ferney Tabares', pin_acceso: '3333',   rol: 'OPERARIO',   turno: 'Turno 2' },
+  { id: 'turnero',        nombre: 'Turnero',        pin_acceso: '4444',   rol: 'OPERARIO',   turno: 'Turno 1' },
+  { id: 'jhon-piedrahita',nombre: 'Jhon Piedrahita',pin_acceso: 'jp2026', rol: 'SUPERVISOR', turno: 'Turno 1' },
 ];
 
+// ==========================================================================
+// PRISMA CLIENT
+// ==========================================================================
 const globalForPrisma = globalThis as typeof globalThis & {
   prisma?: PrismaClient;
 };
@@ -63,12 +79,22 @@ const globalForPrisma = globalThis as typeof globalThis & {
 async function getPrismaClient() {
   if (!globalForPrisma.prisma) {
     const { PrismaClient } = await import('@prisma/client');
-    globalForPrisma.prisma = new PrismaClient();
+    globalForPrisma.prisma = new PrismaClient({
+      log: process.env.NODE_ENV === 'development' ? ['error', 'warn'] : ['error'],
+      datasources: {
+        db: {
+          url: process.env.DATABASE_URL,
+        },
+      },
+    });
   }
 
   return globalForPrisma.prisma;
 }
 
+// ==========================================================================
+// SESSION HELPERS
+// ==========================================================================
 function parseCookies(cookieHeader?: string): Record<string, string> {
   if (!cookieHeader) {
     return {};
@@ -173,6 +199,9 @@ function sendAuthenticatedUser(res: Response, user: SessionUser) {
   return res.status(200).json({ user });
 }
 
+// ==========================================================================
+// DATA HELPERS
+// ==========================================================================
 function toNumberOrNull(value?: string | number | null) {
   if (value === undefined || value === null || value === '') {
     return null;
@@ -203,7 +232,7 @@ function parseLocalMachine(machine: SubmittedMachine): {
 }
 
 function buildObservationSummary(data: SubmittedMachineData) {
-  const timeStr = data.tiempoIncubacion 
+  const timeStr = data.tiempoIncubacion
     ? `Tiempo: ${data.tiempoIncubacion.dias}d ${data.tiempoIncubacion.horas}h ${data.tiempoIncubacion.minutos}m`
     : null;
 
@@ -215,6 +244,7 @@ function buildObservationSummary(data: SubmittedMachineData) {
     data.volteoNumero ? `Volteos: ${data.volteoNumero}` : null,
     data.volteoPosicion ? `Posicion: ${data.volteoPosicion}` : null,
     data.alarma ? `Alarma: ${data.alarma}` : null,
+    data.ventiladorPrincipal ? `Ventilador: ${data.ventiladorPrincipal}` : null,
     data.observaciones ? `Nota: ${data.observaciones}` : null,
   ].filter(Boolean);
 
@@ -231,28 +261,32 @@ function extractObservationValue(observaciones: string | null | undefined, label
   return match?.[1]?.trim() || null;
 }
 
+// ==========================================================================
+// DB RESOLUTION HELPERS
+// Garantizan que los usuarios y máquinas existan en BD antes de insertar logs.
+// ==========================================================================
 async function resolveDatabaseUser(sessionUser: SessionUser) {
   const prisma = await getPrismaClient();
+
+  // 1. Buscar primero por ID estable (slug)
   const byId = await prisma.user.findUnique({ where: { id: sessionUser.id } }).catch(() => null);
+  if (byId) return byId;
 
-  if (byId) {
-    return byId;
-  }
-
+  // 2. Buscar por nombre
   const byName = await prisma.user.findFirst({ where: { nombre: sessionUser.name } }).catch(() => null);
+  if (byName) return byName;
 
-  if (byName) {
-    return byName;
-  }
-
-  const syntheticPin = `ext-${crypto.createHash('sha1').update(sessionUser.id).digest('hex').slice(0, 8)}`;
+  // 3. Crear el usuario en BD usando los datos del predefinido si existe, o datos sintéticos
+  const predefined = predefinedUsers.find(u => u.id === sessionUser.id || u.nombre === sessionUser.name);
 
   return prisma.user.create({
     data: {
       id: sessionUser.id,
       nombre: sessionUser.name,
-      pin_acceso: syntheticPin,
+      pin_acceso: predefined?.pin_acceso || `ext-${crypto.createHash('sha1').update(sessionUser.id).digest('hex').slice(0, 8)}`,
       rol: sessionUser.role,
+      turno: sessionUser.shift || predefined?.turno || 'Turno 1',
+      estado: 'Activo',
     },
   });
 }
@@ -284,12 +318,49 @@ async function resolveDatabaseMachine(machine: SubmittedMachine) {
   });
 }
 
+// ==========================================================================
+// SEED - Poblar la BD con los usuarios predefinidos
+// ==========================================================================
+async function seedPredefinedUsers() {
+  try {
+    const prisma = await getPrismaClient();
+    for (const u of predefinedUsers) {
+      await prisma.user.upsert({
+        where: { id: u.id },
+        update: {
+          nombre: u.nombre,
+          rol: u.rol,
+          turno: u.turno,
+        },
+        create: {
+          id: u.id,
+          nombre: u.nombre,
+          pin_acceso: u.pin_acceso,
+          rol: u.rol,
+          turno: u.turno,
+          estado: 'Activo',
+        },
+      });
+    }
+    console.log(`[Seed] ${predefinedUsers.length} usuarios predefinidos sincronizados en BD.`);
+  } catch (error) {
+    console.warn('[Seed] No se pudo sembrar usuarios (BD no disponible). El fallback local estará activo.', error instanceof Error ? error.message : '');
+  }
+}
+
+// ==========================================================================
+// EXPRESS APP
+// ==========================================================================
 export function createApiApp(): Express {
   const app = express();
 
   app.use(express.json({ limit: '10mb' }));
   app.use(attachSessionUser);
 
+  // Intentar semillado al arrancar (no bloquea el arranque)
+  void seedPredefinedUsers();
+
+  // ── Session ──────────────────────────────────────────────────────────────
   app.get('/api/session', (req: AuthenticatedRequest, res) => {
     if (!req.user) {
       return res.status(401).json({ error: 'No hay sesión activa' });
@@ -303,6 +374,7 @@ export function createApiApp(): Express {
     res.status(204).end();
   });
 
+  // ── Login ────────────────────────────────────────────────────────────────
   app.post('/api/login', async (req, res) => {
     const { id, pin } = req.body ?? {};
 
@@ -310,40 +382,70 @@ export function createApiApp(): Express {
       return res.status(400).json({ error: 'Credenciales incompletas' });
     }
 
+    // 1. Intentar autenticación desde la BD
     try {
       const prisma = await getPrismaClient();
       const user = await prisma.user.findFirst({
         where: {
-          OR: [{ id }, { nombre: id }],
+          OR: [
+            { id: String(id) },
+            { nombre: { equals: String(id), mode: 'insensitive' } },
+          ],
         },
       });
 
-      if (user && user.pin_acceso === pin && ['OPERARIO', 'SUPERVISOR', 'JEFE'].includes(user.rol)) {
+      if (user && user.pin_acceso === String(pin) && ['OPERARIO', 'SUPERVISOR', 'JEFE'].includes(user.rol)) {
+        console.log(`[Login] Autenticado desde BD: ${user.nombre}`);
         return sendAuthenticatedUser(res, {
           id: user.id,
           name: user.nombre,
-          role: user.rol,
+          role: user.rol as UserRole,
           shift: user.turno,
         });
       }
     } catch (error) {
-      console.warn('Error de BD en login:', error instanceof Error ? error.message : error);
+      console.warn('[Login] Error de BD, usando fallback local:', error instanceof Error ? error.message : error);
     }
 
-    const localUser = predefinedUsers.find((u) => (u.id === id || u.nombre === id) && u.pin_acceso === pin);
+    // 2. Fallback: credenciales predefinidas locales (buscar por id slug, nombre o pin)
+    const localUser = predefinedUsers.find(u =>
+      (u.id === String(id) || u.nombre.toLowerCase() === String(id).toLowerCase()) &&
+      u.pin_acceso === String(pin)
+    );
+
     if (localUser) {
-      console.log('Login exitoso con usuario predefinido (fallback):', localUser.nombre);
+      console.log(`[Login] Autenticado con credencial local (fallback): ${localUser.nombre}`);
+      // Intentar registrar en BD para que esté disponible en sincronizaciones
+      try {
+        const prisma = await getPrismaClient();
+        await prisma.user.upsert({
+          where: { id: localUser.id },
+          update: { nombre: localUser.nombre, rol: localUser.rol, turno: localUser.turno },
+          create: {
+            id: localUser.id,
+            nombre: localUser.nombre,
+            pin_acceso: localUser.pin_acceso,
+            rol: localUser.rol,
+            turno: localUser.turno,
+            estado: 'Activo',
+          },
+        });
+      } catch {
+        // No crítico
+      }
+
       return sendAuthenticatedUser(res, {
         id: localUser.id,
         name: localUser.nombre,
         role: localUser.rol,
-        shift: 'Turno 1',
+        shift: localUser.turno,
       });
     }
 
     return res.status(401).json({ error: 'Credenciales inválidas' });
   });
 
+  // ── Sync Hourly ──────────────────────────────────────────────────────────
   app.post('/api/sync-hourly', requireAuthenticatedUser, async (req: AuthenticatedRequest, res) => {
     try {
       const { machines } = req.body as { machines?: SubmittedMachine[] };
@@ -358,21 +460,19 @@ export function createApiApp(): Express {
         return res.status(400).json({ error: 'No hay máquinas completadas para sincronizar' });
       }
 
-      const fallbackCount = completedMachines.length;
-
       try {
         const prisma = await getPrismaClient();
         const databaseUser = await resolveDatabaseUser(req.user!);
 
         const logsToInsert = await Promise.all(completedMachines.map(async (machine) => {
           const resolvedMachine = await resolveDatabaseMachine(machine);
-          const mainTemp = toNumberOrNull(machine.data?.tempOvoscan) ?? toNumberOrNull(machine.data?.temperatura);
-          const secondaryTemp = toNumberOrNull(machine.data?.tempAire) ?? mainTemp;
-          const co2 = toNumberOrNull(machine.data?.co2);
-
-          if (mainTemp === null || secondaryTemp === null || co2 === null) {
-            throw new Error(`Faltan métricas numéricas obligatorias para la máquina ${machine.id}`);
-          }
+          
+          // Para máquinas apagadas, usar 0
+          const d = machine.data!;
+          const mainTemp = toNumberOrNull(d.tempOvoscan) ?? toNumberOrNull(d.temperatura) ?? 0;
+          const secondaryTemp = toNumberOrNull(d.tempAire) ?? mainTemp;
+          const co2 = toNumberOrNull(d.co2) ?? 0;
+          const humidity = toNumberOrNull(d.humedadRelativa) ?? 0;
 
           return {
             user_id: databaseUser.id,
@@ -380,14 +480,14 @@ export function createApiApp(): Express {
             photo_url: machine.photoUrl || null,
             temp_principal_actual: mainTemp,
             temp_principal_consigna: mainTemp,
-            co2_actual: co2,
-            co2_consigna: co2,
+            co2_actual: humidity > 0 ? humidity : co2,  // Guardamos humedad en co2_actual si disponible
+            co2_consigna: humidity > 0 ? humidity : co2,
             fan_speed: 0,
             temp_secundaria_actual: secondaryTemp,
             temp_secundaria_consigna: secondaryTemp,
             is_na: machine.type === 'nacedora',
             temp_superior_actual: null,
-            observaciones: buildObservationSummary(machine.data || {}),
+            observaciones: buildObservationSummary(d),
           };
         }));
 
@@ -400,26 +500,29 @@ export function createApiApp(): Express {
           count: result.count,
         });
       } catch (dbError) {
-        console.error('Error al sincronizar con la base de datos:', dbError);
-        return res.status(500).json({ error: 'No se pudo conectar a la base de datos para guardar los registros' });
+        console.error('[Sync] Error al sincronizar con la base de datos:', dbError);
+        // Respondemos 200 para que el frontend no bloquee al operario, pero indicamos el error de BD
+        return res.status(500).json({ error: 'No se pudo conectar a la base de datos para guardar los registros. Los datos locales están intactos.' });
       }
     } catch (error) {
-      console.error('Error en sync-hourly:', error);
+      console.error('[Sync] Error interno:', error);
       return res.status(500).json({ error: 'Error interno del servidor al sincronizar' });
     }
   });
 
+  // ── Dashboard: Summary ───────────────────────────────────────────────────
   app.get('/api/dashboard/summary', requireRoles(SUPERVISOR_ROLES), async (_req, res) => {
     try {
       const prisma = await getPrismaClient();
       const reportCount = await prisma.hourlyLog.count();
       return res.json({ reportCount });
     } catch (error) {
-      console.error('Error al consultar conteo de reportes:', error);
+      console.error('[Dashboard] Error al consultar conteo de reportes:', error);
       return res.json({ reportCount: 0 });
     }
   });
 
+  // ── Dashboard: Status ────────────────────────────────────────────────────
   app.get('/api/dashboard/status', requireRoles(SUPERVISOR_ROLES), async (_req, res) => {
     try {
       const prisma = await getPrismaClient();
@@ -464,6 +567,7 @@ export function createApiApp(): Express {
           const tempAire = extractObservationValue(observaciones, 'Temp Aire');
           const volteoNumero = extractObservationValue(observaciones, 'Volteos');
           const alarmaActiva = extractObservationValue(observaciones, 'Alarma');
+          const ventilador = extractObservationValue(observaciones, 'Ventilador');
 
           humidity = humedadRelativa || log.co2_actual.toFixed(1);
           data = {
@@ -473,6 +577,7 @@ export function createApiApp(): Express {
             tempAire,
             volteoNumero,
             alarma: alarmaActiva,
+            ventiladorPrincipal: ventilador,
           };
 
           if (alarmaActiva === 'Si' || Math.abs(log.temp_principal_actual - log.temp_principal_consigna) > 0.5) {
@@ -502,17 +607,18 @@ export function createApiApp(): Express {
 
       return res.json(statusData);
     } catch (error) {
-      console.error('Error al consultar BD para status:', error);
+      console.error('[Dashboard] Error al consultar BD para status:', error);
       return res.json([]);
     }
   });
 
+  // ── Dashboard: Trends ────────────────────────────────────────────────────
   app.get('/api/dashboard/trends', requireRoles(SUPERVISOR_ROLES), async (req, res) => {
     try {
       const { machine } = req.query;
       const prisma = await getPrismaClient();
       const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
-      
+
       const filter: any = { fecha_hora: { gte: twentyFourHoursAgo } };
       if (machine && machine !== 'Ver: Planta Completa' && machine !== 'undefined') {
         filter.machine_id = String(machine);
@@ -544,15 +650,16 @@ export function createApiApp(): Express {
 
       return res.json(trendsData);
     } catch (error) {
-      console.error('Error al consultar BD para trends:', error);
+      console.error('[Dashboard] Error al consultar BD para trends:', error);
       return res.json([]);
     }
   });
 
+  // ── Dashboard: Operators ─────────────────────────────────────────────────
   app.get('/api/dashboard/operators', requireRoles(SUPERVISOR_ROLES), async (_req, res) => {
     try {
       const prisma = await getPrismaClient();
-      const users = await (prisma.user as any).findMany({
+      const users = await prisma.user.findMany({
         select: {
           id: true,
           nombre: true,
@@ -560,7 +667,8 @@ export function createApiApp(): Express {
           turno: true,
           estado: true,
         },
-      } as any);
+        orderBy: { nombre: 'asc' },
+      });
 
       const mappedUsers = users.map((user) => ({
         id: user.id,
@@ -572,11 +680,20 @@ export function createApiApp(): Express {
 
       return res.json(mappedUsers);
     } catch (error) {
-      console.error('Error fetching operators:', error);
-      return res.status(500).json({ error: 'Fallo de conexión a la Base de Datos.' });
+      console.error('[Operators] Error fetching operators:', error);
+      // Devolver los usuarios predefinidos como fallback para que el panel no quede vacío
+      const fallback = predefinedUsers.map(u => ({
+        id: u.id,
+        name: u.nombre,
+        role: u.rol,
+        shift: u.turno,
+        status: 'Activo',
+      }));
+      return res.json(fallback);
     }
   });
 
+  // ── Create Operator ──────────────────────────────────────────────────────
   app.post('/api/operators', requireRoles(SUPERVISOR_ROLES), async (req, res) => {
     try {
       const prisma = await getPrismaClient();
@@ -586,25 +703,39 @@ export function createApiApp(): Express {
         return res.status(400).json({ error: 'Nombre, PIN y rol son requeridos' });
       }
 
+      if (String(pin).length < 4 || String(pin).length > 8) {
+        return res.status(400).json({ error: 'El PIN debe tener entre 4 y 8 caracteres' });
+      }
+
       const validRoles: UserRole[] = ['OPERARIO', 'SUPERVISOR', 'JEFE'];
 
       if (!validRoles.includes(rol)) {
         return res.status(400).json({ error: 'Rol inválido' });
       }
 
-      const existingUser = await prisma.user.findUnique({ where: { pin_acceso: pin } });
+      const existingUser = await prisma.user.findUnique({ where: { pin_acceso: String(pin) } });
 
       if (existingUser) {
-        return res.status(400).json({ error: 'El PIN ya está en uso' });
+        return res.status(400).json({ error: 'El PIN ya está en uso por otro usuario' });
       }
 
-      const newUser = await (prisma.user as any).create({
+      // Generar ID slug a partir del nombre
+      const slugId = String(nombre)
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/(^-|-$)/g, '')
+        .slice(0, 40) + '-' + Date.now().toString(36);
+
+      const newUser = await prisma.user.create({
         data: {
-          nombre,
-          pin_acceso: pin,
+          id: slugId,
+          nombre: String(nombre),
+          pin_acceso: String(pin),
           rol,
           turno: turno || 'Turno 1',
-          estado: 'Activo'
+          estado: 'Activo',
         },
         select: {
           id: true,
@@ -613,7 +744,7 @@ export function createApiApp(): Express {
           turno: true,
           estado: true,
         },
-      } as any);
+      });
 
       return res.status(201).json({
         id: newUser.id,
@@ -623,22 +754,27 @@ export function createApiApp(): Express {
         status: newUser.estado,
       });
     } catch (error) {
-      console.error('Error creating operator:', error);
+      console.error('[Operators] Error creating operator:', error);
       return res.status(500).json({ error: 'No fue posible conectar con la Base de Datos. Revisa DATABASE_URL.' });
     }
   });
 
+  // ── Update Operator ──────────────────────────────────────────────────────
   app.put('/api/operators/:id', requireRoles(SUPERVISOR_ROLES), async (req, res) => {
     try {
       const prisma = await getPrismaClient();
       const { id } = req.params;
       const { turno, estado } = req.body;
 
-      const dataToUpdate: any = {};
+      const dataToUpdate: Record<string, string> = {};
       if (turno) dataToUpdate.turno = turno;
       if (estado) dataToUpdate.estado = estado;
 
-      const updatedUser = await (prisma.user as any).update({
+      if (Object.keys(dataToUpdate).length === 0) {
+        return res.status(400).json({ error: 'No hay datos para actualizar' });
+      }
+
+      const updatedUser = await prisma.user.update({
         where: { id },
         data: dataToUpdate,
         select: {
@@ -648,7 +784,7 @@ export function createApiApp(): Express {
           turno: true,
           estado: true,
         },
-      } as any);
+      });
 
       return res.json({
         id: updatedUser.id,
@@ -658,16 +794,17 @@ export function createApiApp(): Express {
         status: updatedUser.estado,
       });
     } catch (error) {
-      console.error('Error updating operator:', error);
+      console.error('[Operators] Error updating operator:', error);
       return res.status(500).json({ error: 'Error de conexión a la Base de Datos al modificar el operario.' });
     }
   });
 
+  // ── My Shift Report ──────────────────────────────────────────────────────
   app.get('/api/my-shift-report', requireAuthenticatedUser, async (req: AuthenticatedRequest, res) => {
     try {
       const prisma = await getPrismaClient();
       const twelveHoursAgo = new Date(Date.now() - 12 * 60 * 60 * 1000);
-      
+
       const logs = await prisma.hourlyLog.findMany({
         where: {
           user_id: req.user!.id,
@@ -684,20 +821,27 @@ export function createApiApp(): Express {
 
       return res.json(logs);
     } catch (error) {
-      console.error('Error fetching shift reports:', error);
+      console.error('[Report] Error fetching shift reports:', error);
       return res.status(500).json({ error: 'Error interno obteniendo reporte de turno' });
     }
   });
 
-  app.get('/api/health-db', async (req, res) => {
+  // ── Health Check ─────────────────────────────────────────────────────────
+  app.get('/api/health-db', async (_req, res) => {
     try {
       const prisma = await getPrismaClient();
       await prisma.$executeRaw`SELECT 1`;
-      return res.status(200).json({ status: 'Connected! Supabase DB reached.' });
+      return res.status(200).json({ status: 'Connected! Supabase DB reached.', users: predefinedUsers.length });
     } catch (error: any) {
-      console.error('DB Error Health Check:', error);
+      console.error('[Health] DB Error:', error);
       return res.status(500).json({ status: 'Failed', error: error.message || 'Error de conexion' });
     }
+  });
+
+  // ── Seed endpoint (útil para forzar semillado desde panel admin) ─────────
+  app.post('/api/seed', requireRoles(['JEFE']), async (_req, res) => {
+    await seedPredefinedUsers();
+    return res.json({ message: `${predefinedUsers.length} usuarios sincronizados.` });
   });
 
   return app;

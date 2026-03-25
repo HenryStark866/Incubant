@@ -71,6 +71,30 @@ export default function SupervisorDashboard() {
     setPreviousReportCount(reportCount);
   }, [reportCount]);
 
+  // Reloj y reglas de turno en tiempo real
+  const [currentTime, setCurrentTime] = useState(new Date());
+  
+  useEffect(() => {
+    const timer = setInterval(() => setCurrentTime(new Date()), 30000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const getShiftInfo = (date: Date) => {
+    const time = date.getHours() + date.getMinutes() / 60;
+    // 6:20 (6.333) to 14:40 (14.666) -> Turno 1
+    if (time >= 6.333 && time < 14.666) return 'Turno 1';
+    // 14:40 to 22:20 (22.333) -> Turno 2
+    if (time >= 14.666 && time < 22.333) return 'Turno 2';
+    // 22:20 to 6:20 -> Turno 3
+    return 'Turno 3';
+  };
+
+  const currentShiftName = getShiftInfo(currentTime);
+  const activeOperatorsList = operatorsData
+    .filter(o => o.turno === currentShiftName && o.estado === 'Activo')
+    .map(o => (o.name || 'Sin nombre').split(' ')[0]) // Primer Nombre usando name
+    .join(', ') || 'N/A';
+
   const handleTabChange = (tab: 'dashboard' | 'personal' | 'settings') => {
     setActiveTab(tab);
     setIsSidebarOpen(false);
@@ -826,14 +850,17 @@ export default function SupervisorDashboard() {
                 </div>
               </div>
 
-              <div className="bg-brand-secondary/10 border border-brand-secondary/30 rounded-2xl px-5 py-3 flex items-center gap-4 min-w-[138px] animate-pulse">
-                <div className="p-2 bg-white rounded-xl shadow-sm">
-                  <Clock className="text-brand-primary" size={20} />
+              <div className="bg-brand-secondary/10 border border-brand-secondary/30 rounded-2xl px-5 py-3 flex flex-col justify-center min-w-[200px]">
+                <div className="flex items-center gap-2 mb-1">
+                  <Clock className="text-brand-primary" size={14} />
+                  <p className="text-[10px] text-brand-primary uppercase font-black tracking-widest">{currentTime.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})} - {currentShiftName}</p>
                 </div>
-                <div>
-                  <p className="text-[9px] text-brand-primary uppercase font-black tracking-widest">Cambio</p>
-                  <p className="text-xl font-black text-brand-primary leading-none">14:00</p>
-                </div>
+                <p className="text-xs font-black text-brand-dark leading-none truncate max-w-[190px]">
+                  Operador: <span className="text-brand-primary font-bold">{activeOperatorsList}</span>
+                </p>
+                <p className="text-[9px] text-brand-gray/80 font-bold mt-1">
+                  {currentTime.toLocaleDateString()}
+                </p>
               </div>
             </div>
           </div>

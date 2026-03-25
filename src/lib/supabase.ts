@@ -102,8 +102,9 @@ export async function listEvidences(folder: string = '') {
       return [];
     }
 
+    const client = supabase;
     return data.map(file => {
-      const { data: publicUrlData } = supabase.storage
+      const { data: publicUrlData } = client.storage
         .from('evidencias')
         .getPublicUrl(`${folder ? folder + '/' : ''}${file.name}`);
       

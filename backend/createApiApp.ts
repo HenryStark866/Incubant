@@ -517,96 +517,6 @@ export function createApiApp(): Express {
     return res.status(401).json({ error: 'PIN o usuario incorrectos' });
   });
 
-  // ── Operator Management ──────────────────────────────────────────────────
-  app.get('/api/dashboard/operators', requireRoles(SUPERVISOR_ROLES), async (_req, res) => {
-    try {
-      const prisma = await getPrismaClient();
-      const users = await prisma.user.findMany({
-        where: { estado: 'Activo' },
-        orderBy: { nombre: 'asc' }
-      });
-      // Mapear al formato que espera el frontend
-      const mapped = users.map(u => ({
-        id: u.id,
-        name: u.nombre,
-        role: u.rol,
-        shift: u.turno,
-        status: u.estado
-      }));
-      return res.json(mapped);
-    } catch (error) {
-      console.error('[Admin] Error listing operators:', error);
-      return res.status(500).json({ error: 'Error al listar personal' });
-    }
-  });
-
-  app.post('/api/operators', requireRoles(SUPERVISOR_ROLES), async (req, res) => {
-    try {
-      const { nombre, pin, rol } = req.body;
-      const prisma = await getPrismaClient();
-      
-      const slug = (nombre as string).toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
-      const id = `${slug}-${Math.floor(1000 + Math.random() * 9000)}`;
-
-      const user = await prisma.user.create({
-        data: {
-          id,
-          nombre,
-          pin_acceso: String(pin),
-          rol,
-          turno: 'Turno 1',
-          estado: 'Activo'
-        }
-      });
-
-      return res.status(201).json({
-        id: user.id,
-        name: user.nombre,
-        role: user.rol,
-        shift: user.turno,
-        status: user.estado
-      });
-    } catch (error) {
-      return res.status(500).json({ error: 'Error al crear operario' });
-    }
-  });
-
-  app.put('/api/operators/:id', requireRoles(SUPERVISOR_ROLES), async (req, res) => {
-    try {
-      const { id } = req.params;
-      const { turno, estado } = req.body;
-      const prisma = await getPrismaClient();
-      const user = await prisma.user.update({
-        where: { id },
-        data: { turno, estado }
-      });
-      return res.json({
-        id: user.id,
-        name: user.nombre,
-        role: user.rol,
-        shift: user.turno,
-        status: user.estado
-      });
-    } catch (error) {
-      return res.status(500).json({ error: 'Error al actualizar operario' });
-    }
-  });
-
-  app.delete('/api/operators/:id', requireRoles(SUPERVISOR_ROLES), async (req, res) => {
-    try {
-      const { id } = req.params;
-      const prisma = await getPrismaClient();
-      // Soft delete: cambiar estado a Inactivo
-      await prisma.user.update({
-        where: { id },
-        data: { estado: 'Inactivo' }
-      });
-      return res.status(204).end();
-    } catch (error) {
-      return res.status(500).json({ error: 'Error al eliminar operario' });
-    }
-  });
-
   // ── Sync Hourly ──────────────────────────────────────────────────────────
   app.post('/api/sync-hourly', requireAuthenticatedUser, async (req: AuthenticatedRequest, res) => {
     try {
@@ -713,14 +623,6 @@ export function createApiApp(): Express {
       return res.json({ reportCount: 0, lastReportTime: null, activeOperatorsCount: 0 });
     }
   });
-
-  // Helper para determinar turno en el backend
-  function getShiftName(date: Date): string {
-    const hour = date.getHours();
-    if (hour >= 6 && hour < 14) return 'Turno 1';
-    if (hour >= 14 && hour < 22) return 'Turno 2';
-    return 'Turno 3';
-  }
 
   // ── Dashboard: Status ────────────────────────────────────────────────────
   app.get('/api/dashboard/status', requireRoles(SUPERVISOR_ROLES), async (_req, res) => {
@@ -1160,6 +1062,30 @@ export function createApiApp(): Express {
     }
   });
 
+  app.delete('/api/admin/assignments/:id', requireRoles(SUPERVISOR_ROLES), async (req, res) => {
+    try {
+      const { id } = req.params;
+      const prisma = await getPrismaClient();
+      await prisma.scheduleAssignment.delete({ where: { id } });
+      return res.status(204).end();
+    } catch (error) {
+      return res.status(500).json({ error: 'Error al eliminar asignación' });
+    }
+  });
+
+  app.get('/api/admin/users', requireRoles(SUPERVISOR_ROLES), async (_req, res) => {
+    try {
+      const prisma = await getPrismaClient();
+      const users = await prisma.user.findMany({ 
+        where: { estado: 'Activo' },
+        orderBy: { nombre: 'asc' }
+      });
+      return res.json(users);
+    } catch (err) {
+      return res.status(500).json({ error: 'Fallo al obtener usuarios' });
+    }
+  });
+
   // ── Operator Perspective ─────────────────────────────────────────────────
   app.get('/api/my-schedule', requireAuthenticatedUser, async (req: AuthenticatedRequest, res) => {
     try {
@@ -1255,117 +1181,7 @@ export function createApiApp(): Express {
     return res.json({ message: `${predefinedUsers.length} usuarios sincronizados.` });
   });
 
-  // ── Shifts & Schedule Management ──────────────────────────────────────────
-  app.get('/api/admin/shifts', requireRoles(SUPERVISOR_ROLES), async (_req, res) => {
-    try {
-      const prisma = await getPrismaClient();
-      const shifts = await prisma.shift.findMany({ orderBy: { hora_inicio: 'asc' } });
-      return res.json(shifts);
-    } catch (error) {
-      return res.status(500).json({ error: 'Error al obtener turnos' });
-    }
-  });
-
-  app.post('/api/admin/shifts', requireRoles(SUPERVISOR_ROLES), async (req, res) => {
-    try {
-      const { nombre, hora_inicio, hora_fin, color } = req.body;
-      const prisma = await getPrismaClient();
-      const shift = await prisma.shift.create({
-        data: { nombre, hora_inicio, hora_fin, color }
-      });
-      return res.status(201).json(shift);
-    } catch (error) {
-      return res.status(500).json({ error: 'Error al crear turno' });
-    }
-  });
-
-  app.get('/api/admin/assignments', requireRoles(SUPERVISOR_ROLES), async (_req, res) => {
-    try {
-      const prisma = await getPrismaClient();
-      const assignments = await (prisma as any).scheduleAssignment.findMany({
-        include: { user: true, shift: true },
-        orderBy: { fecha: 'desc' },
-        take: 50
-      });
-      return res.json(assignments);
-    } catch (error) {
-      return res.status(500).json({ error: 'Error al obtener asignaciones' });
-    }
-  });
-
-  app.post('/api/admin/assignments', requireRoles(SUPERVISOR_ROLES), async (req, res) => {
-    try {
-      const { user_id, shift_id, fecha } = req.body;
-      const prisma = await getPrismaClient();
-      
-      const assignment = await (prisma as any).scheduleAssignment.upsert({
-        where: {
-          user_id_fecha: {
-            user_id,
-            fecha: new Date(fecha)
-          }
-        },
-        update: { shift_id },
-        create: {
-          user_id,
-          shift_id,
-          fecha: new Date(fecha)
-        },
-        include: { user: true, shift: true }
-      });
-
-      // Notificar al usuario vía SSE
-      sendEventToUser(user_id, {
-        type: 'NEW_ASSIGNMENT',
-        message: `Se te ha asignado el turno ${assignment.shift.nombre} para el día ${fecha}`,
-        assignment
-      });
-
-      return res.status(201).json(assignment);
-    } catch (error) {
-      console.error('[Admin] Error assigning shift:', error);
-      return res.status(500).json({ error: 'Error al asignar turno' });
-    }
-  });
-
-  app.delete('/api/admin/assignments/:id', requireRoles(SUPERVISOR_ROLES), async (req, res) => {
-    try {
-      const { id } = req.params;
-      const prisma = await getPrismaClient();
-      await (prisma as any).scheduleAssignment.delete({ where: { id } });
-      return res.status(204).end();
-    } catch (error) {
-      return res.status(500).json({ error: 'Error al eliminar asignación' });
-    }
-  });
-
-  app.get('/api/my-schedule', requireAuthenticatedUser, async (req: AuthenticatedRequest, res) => {
-    try {
-      const prisma = await getPrismaClient();
-      const assignments = await (prisma as any).scheduleAssignment.findMany({
-        where: { user_id: req.user!.id },
-        include: { shift: true },
-        orderBy: { fecha: 'asc' },
-        take: 14 // Próximas 2 semanas
-      });
-      return res.json(assignments);
-    } catch (error) {
-      return res.status(500).json({ error: 'Error al obtener tu horario' });
-    }
-  });
-
-  app.get('/api/admin/users', requireRoles(SUPERVISOR_ROLES), async (_req, res) => {
-    try {
-      const prisma = await getPrismaClient();
-      const users = await prisma.user.findMany({ 
-        where: { estado: 'Activo' },
-        orderBy: { nombre: 'asc' }
-      });
-      return res.json(users);
-    } catch (err) {
-      return res.status(500).json({ error: 'Fallo al obtener usuarios' });
-    }
-  });
+  // ── Finalization ─────────────────────────────────────────────────────────
 
   return app;
 }

@@ -350,15 +350,16 @@ export default function SupervisorDashboard() {
       const tableDataIncubadoras = machinesData
         .filter(m => m.type === 'incubadora')
         .map(m => {
-          const obs = m.data?.observaciones || m.observaciones || '';
+          const d = m.data;
           return [
-            m.name.replace('Incubadora ', ''),
+            m.name.replace('INC-', ''),
             m.status === 'alarm' ? 'ALARMA' : 'OK',
-            m.data?.tempOvoscan || m.temp || '--',
-            m.data?.tempAire || '--',
-            m.data?.humedadRelativa || m.humidity || '--',
-            m.data?.volteoNumero || '--',
-            m.data?.volteoPosicion || '--'
+            d?.tempOvoscan || m.temp || '--',
+            d?.tempAire || '--',
+            d?.humedadRelativa || '--',
+            d?.co2 || '--',
+            d?.volteoNumero || '--',
+            d?.ventiladorPrincipal || '--'
           ];
         });
 
@@ -369,7 +370,7 @@ export default function SupervisorDashboard() {
 
       autoTable(doc, {
         startY: 80,
-        head: [['Máquina', 'Estado', 'T.Ovo', 'T.Aire', 'Hum %', 'V/N°', 'V/Pos']],
+        head: [['Máquina', 'Estado', 'T.Ovo', 'T.Aire', 'Hum %', 'CO2', 'V/N°', 'Vent']],
         body: tableDataIncubadoras,
         theme: 'striped',
         headStyles: { fillColor: [245, 166, 35], textColor: 255, fontStyle: 'bold' },
@@ -380,18 +381,22 @@ export default function SupervisorDashboard() {
       const lastY = (doc as any).lastAutoTable.finalY + 15;
       const tableDataNacedoras = machinesData
         .filter(m => m.type === 'nacedora')
-        .map(m => [
-          m.name.replace('Nacedora ', ''),
-          m.status === 'alarm' ? 'ALARMA' : 'OK',
-          m.data?.temperatura || m.temp || '--',
-          m.data?.humedadRelativa || m.humidity || '--',
-          m.data?.co2 || '--'
-        ]);
+        .map(m => {
+          const d = m.data;
+          return [
+            m.name.replace('NAC-', ''),
+            m.status === 'alarm' ? 'ALARMA' : 'OK',
+            d?.temperatura || m.temp || '--',
+            d?.humedadRelativa || '--',
+            d?.co2 || '--',
+            d?.ventiladorPrincipal || '--'
+          ];
+        });
 
       doc.text('DATOS TÉCNICOS: NACEDORAS', 14, lastY);
       autoTable(doc, {
         startY: lastY + 5,
-        head: [['Máquina', 'Estado', 'Temp °C', 'Hum %', 'CO2']],
+        head: [['Máquina', 'Estado', 'Temp °C', 'Hum %', 'CO2', 'Vent']],
         body: tableDataNacedoras,
         theme: 'striped',
         headStyles: { fillColor: [100, 100, 100], textColor: 255, fontStyle: 'bold' },

@@ -12,12 +12,16 @@ export interface User {
 }
 
 export interface MachineData {
-  diaIncubacion: string;
+  tiempoIncubacion: {
+    dias: string;
+    horas: string;
+    minutos: string;
+  };
   // Para Incubadoras
   tempOvoscan?: string;
   tempAire?: string;
   volteoNumero?: string;
-  volteoPosicion?: string;
+  volteoPosicion?: 'V' | 'A' | '';
   alarma?: 'Si' | 'No';
   // Para Nacedoras (o general)
   temperatura?: string; 

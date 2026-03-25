@@ -7,7 +7,7 @@ app.use(express.json());
 
 // Apply the routes from our central backend logic
 const apiRouter = createApiApp();
-app.use('/api', apiRouter);
+app.use('/', apiRouter);
 
 // Export for Vercel Serverless
 export default app;

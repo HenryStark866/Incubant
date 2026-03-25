@@ -1,11 +1,79 @@
 import React, { useState } from 'react';
-import { useMachineStore, MachineType } from '../store/useMachineStore';
-import { CheckCircle2, Clock, UploadCloud, Loader2, LogOut, ChevronRight, Egg } from 'lucide-react';
+import { useMachineStore, MachineType, Machine } from '../store/useMachineStore';
+import { CheckCircle2, Clock, UploadCloud, Loader2, LogOut, ChevronRight, Egg, AlertTriangle, X, Download, FileText } from 'lucide-react';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
+
+// Specialized Confirmation Modal
+const ConfirmationModal = ({ 
+  isOpen, 
+  onClose, 
+  onConfirm, 
+  pendingCount,
+  pendingMachines 
+}: { 
+  isOpen: boolean, 
+  onClose: () => void, 
+  onConfirm: () => void,
+  pendingCount: number,
+  pendingMachines: Machine[]
+}) => {
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-[100] bg-brand-dark/60 backdrop-blur-md flex items-center justify-center p-6 animate-in fade-in duration-300">
+      <div className="bg-white rounded-[2.5rem] w-full max-w-md overflow-hidden shadow-2xl animate-in zoom-in-95 duration-300">
+        <div className="p-8">
+          <div className="w-16 h-16 bg-orange-50 rounded-2xl flex items-center justify-center mb-6 border border-orange-100 mx-auto">
+            <AlertTriangle size={32} className="text-[#F5A623]" />
+          </div>
+          
+          <h2 className="text-2xl font-black text-brand-dark text-center mb-4 leading-tight">
+            ¿Enviar reporte incompleto?
+          </h2>
+          
+          <p className="text-gray-500 text-center font-medium mb-6 leading-relaxed">
+            Faltan <span className="text-brand-dark font-black underline">{pendingCount} máquinas</span> por registrar. <br/>
+            Las máquinas sin datos se marcarán automáticamente como <span className="text-orange-600 font-bold">"APAGADA"</span>.
+          </p>
+
+          <div className="bg-gray-50 rounded-2xl p-4 mb-8 border border-gray-100">
+            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">Máquinas Pendientes:</p>
+            <div className="flex flex-wrap gap-2">
+              {pendingMachines.map(m => (
+                <span key={m.id} className="px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-xs font-black text-brand-dark">
+                  #{m.number}
+                </span>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-3">
+            <button
+              onClick={onConfirm}
+              className="w-full py-5 bg-[#F5A623] text-white rounded-2xl font-black text-sm uppercase tracking-widest shadow-lg shadow-orange-500/20 active:scale-95 transition-all"
+            >
+              Sí, Enviar Reporte
+            </button>
+            <button
+              onClick={onClose}
+              className="w-full py-5 bg-gray-100 text-gray-500 rounded-2xl font-black text-sm uppercase tracking-widest active:scale-95 transition-all"
+            >
+              Volver a Revisar
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 export default function DashboardScreen() {
   const [activeTab, setActiveTab] = useState<MachineType>('incubadora');
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncSuccess, setSyncSuccess] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [syncPhase, setSyncPhase] = useState<'uploading' | 'database' | 'pdf'>('uploading');
   
   const machines = useMachineStore(state => state.machines);
   const setActiveMachine = useMachineStore(state => state.setActiveMachine);
@@ -15,7 +83,8 @@ export default function DashboardScreen() {
 
   const filteredMachines = machines.filter(m => m.type === activeTab);
 
-  const pendingCount = machines.filter(m => m.status === 'pending').length;
+  const pendingMachines = machines.filter(m => m.status === 'pending');
+  const pendingCount = pendingMachines.length;
   const completedCount = machines.filter(m => m.status === 'completed').length;
   const allCompleted = pendingCount === 0;
 
@@ -35,16 +104,168 @@ export default function DashboardScreen() {
     }
   };
 
-  const handleSync = async () => {
+  const generatePDF = (syncedMachines: Machine[]) => {
+    try {
+      const doc = new jsPDF();
+      
+      // Estilos Base
+      const primaryColor: [number, number, number] = [245, 166, 35]; // #F5A623
+      
+      // Header
+      doc.setFontSize(22);
+      doc.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
+      doc.setFont("helvetica", "bold");
+      doc.text('INCUBANT MONITOR', 14, 20);
+      
+      doc.setFontSize(12);
+      doc.setTextColor(50, 50, 50);
+      doc.text('REPORTE DIARIO DE OPERACIÓN', 14, 28);
+      
+      doc.setFontSize(10);
+      doc.setTextColor(100, 100, 100);
+      doc.setFont("helvetica", "normal");
+      doc.text(`Fecha: ${new Date().toLocaleDateString()} | Hora: ${new Date().toLocaleTimeString()}`, 14, 35);
+      doc.text(`Operario: ${currentUser?.name || 'Sistema'}`, 14, 40);
+
+      // Tabla de Incubadoras
+      const incs = syncedMachines.filter(m => m.type === 'incubadora');
+      const incData = incs.map(m => {
+        const d = m.data;
+        const time = d?.tiempoIncubacion ? `${d.tiempoIncubacion.dias}d ${d.tiempoIncubacion.horas}h ${d.tiempoIncubacion.minutos}m` : '--';
+        return [
+          m.number,
+          m.status === 'completed' ? 'OK' : 'APAGADA',
+          time,
+          d?.tempOvoscan || '--',
+          d?.tempAire || '--',
+          d?.humedadRelativa || '--',
+          d?.co2 || '--',
+          d?.volteoNumero || '--',
+          d?.volteoPosicion || '--',
+          d?.alarma || 'No',
+          m.photoUrl ? 'VER FOTO' : '--',
+          d?.observaciones || ''
+        ];
+      });
+
+      doc.setFontSize(14);
+      doc.setTextColor(0, 0, 0);
+      doc.setFont("helvetica", "bold");
+      doc.text('CONTROL INCUBADORAS', 14, 55);
+
+      autoTable(doc, {
+        startY: 60,
+        head: [['N°', 'Est.', 'Tiempo', 'T.Ovo', 'T.Aire', 'Hum%', 'CO2', 'V/N', 'V/P', 'Alm', 'Evid.', 'Obs']],
+        body: incData,
+        theme: 'grid',
+        headStyles: { fillColor: [245, 166, 35] as [number, number, number], textColor: 255, fontSize: 8 },
+        styles: { fontSize: 7 },
+        didDrawCell: (data) => {
+          if (data.section === 'body' && data.column.index === 10 && data.cell.text[0] === 'VER FOTO') {
+            const machine = incs[data.row.index];
+            if (machine.photoUrl) {
+              doc.link(data.cell.x + 2, data.cell.y + 2, data.cell.width - 4, data.cell.height - 4, { url: machine.photoUrl });
+            }
+          }
+        },
+        willDrawCell: (data) => {
+          if (data.section === 'body' && data.column.index === 10 && data.cell.text[0] === 'VER FOTO') {
+            doc.setTextColor(0, 0, 255);
+          }
+        }
+      });
+
+      // Tabla de Nacedoras
+      const nacs = syncedMachines.filter(m => m.type === 'nacedora');
+      const nacData = nacs.map(m => {
+        const d = m.data;
+        const time = d?.tiempoIncubacion ? `${d.tiempoIncubacion.dias}d ${d.tiempoIncubacion.horas}h ${d.tiempoIncubacion.minutos}m` : '--';
+        return [
+          m.number,
+          m.status === 'completed' ? 'OK' : 'APAGADA',
+          time,
+          d?.temperatura || '--',
+          d?.humedadRelativa || '--',
+          d?.co2 || '--',
+          m.photoUrl ? 'VER FOTO' : '--',
+          d?.observaciones || ''
+        ];
+      });
+
+      const currentY = (doc as any).lastAutoTable.finalY + 15;
+      doc.text('CONTROL NACEDORAS', 14, currentY);
+
+      autoTable(doc, {
+        startY: currentY + 5,
+        head: [['N°', 'Est.', 'Tiempo', 'Temp', 'Hum%', 'CO2', 'Evid.', 'Obs']],
+        body: nacData,
+        theme: 'grid',
+        headStyles: { fillColor: [80, 80, 80] as [number, number, number], textColor: 255, fontSize: 8 },
+        styles: { fontSize: 8 },
+        didDrawCell: (data) => {
+          if (data.section === 'body' && data.column.index === 6 && data.cell.text[0] === 'VER FOTO') {
+            const machine = nacs[data.row.index];
+            if (machine.photoUrl) {
+              doc.link(data.cell.x + 2, data.cell.y + 2, data.cell.width - 4, data.cell.height - 4, { url: machine.photoUrl });
+            }
+          }
+        },
+        willDrawCell: (data) => {
+          if (data.section === 'body' && data.column.index === 6 && data.cell.text[0] === 'VER FOTO') {
+            doc.setTextColor(0, 0, 255);
+          }
+        }
+      });
+
+      doc.save(`Reporte_Incubant_${new Date().toISOString().split('T')[0]}.pdf`);
+    } catch (err) {
+      console.error('PDF Error:', err);
+    }
+  };
+
+  const handleSyncAttempt = () => {
+    if (allCompleted) {
+      executeSync();
+    } else {
+      setShowConfirm(true);
+    }
+  };
+
+  const executeSync = async () => {
+    setShowConfirm(false);
     setIsSyncing(true);
+    setSyncPhase('uploading');
     
     try {
+      // 0. Preparar máquinas (marcar faltantes como apagadas)
+      const preparedMachines = machines.map(m => {
+        if (m.status === 'pending') {
+          return {
+            ...m,
+            status: 'completed' as const, // Marcar como revisada pero 'apagada'
+            data: {
+              tiempoIncubacion: { dias: '0', horas: '0', minutos: '0' },
+              tempOvoscan: '0',
+              tempAire: '0',
+              temperatura: '0',
+              humedadRelativa: '0',
+              co2: '0',
+              observaciones: 'MÁQUINA APAGADA (Sin registro operario)',
+              alarma: 'No' as const,
+              volteoPosicion: '' as const,
+              volteoNumero: '0'
+            }
+          };
+        }
+        return m;
+      });
+
       // 1. Upload images to Supabase
       const { uploadEvidenceImage } = await import('../lib/supabase');
       
       const machinesWithUploadedPhotos = await Promise.all(
-        machines.map(async (machine) => {
-          if (machine.status === 'completed' && machine.photoUrl && machine.photoUrl.startsWith('data:image')) {
+        preparedMachines.map(async (machine) => {
+          if (machine.photoUrl && machine.photoUrl.startsWith('data:image')) {
             try {
               const publicUrl = await uploadEvidenceImage(machine.photoUrl, machine.id);
               return { ...machine, photoUrl: publicUrl };
@@ -58,6 +279,7 @@ export default function DashboardScreen() {
       );
 
       // 2. Send data to backend
+      setSyncPhase('database');
       const response = await fetch('/api/sync-hourly', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -68,9 +290,12 @@ export default function DashboardScreen() {
       });
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => null);
-        throw new Error(errorData?.error || 'Error al guardar los datos en el servidor');
+        throw new Error('Error al guardar los datos en el servidor');
       }
+
+      // 3. Generar y Descargar PDF
+      setSyncPhase('pdf');
+      generatePDF(machinesWithUploadedPhotos);
 
       setSyncSuccess(true);
       setTimeout(() => {
@@ -80,7 +305,7 @@ export default function DashboardScreen() {
 
     } catch (error) {
       console.error("Error de sincronización:", error);
-      alert(error instanceof Error ? error.message : 'Hubo un error al sincronizar los datos. Por favor, inténtalo de nuevo.');
+      alert('Hubo un error al sincronizar. Por favor verifica tu conexión.');
     } finally {
       setIsSyncing(false);
     }
@@ -94,22 +319,43 @@ export default function DashboardScreen() {
           <div className="bg-white rounded-3xl p-10 flex flex-col items-center text-center w-full max-w-sm shadow-2xl animate-in fade-in zoom-in duration-200">
             {isSyncing ? (
               <>
-                <Loader2 className="w-16 h-16 text-[#F5A623] animate-spin mb-6" />
-                <h2 className="text-2xl font-bold text-[#1A1A1A] mb-2">Sincronizando...</h2>
-                <p className="text-gray-500 font-medium">Actualizando registros en la nube</p>
+                <div className="relative mb-8">
+                  <Loader2 className="w-20 h-20 text-[#F5A623] animate-spin" />
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    {syncPhase === 'uploading' && <UploadCloud size={24} className="text-[#F5A623]" />}
+                    {syncPhase === 'database' && <UploadCloud size={24} className="text-[#F5A623]" />}
+                    {syncPhase === 'pdf' && <FileText size={24} className="text-[#F5A623]" />}
+                  </div>
+                </div>
+                <h2 className="text-2xl font-black text-brand-dark mb-4 uppercase tracking-tight">
+                  {syncPhase === 'uploading' ? 'Subiendo Evidencia...' : 
+                   syncPhase === 'database' ? 'Guardando Datos...' : 
+                   'Generando Reporte...'}
+                </h2>
+                <div className="w-full bg-gray-100 h-1.5 rounded-full overflow-hidden">
+                   <div className="h-full bg-brand-primary animate-progress-fast"></div>
+                </div>
               </>
             ) : (
               <>
                 <div className="w-20 h-20 bg-green-50 rounded-full flex items-center justify-center mb-6">
                   <CheckCircle2 className="w-12 h-12 text-green-500" />
                 </div>
-                <h2 className="text-2xl font-bold text-[#1A1A1A] mb-2">¡Completado!</h2>
-                <p className="text-gray-500 font-medium">Los datos se han guardado correctamente.</p>
+                <h2 className="text-2xl font-black text-brand-dark mb-2 uppercase tracking-tight">¡Éxito!</h2>
+                <p className="text-gray-500 font-medium">Sincronización y Reporte completados.</p>
               </>
             )}
           </div>
         </div>
       )}
+
+      <ConfirmationModal 
+        isOpen={showConfirm}
+        onClose={() => setShowConfirm(false)}
+        onConfirm={executeSync}
+        pendingCount={pendingCount}
+        pendingMachines={pendingMachines}
+      />
 
       {/* Header Corporativo */}
       <div className="bg-white px-6 py-5 border-b border-gray-200 shadow-sm z-10">
@@ -225,16 +471,16 @@ export default function DashboardScreen() {
       {/* Botón de Sincronización */}
       <div className="absolute bottom-0 inset-x-0 p-6 bg-gradient-to-t from-[#F5F5F7] via-[#F5F5F7] to-transparent z-20">
         <button 
-          onClick={handleSync}
-          disabled={!allCompleted || isSyncing}
-          className={`w-full py-4 rounded-2xl font-bold text-base flex items-center justify-center gap-3 transition-all uppercase tracking-wide ${
-            allCompleted 
-              ? 'bg-[#F5A623] text-white active:bg-[#e0961d] shadow-lg shadow-[#F5A623]/30' 
-              : 'bg-gray-200 text-gray-400 cursor-not-allowed border border-gray-300'
+          onClick={handleSyncAttempt}
+          disabled={isSyncing}
+          className={`w-full py-5 rounded-[2rem] font-black text-lg flex items-center justify-center gap-3 transition-all uppercase tracking-widest shadow-xl ${
+            isSyncing 
+              ? 'bg-gray-400 text-white cursor-not-allowed'
+              : 'bg-[#F5A623] text-white active:scale-95 shadow-[#F5A623]/30'
           }`}
         >
-          <UploadCloud size={22} />
-          {allCompleted ? 'Sincronizar Datos' : `Faltan ${pendingCount} revisiones`}
+          <UploadCloud size={24} />
+          Sincronizar Operación
         </button>
       </div>
     </div>

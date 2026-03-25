@@ -16,7 +16,7 @@ import { useMachineStore } from '../store/useMachineStore';
 export default function SupervisorDashboard() {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'personal' | 'settings'>('dashboard');
   const [selectedMachine, setSelectedMachine] = useState<any | null>(null);
-  const [chartFilter, setChartFilter] = useState('Todas (Promedio)');
+  const [chartFilter, setChartFilter] = useState('Ver: Planta Completa');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   const [machinesData, setMachinesData] = useState<any[]>([]);
@@ -92,7 +92,7 @@ export default function SupervisorDashboard() {
         // Actualizar la lista de operadores
         setOperatorsData(prev => [...prev, createdOperator]);
         // Reset form
-        setNewOperator({ name: '', pin: '', role: 'OPERARIO' });
+        setNewOperator({ name: '', pin: '', role: 'OPERARIO', turno: 'Turno 1' });
         setShowCreateOperator(false);
         alert('Operario creado exitosamente');
       } else {
@@ -200,9 +200,28 @@ export default function SupervisorDashboard() {
     }
 
     void fetchData();
-    const interval = setInterval(fetchData, 60000);
+    const interval = setInterval(() => fetchData(), 60000);
     return () => clearInterval(interval);
   }, [canAccessSupervisor]);
+
+  useEffect(() => {
+    if (canAccessSupervisor) {
+      const fetchData = async () => {
+        try {
+          const trendsRes = await fetch(`/api/dashboard/trends?machine=${encodeURIComponent(chartFilter)}`);
+          const trendsJson = await trendsRes.json();
+          if (trendsRes.ok && Array.isArray(trendsJson)) {
+            setTrendsData(trendsJson);
+          } else {
+            setTrendsData([]);
+          }
+        } catch (error) {
+          setTrendsData([]);
+        }
+      };
+      void fetchData();
+    }
+  }, [chartFilter]);
 
   const activeAlarms = machinesData.filter(m => m.status === 'alarm').length;
   const efficiency = machinesData.length > 0
@@ -230,20 +249,29 @@ export default function SupervisorDashboard() {
        doc.text(`Operario Responsable: ${currentUser?.name || 'Sin responsable autenticado'}`, 14, 40);
 
       // Preparar datos para las Incubadoras
-      const incubadoras = machinesData.filter(m => m.type === 'incubadora');
-      const tableDataIncubadoras = incubadoras.map(m => [
-        m.name.replace('Incubadora ', ''),
-        m.status === 'alarm' ? 'Alarma' : m.status === 'maintenance' ? 'Mantenim.' : 'OK',
-        m.data?.diaIncubacion || m.incubatorDay || '--',
-        m.data?.tempOvoscan || m.temp || '--',
-        m.data?.tempAire || '--',
-        m.data?.humedadRelativa || m.humidity || '--',
-        m.data?.co2 || '--',
-        m.data?.volteoNumero || '--',
-        m.data?.volteoPosicion || '--',
-        m.data?.alarma || 'No',
-        m.data?.observaciones?.substring(0, 30) || ''
-      ]);
+      const tableDataIncubadoras = machinesData
+        .filter(m => m.type === 'incubadora')
+        .map(m => {
+          const obs = m.data?.observaciones || m.observaciones || '';
+          const time = m.data?.tiempoIncubacion 
+            ? `${m.data.tiempoIncubacion.dias}d ${m.data.tiempoIncubacion.horas}h ${m.data.tiempoIncubacion.minutos}m`
+            : (obs.match(/Tiempo:\s*([^|]+)/)?.[1]?.trim() || '--');
+            
+          return [
+            m.name.replace('Incubadora ', ''),
+            m.status === 'alarm' ? 'Alarma' : m.status === 'maintenance' ? 'Mantenim.' : 'OK',
+            time,
+            m.data?.tempOvoscan || m.temp || '--',
+            m.data?.tempAire || (obs.match(/Temp Aire:\s*([^|]+)/)?.[1]?.trim() || '--'),
+            m.data?.humedadRelativa || m.humidity || '--',
+            m.data?.co2 || (obs.match(/CO2:\s*([^|]+)/)?.[1]?.trim() || '--'),
+            m.data?.volteoNumero || (obs.match(/Volteos:\s*([^|]+)/)?.[1]?.trim() || '--'),
+            m.data?.volteoPosicion || (obs.match(/Posicion:\s*([^|]+)/)?.[1]?.trim() || '--'),
+            m.data?.alarma || (obs.match(/Alarma:\s*([^|]+)/)?.[1]?.trim() || 'No'),
+            m.photoUrl ? 'VER FOTO' : '--',
+            obs.substring(0, 30)
+          ];
+        });
 
       doc.setFontSize(14);
       doc.setTextColor(0, 0, 0);
@@ -252,26 +280,49 @@ export default function SupervisorDashboard() {
 
       autoTable(doc, {
         startY: 60,
-        head: [['N°', 'Estado', 'Día', 'T.Ovo', 'T.Aire', 'Hum %', 'CO2', 'V/N°', 'V/Pos', 'Alarma', 'Observaciones']],
+        head: [['N°', 'Estado', 'Tiempo', 'T.Ovo', 'T.Aire', 'Hum %', 'CO2', 'V/N°', 'V/Pos', 'Alarma', 'Evid.', 'Obs']],
         body: tableDataIncubadoras,
         theme: 'grid',
-        headStyles: { fillColor: [245, 166, 35], textColor: 255, fontSize: 8, fontStyle: 'bold' },
+        headStyles: { fillColor: [245, 166, 35] as [number, number, number], textColor: 255, fontSize: 8, fontStyle: 'bold' },
         styles: { fontSize: 7, cellPadding: 2 },
-        alternateRowStyles: { fillColor: [245, 245, 245] },
+        alternateRowStyles: { fillColor: [245, 245, 245] as [number, number, number] },
+        didDrawCell: (data) => {
+          if (data.section === 'body' && data.column.index === 10 && data.cell.text[0] === 'VER FOTO') {
+            const rowIdx = data.row.index;
+            const machine = machinesData.filter(m => m.type === 'incubadora')[rowIdx];
+            if (machine?.photoUrl) {
+              doc.link(data.cell.x + 2, data.cell.y + 2, data.cell.width - 4, data.cell.height - 4, { url: machine.photoUrl });
+            }
+          }
+        },
+        willDrawCell: (data) => {
+          if (data.section === 'body' && data.column.index === 10 && data.cell.text[0] === 'VER FOTO') {
+            doc.setTextColor(0, 0, 255);
+          }
+        }
       });
 
       // Preparar datos para las Nacedoras
       const currentY = (doc as any).lastAutoTable.finalY + 15;
-      const nacedoras = machinesData.filter(m => m.type === 'nacedora');
-      const tableDataNacedoras = nacedoras.map(m => [
-        m.name.replace('Nacedora ', ''),
-        m.status === 'alarm' ? 'Alarma' : m.status === 'maintenance' ? 'Mantenim.' : 'OK',
-        m.data?.diaIncubacion || m.incubatorDay || '--',
-        m.data?.temperatura || m.temp || '--',
-        m.data?.humedadRelativa || m.humidity || '--',
-        m.data?.co2 || '--',
-        m.data?.observaciones?.substring(0, 40) || ''
-      ]);
+      const tableDataNacedoras = machinesData
+        .filter(m => m.type === 'nacedora')
+        .map(m => {
+          const obs = m.data?.observaciones || m.observaciones || '';
+          const time = m.data?.tiempoIncubacion 
+            ? `${m.data.tiempoIncubacion.dias}d ${m.data.tiempoIncubacion.horas}h ${m.data.tiempoIncubacion.minutos}m`
+            : (obs.match(/Tiempo:\s*([^|]+)/)?.[1]?.trim() || '--');
+
+          return [
+            m.name.replace('Nacedora ', ''),
+            m.status === 'alarm' ? 'Alarma' : m.status === 'maintenance' ? 'Mantenim.' : 'OK',
+            time,
+            m.data?.temperatura || m.temp || '--',
+            m.data?.humedadRelativa || m.humidity || '--',
+            m.data?.co2 || (obs.match(/CO2:\s*([^|]+)/)?.[1]?.trim() || '--'),
+            m.photoUrl ? 'VER FOTO' : '--',
+            obs.substring(0, 40)
+          ];
+        });
 
       // Comprobar si hay espacio para las nacedoras, o crear nueva página
       if (currentY > 250) {
@@ -290,12 +341,26 @@ export default function SupervisorDashboard() {
         doc.text('CONTROL DIARIO NACEDORAS', 14, currentY);
         autoTable(doc, {
           startY: currentY + 5,
-          head: [['N°', 'Estado', 'Día Inc.', 'Temp °C', 'Hum %', 'CO2', 'Observaciones']],
+          head: [['N°', 'Estado', 'Tiempo', 'Temp', 'Hum %', 'CO2', 'Evid.', 'Observaciones']],
           body: tableDataNacedoras,
           theme: 'grid',
-          headStyles: { fillColor: [100, 100, 100], textColor: 255, fontSize: 8, fontStyle: 'bold' },
+          headStyles: { fillColor: [100, 100, 100] as [number, number, number], textColor: 255, fontSize: 8, fontStyle: 'bold' },
           styles: { fontSize: 8, cellPadding: 2 },
-          alternateRowStyles: { fillColor: [245, 245, 245] },
+          alternateRowStyles: { fillColor: [245, 245, 245] as [number, number, number] },
+          didDrawCell: (data) => {
+            if (data.section === 'body' && data.column.index === 6 && data.cell.text[0] === 'VER FOTO') {
+              const rowIdx = data.row.index;
+              const machine = machinesData.filter(m => m.type === 'nacedora')[rowIdx];
+              if (machine?.photoUrl) {
+                doc.link(data.cell.x + 2, data.cell.y + 2, data.cell.width - 4, data.cell.height - 4, { url: machine.photoUrl });
+              }
+            }
+          },
+          willDrawCell: (data) => {
+            if (data.section === 'body' && data.column.index === 6 && data.cell.text[0] === 'VER FOTO') {
+              doc.setTextColor(0, 0, 255);
+            }
+          }
         });
       }
 
@@ -493,66 +558,75 @@ export default function SupervisorDashboard() {
 
         {editingOperator && (
           <div
-            className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4"
+            className="fixed inset-0 z-[60] bg-brand-dark/40 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-300"
             onClick={() => setEditingOperator(null)}
           >
             <div
-              className="bg-white rounded-2xl w-full max-w-md p-6 shadow-xl transform transition-all duration-300"
+              className="bg-white border-2 border-brand-primary/10 rounded-[2.5rem] w-full max-w-md shadow-2xl overflow-hidden animate-in zoom-in duration-300"
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="flex justify-between items-start mb-4">
-                <h2 className="text-xl font-black text-brand-dark">Modificar Operario / Turno</h2>
-                <button onClick={() => setEditingOperator(null)} className="text-gray-500 hover:text-gray-700">
-                  <X size={24} />
+              <div className="p-6 sm:p-8 border-b border-gray-50 flex items-center justify-between bg-brand-secondary/5">
+                <h2 className="text-xl font-black text-brand-dark">Modificar Operario</h2>
+                <button 
+                  onClick={() => setEditingOperator(null)}
+                  className="p-2 bg-white hover:bg-gray-50 rounded-xl text-brand-gray transition-all shadow-sm border border-gray-100"
+                >
+                  <X size={20} />
                 </button>
               </div>
               
-              <form onSubmit={handleUpdateOperatorSubmit} className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-brand-gray mb-2">Nombre Completo</label>
-                  <input type="text" value={editingOperator.name} disabled className="w-full px-4 py-3 bg-gray-100 border border-gray-300 rounded-lg text-gray-500" />
+              <form onSubmit={handleUpdateOperatorSubmit} className="p-6 sm:p-8 space-y-6">
+                <div className="bg-gray-50/50 p-4 rounded-3xl border border-gray-100 italic text-sm text-brand-gray">
+                  Editando perfil de: <span className="font-black text-brand-dark not-italic ml-1">{editingOperator.name}</span>
                 </div>
                 
                 <div>
-                  <label className="block text-sm font-medium text-brand-gray mb-2">Asignar Turno / Horario</label>
-                  <select 
-                    value={editingOperator.shift}
-                    onChange={(e) => setEditingOperator({...editingOperator, shift: e.target.value})}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-primary"
-                  >
-                    <option value="Turno 1">Turno 1 (Mañana)</option>
-                    <option value="Turno 2">Turno 2 (Tarde)</option>
-                    <option value="Turno 3">Turno 3 (Noche)</option>
-                    <option value="Gestión">Gestión Administrativa</option>
-                  </select>
+                  <label className="block text-[10px] font-black text-brand-gray uppercase tracking-[0.2em] mb-3 ml-2">Asignar Turno / Horario</label>
+                  <div className="relative">
+                    <select 
+                      value={editingOperator.shift}
+                      onChange={(e) => setEditingOperator({...editingOperator, shift: e.target.value})}
+                      className="appearance-none w-full px-6 py-4 bg-white border-2 border-gray-100 rounded-2xl focus:outline-none focus:border-brand-primary focus:ring-4 focus:ring-brand-primary/5 text-brand-dark font-bold text-sm transition-all shadow-sm"
+                    >
+                      <option value="Turno 1">Turno 1 (Mañana)</option>
+                      <option value="Turno 2">Turno 2 (Tarde)</option>
+                      <option value="Turno 3">Turno 3 (Noche)</option>
+                      <option value="Gestión">Gestión Administrativa</option>
+                    </select>
+                    <ChevronDown size={18} className="absolute right-4 top-1/2 -translate-y-1/2 text-brand-primary pointer-events-none" />
+                  </div>
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-brand-gray mb-2">Estado del Operario</label>
-                  <select 
-                    value={editingOperator.status}
-                    onChange={(e) => setEditingOperator({...editingOperator, status: e.target.value})}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-primary"
-                  >
-                    <option value="Activo">Activo</option>
-                    <option value="Inactivo">Inactivo / Suspendido</option>
-                  </select>
+                  <label className="block text-[10px] font-black text-brand-gray uppercase tracking-[0.2em] mb-3 ml-2">Estado del Operario</label>
+                  <div className="relative">
+                    <select 
+                      value={editingOperator.status}
+                      onChange={(e) => setEditingOperator({...editingOperator, status: e.target.value})}
+                      className="appearance-none w-full px-6 py-4 bg-white border-2 border-gray-100 rounded-2xl focus:outline-none focus:border-brand-primary focus:ring-4 focus:ring-brand-primary/5 text-brand-dark font-bold text-sm transition-all shadow-sm"
+                    >
+                      <option value="Activo">Activo</option>
+                      <option value="Inactivo">Inactivo / Suspendido</option>
+                    </select>
+                    <ChevronDown size={18} className="absolute right-4 top-1/2 -translate-y-1/2 text-brand-primary pointer-events-none" />
+                  </div>
                 </div>
                 
-                <div className="flex justify-end space-x-3 mt-6">
+                <div className="flex gap-3 pt-4">
                   <button 
                     type="button"
                     onClick={() => setEditingOperator(null)}
-                    className="px-5 py-3 border border-gray-300 rounded-lg hover:bg-gray-50"
+                    className="flex-1 px-5 py-4 border-2 border-gray-100 rounded-2xl text-brand-gray font-black hover:bg-gray-50 transition-all text-sm uppercase tracking-widest"
                   >
                     Cancelar
                   </button>
                   <button 
                     type="submit"
                     disabled={isUpdatingOperator}
-                    className={`px-5 py-3 bg-brand-primary text-white rounded-lg hover:bg-[#E6951F] disabled:opacity-50`}
+                    className="flex-1 px-5 py-4 bg-brand-primary text-white rounded-2xl font-black hover:bg-[#E6951F] shadow-lg shadow-brand-primary/20 disabled:opacity-50 transition-all text-sm uppercase tracking-widest flex items-center justify-center gap-2"
                   >
-                    {isUpdatingOperator ? 'Guardando...' : 'Guardar Cambios'}
+                    {isUpdatingOperator && <Loader2 size={16} className="animate-spin" />}
+                    {isUpdatingOperator ? 'Guardando' : 'Guardar'}
                   </button>
                 </div>
               </form>
@@ -735,7 +809,7 @@ export default function SupervisorDashboard() {
                     >
                       <option>Ver: Planta Completa</option>
                       {machinesData.map(m => (
-                        <option key={m.id} value={m.name}>{m.name}</option>
+                        <option key={m.id} value={m.id}>{m.name}</option>
                       ))}
                     </select>
                     <ChevronDown size={18} className="absolute right-4 top-1/2 -translate-y-1/2 text-brand-primary pointer-events-none" />

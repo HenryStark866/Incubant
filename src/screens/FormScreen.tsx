@@ -45,6 +45,91 @@ const InputField = React.memo(({
   </div>
 ));
 
+// Specialized Select for Posicion de Volteo (V / A)
+const PosicionToggle = ({ value, onChange, error }: { value: 'V' | 'A' | '', onChange: (v: 'V' | 'A') => void, error?: boolean }) => (
+  <div className={`bg-white rounded-3xl p-5 border-2 transition-all shadow-[0_2px_10px_rgba(0,0,0,0.02)] flex items-center justify-between ${
+    error ? 'border-red-400 bg-red-50/10' : 'border-gray-100'
+  }`}>
+    <div className="flex items-center gap-3">
+      <div className="p-2 rounded-xl bg-gray-50 text-brand-dark">
+        <RotateCw size={18} />
+      </div>
+      <label className="text-[11px] font-black text-brand-dark uppercase tracking-widest opacity-80">Posición de Volteo</label>
+    </div>
+    <div className="flex gap-1.5 bg-gray-50 p-1.5 rounded-2xl border border-gray-100">
+      <button 
+        onClick={() => onChange('V')} 
+        className={`px-5 py-2.5 rounded-xl text-xs font-black transition-all ${value === 'V' ? 'bg-brand-primary text-white shadow-md shadow-brand-primary/20' : 'text-gray-400 hover:text-gray-600'}`}
+      >
+        V
+      </button>
+      <button 
+        onClick={() => onChange('A')} 
+        className={`px-5 py-2.5 rounded-xl text-xs font-black transition-all ${value === 'A' ? 'bg-brand-primary text-white shadow-md shadow-brand-primary/20' : 'text-gray-400 hover:text-gray-600'}`}
+      >
+        A
+      </button>
+    </div>
+  </div>
+);
+
+// New Component for Time Input (Days/Hours/Minutes)
+const TiempoIncubacionInput = ({ 
+  value, 
+  onChange, 
+  error 
+}: { 
+  value: { dias: string, horas: string, minutos: string }, 
+  onChange: (field: string, val: string) => void,
+  error?: boolean 
+}) => (
+  <div className={`bg-white rounded-3xl p-5 border-2 transition-all shadow-[0_2px_10px_rgba(0,0,0,0.02)] ${
+    error ? 'border-red-400 bg-red-50/10' : 'border-gray-100'
+  }`}>
+    <div className="flex items-center gap-3 mb-4">
+      <div className={`p-2 rounded-xl ${error ? 'bg-red-50 text-red-500' : 'bg-gray-50 text-brand-dark'}`}>
+        <Calendar size={18} />
+      </div>
+      <label className="text-[11px] font-black text-brand-dark uppercase tracking-widest opacity-80">
+        Tiempo de Incubación
+      </label>
+    </div>
+    
+    <div className="grid grid-cols-3 gap-3">
+      <div className="flex flex-col items-center gap-1">
+        <input
+          type="number"
+          value={value.dias}
+          onChange={(e) => onChange('dias', e.target.value)}
+          placeholder="00"
+          className="w-full bg-gray-50 rounded-2xl py-3 text-center text-xl font-black text-brand-dark focus:outline-none focus:ring-2 focus:ring-brand-primary/20"
+        />
+        <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Días</span>
+      </div>
+      <div className="flex flex-col items-center gap-1">
+        <input
+          type="number"
+          value={value.horas}
+          onChange={(e) => onChange('horas', e.target.value)}
+          placeholder="00"
+          className="w-full bg-gray-50 rounded-2xl py-3 text-center text-xl font-black text-brand-dark focus:outline-none focus:ring-2 focus:ring-brand-primary/20"
+        />
+        <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Horas</span>
+      </div>
+      <div className="flex flex-col items-center gap-1">
+        <input
+          type="number"
+          value={value.minutos}
+          onChange={(e) => onChange('minutos', e.target.value)}
+          placeholder="00"
+          className="w-full bg-gray-50 rounded-2xl py-3 text-center text-xl font-black text-brand-dark focus:outline-none focus:ring-2 focus:ring-brand-primary/20"
+        />
+        <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Min</span>
+      </div>
+    </div>
+  </div>
+);
+
 // Specialized Select for Alarm
 const AlarmToggle = ({ value, onChange, error }: { value: 'Si' | 'No' | '', onChange: (v: 'Si' | 'No') => void, error?: boolean }) => (
   <div className={`bg-white rounded-3xl p-5 border-2 transition-all shadow-[0_2px_10px_rgba(0,0,0,0.02)] flex items-center justify-between ${
@@ -84,7 +169,7 @@ export default function FormScreen() {
   const isIncubadora = machine?.type === 'incubadora';
 
   const [formData, setFormData] = useState<MachineData>({
-    diaIncubacion: '',
+    tiempoIncubacion: { dias: '', horas: '', minutos: '' },
     tempOvoscan: '',
     tempAire: '',
     volteoNumero: '',
@@ -99,19 +184,34 @@ export default function FormScreen() {
   const [errors, setErrors] = useState<Partial<Record<keyof MachineData, boolean>>>({});
   const [showToast, setShowToast] = useState(false);
 
-  const handleInputChange = useCallback((field: keyof MachineData, value: string) => {
+  const handleInputChange = useCallback((field: keyof MachineData, value: any) => {
     setFormData(prev => ({ ...prev, [field]: value }));
     if (errors[field]) {
       setErrors(prev => ({ ...prev, [field]: false }));
     }
   }, [errors]);
 
+  const handleTimeChange = (field: string, value: string) => {
+    setFormData(prev => ({
+      ...prev,
+      tiempoIncubacion: {
+        ...prev.tiempoIncubacion,
+        [field]: value
+      }
+    }));
+    if (errors.tiempoIncubacion) {
+      setErrors(prev => ({ ...prev, tiempoIncubacion: false }));
+    }
+  };
+
   const handleSave = () => {
     const newErrors: Partial<Record<keyof MachineData, boolean>> = {};
     let hasErrors = false;
 
     // Campos comunes requeridos
-    if (!formData.diaIncubacion) { newErrors.diaIncubacion = true; hasErrors = true; }
+    if (!formData.tiempoIncubacion.dias && !formData.tiempoIncubacion.horas && !formData.tiempoIncubacion.minutos) { 
+      newErrors.tiempoIncubacion = true; hasErrors = true; 
+    }
     if (!formData.humedadRelativa) { newErrors.humedadRelativa = true; hasErrors = true; }
     if (!formData.co2) { newErrors.co2 = true; hasErrors = true; }
 
@@ -192,14 +292,10 @@ export default function FormScreen() {
         {/* UNIFIED SINGLE COLUMN LAYOUT */}
         <div className="space-y-4">
           
-          <InputField 
-            label="Día de Incubación" 
-            value={formData.diaIncubacion} 
-            onChange={(v) => handleInputChange('diaIncubacion', v)}
-            placeholder="" 
-            unit="DÍAS" 
-            icon={Calendar}
-            error={errors.diaIncubacion}
+          <TiempoIncubacionInput 
+            value={formData.tiempoIncubacion} 
+            onChange={handleTimeChange}
+            error={errors.tiempoIncubacion as any}
           />
 
           {isIncubadora ? (
@@ -253,13 +349,9 @@ export default function FormScreen() {
                 error={errors.volteoNumero}
               />
               
-              <InputField 
-                label="Posición de Volteo" 
-                value={formData.volteoPosicion || ''} 
+              <PosicionToggle 
+                value={formData.volteoPosicion as any || ''} 
                 onChange={(v) => handleInputChange('volteoPosicion', v)}
-                placeholder="" 
-                unit="° GRD" 
-                icon={RotateCw}
                 error={errors.volteoPosicion}
               />
 

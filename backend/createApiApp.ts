@@ -15,7 +15,11 @@ type AuthenticatedRequest = Request & {
 };
 
 type SubmittedMachineData = {
-  diaIncubacion?: string;
+  tiempoIncubacion?: {
+    dias: string;
+    horas: string;
+    minutos: string;
+  };
   tempOvoscan?: string;
   tempAire?: string;
   volteoNumero?: string;
@@ -197,10 +201,14 @@ function parseLocalMachine(machine: SubmittedMachine): {
 }
 
 function buildObservationSummary(data: SubmittedMachineData) {
+  const timeStr = data.tiempoIncubacion 
+    ? `Tiempo: ${data.tiempoIncubacion.dias}d ${data.tiempoIncubacion.horas}h ${data.tiempoIncubacion.minutos}m`
+    : null;
+
   const details = [
-    data.diaIncubacion ? `Dia: ${data.diaIncubacion}` : null,
-    data.humedadRelativa ? `Humedad: ${data.humedadRelativa}` : null,
-    data.co2 ? `CO2: ${data.co2}` : null,
+    timeStr,
+    data.humedadRelativa ? `Humedad: ${data.humedadRelativa}%` : null,
+    data.co2 ? `CO2: ${data.co2}%` : null,
     data.tempAire ? `Temp Aire: ${data.tempAire}` : null,
     data.volteoNumero ? `Volteos: ${data.volteoNumero}` : null,
     data.volteoPosicion ? `Posicion: ${data.volteoPosicion}` : null,
@@ -486,12 +494,19 @@ export function createApiApp(): Express {
     }
   });
 
-  app.get('/api/dashboard/trends', requireRoles(SUPERVISOR_ROLES), async (_req, res) => {
+  app.get('/api/dashboard/trends', requireRoles(SUPERVISOR_ROLES), async (req, res) => {
     try {
+      const { machine } = req.query;
       const prisma = await getPrismaClient();
       const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+      
+      const filter: any = { fecha_hora: { gte: twentyFourHoursAgo } };
+      if (machine && machine !== 'Ver: Planta Completa' && machine !== 'undefined') {
+        filter.machine_id = String(machine);
+      }
+
       const logs = await prisma.hourlyLog.findMany({
-        where: { fecha_hora: { gte: twentyFourHoursAgo } },
+        where: filter,
         orderBy: { fecha_hora: 'asc' },
       });
 
@@ -524,7 +539,7 @@ export function createApiApp(): Express {
   app.get('/api/dashboard/operators', requireRoles(SUPERVISOR_ROLES), async (_req, res) => {
     try {
       const prisma = await getPrismaClient();
-      const users = await prisma.user.findMany({
+      const users = await (prisma.user as any).findMany({
         select: {
           id: true,
           nombre: true,
@@ -532,7 +547,7 @@ export function createApiApp(): Express {
           turno: true,
           estado: true,
         },
-      });
+      } as any);
 
       const mappedUsers = users.map((user) => ({
         id: user.id,
@@ -570,7 +585,7 @@ export function createApiApp(): Express {
         return res.status(400).json({ error: 'El PIN ya está en uso' });
       }
 
-      const newUser = await prisma.user.create({
+      const newUser = await (prisma.user as any).create({
         data: {
           nombre,
           pin_acceso: pin,
@@ -585,7 +600,7 @@ export function createApiApp(): Express {
           turno: true,
           estado: true,
         },
-      });
+      } as any);
 
       return res.status(201).json({
         id: newUser.id,
@@ -610,7 +625,7 @@ export function createApiApp(): Express {
       if (turno) dataToUpdate.turno = turno;
       if (estado) dataToUpdate.estado = estado;
 
-      const updatedUser = await prisma.user.update({
+      const updatedUser = await (prisma.user as any).update({
         where: { id },
         data: dataToUpdate,
         select: {
@@ -620,7 +635,7 @@ export function createApiApp(): Express {
           turno: true,
           estado: true,
         },
-      });
+      } as any);
 
       return res.json({
         id: updatedUser.id,

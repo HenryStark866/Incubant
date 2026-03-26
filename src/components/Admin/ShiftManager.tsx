@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Calendar, User, Clock, Trash2, Plus, Users, Save, CheckCircle2, AlertTriangle, ArrowRight, UserPlus, FileSpreadsheet, PlusCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { getApiUrl } from '../../lib/api';
+import { getApiUrl, apiFetch } from '../../lib/api';
 
 type Shift = {
   id: string;
@@ -44,9 +44,9 @@ export default function ShiftManager() {
   const fetchData = async () => {
     try {
       const [sRes, uRes, aRes] = await Promise.all([
-        fetch(getApiUrl('/api/admin/shifts')),
-        fetch(getApiUrl('/api/admin/users')),
-        fetch(getApiUrl('/api/admin/assignments'))
+        apiFetch(getApiUrl('/api/admin/shifts')),
+        apiFetch(getApiUrl('/api/admin/users')),
+        apiFetch(getApiUrl('/api/admin/assignments'))
       ]);
       setShifts(await sRes.json());
       setUsers(await uRes.json());
@@ -64,9 +64,8 @@ export default function ShiftManager() {
     if (!selectedUser || !selectedShift || !selectedDate) return;
     setIsSaving(true);
     try {
-      const res = await fetch(getApiUrl('/api/admin/assignments'), {
+      const res = await apiFetch(getApiUrl('/api/admin/assignments'), {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           user_id: selectedUser,
           shift_id: selectedShift,
@@ -89,9 +88,8 @@ export default function ShiftManager() {
 
   const handleCreateShift = async () => {
     try {
-      const res = await fetch(getApiUrl('/api/admin/shifts'), {
+      const res = await apiFetch(getApiUrl('/api/admin/shifts'), {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newShift)
       });
       if (res.ok) {
@@ -106,7 +104,7 @@ export default function ShiftManager() {
   const deleteAssignment = async (id: string) => {
     if (!confirm('¿Seguro que deseas eliminar esta asignación?')) return;
     try {
-      await fetch(getApiUrl(`/api/admin/assignments/${id}`), { method: 'DELETE' });
+      await apiFetch(getApiUrl(`/api/admin/assignments/${id}`), { method: 'DELETE' });
       fetchData();
     } catch (err) {
       console.error('Error deleting assignment:', err);

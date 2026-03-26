@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Calendar, Clock, Bell, LogIn, ChevronRight } from 'lucide-react';
 import { useEvents } from '../hooks/useEvents';
 import { motion, AnimatePresence } from 'framer-motion';
-import { getApiUrl } from '../lib/api';
+import { getApiUrl, apiFetch } from '../lib/api';
 
 type Assignment = {
   id: string;
@@ -23,7 +23,7 @@ export default function OperatorSchedule() {
 
   const fetchSchedule = async () => {
     try {
-      const res = await fetch(getApiUrl('/api/my-schedule'));
+      const res = await apiFetch(getApiUrl('/api/my-schedule'));
       const data = await res.json();
       setAssignments(data);
     } catch (err) {
@@ -34,7 +34,7 @@ export default function OperatorSchedule() {
   };
 
   useEffect(() => {
-    fetch(getApiUrl('/api/session'))
+    apiFetch(getApiUrl('/api/session'))
       .then(res => res.json())
       .then(data => setUser(data.user));
     

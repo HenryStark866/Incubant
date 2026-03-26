@@ -12,7 +12,7 @@ import SupervisorDashboard from './screens/SupervisorDashboard';
 import { useMachineStore } from './store/useMachineStore';
 import { canUseSupervisorPanel } from './lib/fallbackAuth';
 import { Smartphone, Monitor, Loader2, Wifi, WifiOff } from 'lucide-react';
-import { getApiUrl } from './lib/api';
+import { getApiUrl, apiFetch } from './lib/api';
 
 export default function App() {
   const [viewMode, setViewMode] = useState<'mobile' | 'supervisor'>('mobile');
@@ -33,7 +33,7 @@ export default function App() {
 
     const checkHealth = async () => {
       try {
-        const response = await fetch(getApiUrl('/api/health'));
+        const response = await apiFetch(getApiUrl('/api/health'));
         if (response.ok) {
           setIsApiHealthy(true);
           return true;
@@ -68,7 +68,7 @@ export default function App() {
 
       // 2. Si el API está saludable, validar sesión normal
       try {
-        const response = await fetch(getApiUrl('/api/session'));
+        const response = await apiFetch(getApiUrl('/api/session'));
 
         if (!isMounted) {
           return;

@@ -11,7 +11,7 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { useMachineStore } from '../store/useMachineStore';
 import { listEvidences } from '../lib/supabase';
-import { getApiUrl } from '../lib/api';
+import { getApiUrl, apiFetch } from '../lib/api';
 
 import ShiftManager from '../components/Admin/ShiftManager';
 
@@ -108,7 +108,7 @@ export default function SupervisorDashboard() {
 
   const handleLogout = async () => {
     try {
-      await fetch(getApiUrl('/api/logout'), { method: 'POST' });
+      await apiFetch(getApiUrl('/api/logout'), { method: 'POST' });
     } catch (error) {
       console.error('Error cerrando sesión:', error);
     } finally {
@@ -140,11 +140,8 @@ export default function SupervisorDashboard() {
 
     setIsCreatingOperator(true);
     try {
-      const response = await fetch(getApiUrl('/api/operators'), {
+      const response = await apiFetch(getApiUrl('/api/operators'), {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
         body: JSON.stringify({
           nombre: newOperator.name,
           pin: newOperator.pin,
@@ -178,9 +175,8 @@ export default function SupervisorDashboard() {
 
     setIsUpdatingOperator(true);
     try {
-      const response = await fetch(getApiUrl(`/api/operators/${editingOperator.id}`), {
+      const response = await apiFetch(getApiUrl(`/api/operators/${editingOperator.id}`), {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           turno: editingOperator.shift,
           estado: editingOperator.status,
@@ -208,7 +204,7 @@ export default function SupervisorDashboard() {
     if (!window.confirm('¿Estás seguro de eliminar este operario? Si tiene registros asociados, se desactivará en lugar de borrarse.')) return;
     
     try {
-      const response = await fetch(getApiUrl(`/api/operators/${id}`), {
+      const response = await apiFetch(getApiUrl(`/api/operators/${id}`), {
         method: 'DELETE',
       });
       
@@ -227,10 +223,10 @@ export default function SupervisorDashboard() {
       const fetchData = async () => {
         try {
           const [statusRes, trendsRes, operatorsRes, summaryRes] = await Promise.all([
-            fetch(getApiUrl('/api/dashboard/status')),
-            fetch(getApiUrl('/api/dashboard/trends')),
-            fetch(getApiUrl('/api/dashboard/operators')),
-            fetch(getApiUrl('/api/dashboard/summary'))
+            apiFetch(getApiUrl('/api/dashboard/status')),
+            apiFetch(getApiUrl('/api/dashboard/trends')),
+            apiFetch(getApiUrl('/api/dashboard/operators')),
+            apiFetch(getApiUrl('/api/dashboard/summary'))
           ]);
           
           const statusJson = await statusRes.json();
@@ -302,7 +298,7 @@ export default function SupervisorDashboard() {
     if (canAccessSupervisor) {
       const fetchData = async () => {
         try {
-          const trendsRes = await fetch(getApiUrl(`/api/dashboard/trends?machine=${encodeURIComponent(chartFilter)}`));
+          const trendsRes = await apiFetch(getApiUrl(`/api/dashboard/trends?machine=${encodeURIComponent(chartFilter)}`));
           const trendsJson = await trendsRes.json();
           if (trendsRes.ok && Array.isArray(trendsJson)) {
             setTrendsData(trendsJson);
@@ -409,7 +405,7 @@ export default function SupervisorDashboard() {
       doc.text('BITÁCORA DE INCIDENTES Y ALARMAS', 14, incidentY);
       
       try {
-        const incRes = await fetch(getApiUrl('/api/dashboard/incidents?limit=15'));
+        const incRes = await apiFetch(getApiUrl('/api/dashboard/incidents?limit=15'));
         const incidents = await incRes.json();
         
         if (incidents.length > 0) {

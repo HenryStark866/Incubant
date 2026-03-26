@@ -5,12 +5,9 @@
 
 /**
  * Utility to manage the API URL across different environments.
- * In production (Vercel), it should point to the Render backend.
+ * In production (Vercel), it should point to the Render backend via rewrites.
  * In development, it points to local server or empty for relative proxy.
  */
-
-const IS_PROD = import.meta.env.PROD;
-const VITE_API_BASE_URL = import.meta.env.VITE_API_URL || '';
 
 export const API_BASE_URL = '';
 
@@ -19,7 +16,21 @@ export const API_BASE_URL = '';
  */
 export function getApiUrl(path: string): string {
   const cleanPath = path.startsWith('/') ? path : `/${path}`;
-  // If API_BASE_URL is empty, it means we are using relative paths (usual for local vite proxy)
   if (!API_BASE_URL) return cleanPath;
   return `${API_BASE_URL}${cleanPath}`;
 }
+
+/**
+ * Default fetch options that include credentials (cookies) for all API calls.
+ * This is REQUIRED for session cookies to work across the Vercel → Render proxy.
+ */
+export const apiFetch = (url: string, options: RequestInit = {}): Promise<Response> => {
+  return fetch(url, {
+    ...options,
+    credentials: 'include',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(options.headers || {}),
+    },
+  });
+};

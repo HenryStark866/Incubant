@@ -3,7 +3,7 @@ import { useMachineStore, MachineType, Machine } from '../store/useMachineStore'
 import { CheckCircle2, Clock, UploadCloud, Loader2, LogOut, ChevronRight, Egg, AlertTriangle, X, Download, FileText } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import { getApiUrl } from '../lib/api';
+import { getApiUrl, apiFetch } from '../lib/api';
 
 // Specialized Confirmation Modal
 const ConfirmationModal = ({ 
@@ -94,7 +94,7 @@ export default function DashboardScreen() {
 
     const checkRealtimeStatus = async () => {
       try {
-        const res = await fetch(getApiUrl('/api/session'));
+        const res = await apiFetch(getApiUrl('/api/session'));
         if (res.ok) {
           const { user } = await res.json();
           if (user && user.shift !== currentUser.shift) {
@@ -136,7 +136,7 @@ export default function DashboardScreen() {
       setSyncPhase('pdf');
 
       // Generar Reporte de Fin de Turno
-      const res = await fetch(getApiUrl('/api/my-shift-report'));
+      const res = await apiFetch(getApiUrl('/api/my-shift-report'));
       if (res.ok) {
         const logs = await res.json();
         
@@ -181,7 +181,7 @@ export default function DashboardScreen() {
         }
       }
 
-      await fetch(getApiUrl('/api/logout'), { method: 'POST' });
+      await apiFetch(getApiUrl('/api/logout'), { method: 'POST' });
     } catch (error) {
       console.error('Error cerrando sesión:', error);
     } finally {
@@ -379,9 +379,8 @@ export default function DashboardScreen() {
 
       // 2. Send data to backend
       setSyncPhase('database');
-      const response = await fetch(getApiUrl('/api/sync-hourly'), {
+      const response = await apiFetch(getApiUrl('/api/sync-hourly'), {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           userId: currentUser?.id,
           machines: machinesWithUploadedPhotos

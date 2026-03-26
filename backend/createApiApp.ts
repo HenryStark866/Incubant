@@ -177,14 +177,21 @@ function parseCookies(cookieHeader?: string): Record<string, string> {
 }
 
 function buildSessionCookie(token: string) {
-  const secureFlag = process.env.NODE_ENV === 'production' ? '; Secure' : '';
+  const isProduction = process.env.NODE_ENV === 'production';
+  const secureFlag = isProduction ? '; Secure' : '';
+  // SameSite=None;Secure is required for cookies to work across cross-origin requests
+  // (Vercel frontend → Render backend via vercel.json rewrites).
+  // In development, SameSite=Lax is fine since both run on localhost.
+  const sameSite = isProduction ? 'None' : 'Lax';
   const maxAge = 12 * 60 * 60; // 12 horas
-  return `${SESSION_COOKIE_NAME}=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAge}${secureFlag}`;
+  return `${SESSION_COOKIE_NAME}=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=${sameSite}; Max-Age=${maxAge}${secureFlag}`;
 }
 
 function clearSessionCookie() {
-  const secureFlag = process.env.NODE_ENV === 'production' ? '; Secure' : '';
-  return `${SESSION_COOKIE_NAME}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${secureFlag}`;
+  const isProduction = process.env.NODE_ENV === 'production';
+  const secureFlag = isProduction ? '; Secure' : '';
+  const sameSite = isProduction ? 'None' : 'Lax';
+  return `${SESSION_COOKIE_NAME}=; Path=/; HttpOnly; SameSite=${sameSite}; Max-Age=0${secureFlag}`;
 }
 
 async function attachSessionUser(req: AuthenticatedRequest, _res: Response, next: NextFunction) {

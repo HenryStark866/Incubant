@@ -84,13 +84,13 @@ async function getPrismaClient() {
     // Sanitización robusta de la URL para evitar errores DNS por caracteres ocultos (\r)
     let dbUrl = (process.env.DATABASE_URL || '').replace(/\r/g, '').trim();
     
-    // Auto-fix errors in Supabase database URLs if they were misconfigured by omitting 'db.' or the dot in the password
+    // Fallback: If developers left common password mistakes or missing host prefixes, fix them automatically for production safety
     if (dbUrl.includes('@uhbtivaepyhwfdvtpfjq.supabase.co')) {
       dbUrl = dbUrl.replace('@uhbtivaepyhwfdvtpfjq.supabase.co', '@db.uhbtivaepyhwfdvtpfjq.supabase.co');
     }
-    if (dbUrl.includes('Espartano300%24@')) {
-      dbUrl = dbUrl.replace('Espartano300%24@', 'Espartano300%24.@');
-    }
+    if (dbUrl.includes('Espartano300$@')) dbUrl = dbUrl.replace('Espartano300$@', 'Espartano300%24.@');
+    if (dbUrl.includes('Espartano300$.@')) dbUrl = dbUrl.replace('Espartano300$.@', 'Espartano300%24.@');
+    if (dbUrl.includes('Espartano300%24@')) dbUrl = dbUrl.replace('Espartano300%24@', 'Espartano300%24.@');
     
     globalForPrisma.prisma = new PrismaClient({
       log: process.env.NODE_ENV === 'development' ? ['error', 'warn'] : ['error'],

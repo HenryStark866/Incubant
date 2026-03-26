@@ -1,5 +1,5 @@
 // Manual Redeploy for CORS sync by HenryStark866
-importrt crypto from 'crypto';
+import crypto from 'crypto';
 import cron from 'node-cron';
 import express, { type Express, type NextFunction, type Request, type Response } from 'express';
 import cors from 'cors';

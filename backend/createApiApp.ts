@@ -1,6 +1,5 @@
-im// Manual Redeploy for CORS sync by HenryStark866
-
-  port crypto from 'crypto';
+// Manual Redeploy for CORS sync by HenryStark866
+import   port crypto from 'crypto';
 import cron from 'node-cron';
 import express, { type Express, type NextFunction, type Request, type Response } from 'express';
 import cors from 'cors';

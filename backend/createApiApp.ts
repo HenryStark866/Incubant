@@ -1094,21 +1094,27 @@ export function createApiApp(): Express {
     try {
       const { user_id, shift_id, fecha } = req.body;
       const prisma = await getPrismaClient();
+
+      // Normalizar fecha a medianoche UTC para que el @@unique funcione consistentemente
+      const dateObj = new Date(fecha);
+      dateObj.setUTCHours(0, 0, 0, 0);
+
       const assignment = await prisma.scheduleAssignment.upsert({
-        where: { user_id_fecha: { user_id, fecha: new Date(fecha) } },
+        where: { user_id_fecha: { user_id, fecha: dateObj } },
         update: { shift_id },
-        create: { user_id, shift_id, fecha: new Date(fecha) }
+        create: { user_id, shift_id, fecha: dateObj }
       });
       
       const shift = await prisma.shift.findUnique({ where: { id: shift_id } });
       sendEventToUser(user_id, { 
         type: 'NEW_ASSIGNMENT', 
-        message: `Tu horario para el ${new Date(fecha).toLocaleDateString()} ha sido actualizado al turno "${shift?.nombre}".`,
+        message: `Tu horario para el ${dateObj.toLocaleDateString()} ha sido actualizado al turno "${shift?.nombre}".`,
         assignment 
       });
 
       return res.json(assignment);
     } catch (error) {
+      console.error('[Assignments] Error upserting:', error);
       return res.status(500).json({ error: 'Fallo al asignar turno' });
     }
   });

@@ -48,11 +48,22 @@ export default function ShiftManager() {
         apiFetch(getApiUrl('/api/admin/users')),
         apiFetch(getApiUrl('/api/admin/assignments'))
       ]);
-      setShifts(await sRes.json());
-      setUsers(await uRes.json());
-      setAssignments(await aRes.json());
+      
+      const shiftsJson = await sRes.json();
+      const usersJson = await uRes.json();
+      const assignmentsJson = await aRes.json();
+
+      setShifts(Array.isArray(shiftsJson) ? shiftsJson : []);
+      setUsers(Array.isArray(usersJson) ? usersJson : []);
+      setAssignments(Array.isArray(assignmentsJson) ? assignmentsJson : []);
+      
+      // Auto-select first shift if none selected
+      if (Array.isArray(shiftsJson) && shiftsJson.length > 0 && !selectedShift) {
+        setSelectedShift(shiftsJson[0].id);
+      }
     } catch (err) {
       console.error('Error fetching data:', err);
+      setFeedback({ type: 'error', text: 'Error al conectar con el servidor' });
     }
   };
 
@@ -128,7 +139,7 @@ export default function ShiftManager() {
          
          <button 
            onClick={() => setShowShiftForm(!showShiftForm)}
-           className="flex items-center gap-2.5 bg-brand-orange text-white px-6 py-4 rounded-2xl font-black text-sm shadow-xl shadow-brand-orange/20 hover:scale-[1.03] transition-all"
+           className="flex items-center gap-2.5 bg-brand-primary text-white px-6 py-4 rounded-2xl font-black text-sm shadow-xl shadow-brand-primary/20 hover:scale-[1.03] transition-all"
          >
            <PlusCircle className="w-5 h-5" />
            CONFIGURAR TURNOS
@@ -171,24 +182,30 @@ export default function ShiftManager() {
                />
             </div>
 
-            <div className="grid gap-2">
-               <label className="text-xs font-bold text-gray-400 uppercase tracking-tighter pl-1">Seleccionar Horario</label>
-               <div className="grid grid-cols-2 gap-3">
-                 {shifts.map(s => (
-                   <button
-                     key={s.id}
-                     onClick={() => setSelectedShift(s.id)}
-                     className={`flex flex-col items-start p-4 rounded-2xl border transition-all ${selectedShift === s.id ? 'border-brand-orange bg-brand-orange/5 ring-1 ring-brand-orange/30' : 'bg-gray-50 border-gray-200 opacity-60'}`}
-                   >
-                     <div className="flex items-center gap-2 mb-1">
-                        <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: s.color }}></div>
-                        <span className="font-bold text-gray-800 text-sm">{s.nombre}</span>
-                     </div>
-                     <span className="text-[10px] text-gray-400 font-black">{s.hora_inicio} - {s.hora_fin}</span>
-                   </button>
-                 ))}
-               </div>
-            </div>
+             <div className="grid gap-2">
+                <label className="text-xs font-bold text-gray-400 uppercase tracking-tighter pl-1">Seleccionar Horario</label>
+                <div className="grid grid-cols-2 gap-3">
+                  {shifts.map(s => (
+                    <button
+                      key={s.id}
+                      type="button"
+                      onClick={() => setSelectedShift(s.id)}
+                      className={`flex flex-col items-start p-4 rounded-2xl border-2 transition-all ${selectedShift === s.id ? 'border-brand-primary bg-brand-primary/5 ring-4 ring-brand-primary/10' : 'bg-gray-50 border-gray-100'}`}
+                    >
+                      <div className="flex items-center gap-2 mb-1">
+                         <div className="w-3 h-3 rounded-full shadow-sm" style={{ backgroundColor: s.color || '#f5a623' }}></div>
+                         <span className="font-black text-gray-800 text-xs">{s.nombre}</span>
+                      </div>
+                      <span className="text-[10px] text-brand-gray font-bold tracking-tight">{s.hora_inicio} - {s.hora_fin}</span>
+                    </button>
+                  ))}
+                  {shifts.length === 0 && (
+                    <div className="col-span-2 p-4 bg-orange-50 border border-orange-100 rounded-xl text-center">
+                      <p className="text-[10px] text-orange-600 font-bold uppercase tracking-widest">No hay turnos creados</p>
+                    </div>
+                  )}
+                </div>
+             </div>
             
             <button 
               disabled={isSaving}
@@ -232,9 +249,9 @@ export default function ShiftManager() {
                        <Calendar className="w-5 h-5 text-gray-400" />
                     </div>
                     <div>
-                      <div className="flex items-center gap-2">
+                       <div className="flex items-center gap-2">
                         <h4 className="font-black text-gray-800 text-sm uppercase tracking-tighter">{asm.user.nombre}</h4>
-                        <span className="text-[10px] text-brand-orange font-bold px-2 py-0.5 bg-brand-orange/5 rounded-full">{asm.shift.nombre}</span>
+                        <span className="text-[10px] text-brand-primary font-black px-2 py-0.5 bg-brand-primary/10 rounded-full border border-brand-primary/20">{asm.shift.nombre}</span>
                       </div>
                       <p className="text-xs text-gray-400 mt-0.5 font-bold italic tracking-wide">{new Date(asm.fecha).toLocaleDateString('es-CO', { dateStyle: 'long' })}</p>
                     </div>
@@ -303,8 +320,8 @@ export default function ShiftManager() {
                      </div>
                   </div>
 
-                  <div className="grid gap-4 mt-4">
-                     <button onClick={handleCreateShift} className="w-full bg-brand-orange text-white py-5 rounded-3xl font-black shadow-xl shadow-brand-orange/20 hover:scale-[1.02] active:scale-[0.98] transition-all">
+                   <div className="grid gap-4 mt-4">
+                     <button onClick={handleCreateShift} className="w-full bg-brand-primary text-white py-5 rounded-3xl font-black shadow-xl shadow-brand-primary/20 hover:scale-[1.02] active:scale-[0.98] transition-all">
                         PUBLICAR TURNO
                      </button>
                      <button onClick={() => setShowShiftForm(false)} className="w-full py-4 rounded-2xl font-bold text-gray-400 hover:text-gray-600 transition-colors">

@@ -1,2 +1,0 @@
-src/screens/SupervisorDashboard.tsx(10,19): error TS2307: Cannot find module 'jspdf' or its corresponding type declarations.
-src/screens/SupervisorDashboard.tsx(11,23): error TS2307: Cannot find module 'jspdf-autotable' or its corresponding type declarations.

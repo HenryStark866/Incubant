@@ -508,8 +508,11 @@ export default function SupervisorDashboard() {
               <X size={18} />
             </button>
           </div>
-          <div className="text-center px-4 py-1 bg-brand-primary/10 rounded-full border border-brand-primary/20">
-            <p className="text-[10px] text-brand-primary font-black uppercase tracking-[0.2em]">Sistema de Monitoreo</p>
+          <div className="flex flex-col items-center gap-1">
+            <div className="px-4 py-1 bg-brand-primary/10 rounded-full border border-brand-primary/20">
+              <p className="text-[10px] text-brand-primary font-black uppercase tracking-[0.2em]">Sistema de Monitoreo</p>
+            </div>
+            <span className="text-[8px] text-brand-gray font-bold opacity-40">v0.1.1-PROD</span>
           </div>
         </div>
         

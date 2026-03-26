@@ -82,7 +82,15 @@ async function getPrismaClient() {
   if (!globalForPrisma.prisma) {
     const { PrismaClient } = await import('@prisma/client');
     // Sanitización robusta de la URL para evitar errores DNS por caracteres ocultos (\r)
-    const dbUrl = (process.env.DATABASE_URL || '').replace(/\r/g, '').trim();
+    let dbUrl = (process.env.DATABASE_URL || '').replace(/\r/g, '').trim();
+    
+    // Auto-fix errors in Supabase database URLs if they were misconfigured by omitting 'db.' or the dot in the password
+    if (dbUrl.includes('@uhbtivaepyhwfdvtpfjq.supabase.co')) {
+      dbUrl = dbUrl.replace('@uhbtivaepyhwfdvtpfjq.supabase.co', '@db.uhbtivaepyhwfdvtpfjq.supabase.co');
+    }
+    if (dbUrl.includes('Espartano300%24@')) {
+      dbUrl = dbUrl.replace('Espartano300%24@', 'Espartano300%24.@');
+    }
     
     globalForPrisma.prisma = new PrismaClient({
       log: process.env.NODE_ENV === 'development' ? ['error', 'warn'] : ['error'],
@@ -403,7 +411,7 @@ export function createApiApp(): Express {
 
   app.use(cors({
     origin: (origin, callback) => {
-      if (!origin || allowedOrigins.includes(origin)) {
+      if (!origin || allowedOrigins.includes(origin) || origin.endsWith('.vercel.app')) {
         callback(null, true);
       } else {
         callback(new Error('Not allowed by CORS'));

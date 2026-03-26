@@ -12,7 +12,7 @@
 const IS_PROD = import.meta.env.PROD;
 const VITE_API_BASE_URL = import.meta.env.VITE_API_URL || '';
 
-export const API_BASE_URL = IS_PROD export const API_BASE_URL = '';
+export const API_BASE_URL = '';
 
 /**
  * Normalizes a URL ensuring it uses the API_BASE_URL if needed.

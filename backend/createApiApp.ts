@@ -613,17 +613,40 @@ export function createApiApp(): Express {
         select: { fecha_hora: true }
       });
 
-      // Operadores activos en este turno
-      const currentTime = new Date();
-      const currentShift = getShiftName(currentTime);
-      const activeOps = await prisma.user.count({
-        where: { turno: currentShift, estado: 'Activo' }
+      // 1. Identificar Turno Actual desde la base de datos (dinámico)
+      const shifts = await prisma.shift.findMany();
+      const timeStr = currentTime.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', hour12: false });
+      
+      const currentShiftObj = shifts.find(s => {
+        if (s.hora_inicio <= s.hora_fin) {
+          return timeStr >= s.hora_inicio && timeStr <= s.hora_fin;
+        } else {
+          return timeStr >= s.hora_inicio || timeStr <= s.hora_fin;
+        }
       });
+
+      const currentShift = currentShiftObj?.nombre || getShiftName(currentTime);
+
+      // 2. Buscar operarios asignados para HOY en este turno
+      const today = new Date();
+      today.setHours(0,0,0,0);
+
+      const assignments = await prisma.scheduleAssignment.findMany({
+        where: {
+          fecha: today,
+          shift_id: currentShiftObj?.id
+        },
+        include: { user: true }
+      });
+
+      const activeOpsNames = assignments.map(a => a.user.nombre.split(' ')[0]).join(', ') || 'N/A';
+      const activeOpsCount = assignments.length;
 
       return res.json({ 
         reportCount, 
         lastReportTime: lastLog?.fecha_hora || null,
-        activeOperatorsCount: activeOps,
+        activeOperatorsCount: activeOpsCount,
+        activeOperatorsNames: activeOpsNames,
         currentShift
       });
     } catch (error) {

@@ -28,8 +28,9 @@ export default function SupervisorDashboard() {
   const [summaryData, setSummaryData] = useState<{
     lastReportTime: string | null;
     activeOperatorsCount: number;
+    activeOperatorsNames: string;
     currentShift: string;
-  }>({ lastReportTime: null, activeOperatorsCount: 0, currentShift: 'Turno 1' });
+  }>({ lastReportTime: null, activeOperatorsCount: 0, activeOperatorsNames: 'N/A', currentShift: 'Turno 1' });
   const [isLoading, setIsLoading] = useState(true);
   const [dbError, setDbError] = useState<string | null>(null);
   
@@ -85,21 +86,9 @@ export default function SupervisorDashboard() {
     return () => clearInterval(timer);
   }, []);
 
-  const getShiftInfo = (date: Date) => {
-    const time = date.getHours() + date.getMinutes() / 60;
-    // 6:20 (6.333) to 14:40 (14.666) -> Turno 1
-    if (time >= 6.333 && time < 14.666) return 'Turno 1';
-    // 14:40 to 22:20 (22.333) -> Turno 2
-    if (time >= 14.666 && time < 22.333) return 'Turno 2';
-    // 22:20 to 6:20 -> Turno 3
-    return 'Turno 3';
-  };
-
-  const currentShiftName = getShiftInfo(currentTime);
-  const activeOperatorsList = operatorsData
-    .filter(o => o.turno === currentShiftName && o.estado === 'Activo')
-    .map(o => (o.name || 'Sin nombre').split(' ')[0]) // Primer Nombre usando name
-    .join(', ') || 'N/A';
+  // REEMPLAZADO POR DATOS DE API: El nombre del turno y operarios ahora se obtienen de la tabla de asignaciones
+  const currentShiftName = summaryData.currentShift;
+  const activeOperatorsList = summaryData.activeOperatorsNames;
 
   const handleTabChange = (tab: 'dashboard' | 'personal' | 'horarios' | 'settings') => {
     setActiveTab(tab);
@@ -220,74 +209,72 @@ export default function SupervisorDashboard() {
   };
 
   useEffect(() => {
-      const fetchData = async () => {
-        try {
-          const [statusRes, trendsRes, operatorsRes, summaryRes] = await Promise.all([
-            apiFetch(getApiUrl('/api/dashboard/status')),
-            apiFetch(getApiUrl('/api/dashboard/trends')),
-            apiFetch(getApiUrl('/api/dashboard/operators')),
-            apiFetch(getApiUrl('/api/dashboard/summary'))
-          ]);
-          
-          const statusJson = await statusRes.json();
-          const trendsJson = await trendsRes.json();
-          const operatorsJson = await operatorsRes.json();
-          const summaryJson = await summaryRes.json();
-          
-          if (statusRes.ok && Array.isArray(statusJson)) {
-            setMachinesData(statusJson);
-          } else {
-            setMachinesData([]);
-          }
-  
-          if (trendsRes.ok && Array.isArray(trendsJson)) {
-            setTrendsData(trendsJson);
-          } else {
-            setTrendsData([]);
-          }
-
-          if (operatorsRes.ok && Array.isArray(operatorsJson)) {
-            setOperatorsData(operatorsJson);
-          } else {
-            setOperatorsData([]);
-            if (operatorsJson?.error) setDbError(operatorsJson.error);
-          }
-
-          if (summaryRes.ok && typeof summaryJson?.reportCount === 'number') {
-            setReportCount(summaryJson.reportCount);
-            setSummaryData({
-              lastReportTime: summaryJson.lastReportTime,
-              activeOperatorsCount: summaryJson.activeOperatorsCount,
-              currentShift: summaryJson.currentShift
-            });
-          } else {
-            setReportCount(0);
-          }
-
-          // Reset error if success
-          setDbError(null);
-        } catch (error: any) {
-          console.error("Error fetching dashboard data:", error);
-          setDbError(error.message?.includes('JSON') 
-            ? "Error de formato en la respuesta del servidor." 
-            : "No fue posible conectar con la Base de Datos. Revisa DATABASE_URL en Vercel.");
+    const fetchData = async () => {
+      if (!canAccessSupervisor) {
+        setIsLoading(false);
+        return;
+      }
+      
+      try {
+        const [statusRes, trendsRes, operatorsRes, summaryRes] = await Promise.all([
+          apiFetch(getApiUrl('/api/dashboard/status')),
+          apiFetch(getApiUrl('/api/dashboard/trends')),
+          apiFetch(getApiUrl('/api/dashboard/operators')),
+          apiFetch(getApiUrl('/api/dashboard/summary'))
+        ]);
+        
+        const statusJson = await statusRes.json();
+        const trendsJson = await trendsRes.json();
+        const operatorsJson = await operatorsRes.json();
+        const summaryJson = await summaryRes.json();
+        
+        if (statusRes.ok && Array.isArray(statusJson)) {
+          setMachinesData(statusJson);
+        } else {
           setMachinesData([]);
-          setTrendsData([]);
-          setOperatorsData([]);
-          setReportCount(0);
-        } finally {
-          setIsLoading(false);
         }
-    };
 
-    if (!canAccessSupervisor) {
-      setMachinesData([]);
-      setTrendsData([]);
-      setOperatorsData([]);
-      setReportCount(0);
-      setIsLoading(false);
-      return;
-    }
+        if (trendsRes.ok && Array.isArray(trendsJson)) {
+          setTrendsData(trendsJson);
+        } else {
+          setTrendsData([]);
+        }
+
+        if (operatorsRes.ok && Array.isArray(operatorsJson)) {
+          setOperatorsData(operatorsJson);
+        } else {
+          setOperatorsData([]);
+          if (operatorsJson?.error) setDbError(operatorsJson.error);
+        }
+
+        if (summaryRes.ok && summaryJson) {
+          setSummaryData(prev => ({ 
+            ...prev, 
+            ...summaryJson,
+            // Aseguramos que los campos requeridos tengan un valor base
+            activeOperatorsNames: summaryJson.activeOperatorsNames || 'N/A',
+            currentShift: summaryJson.currentShift || prev.currentShift || 'Turno actual'
+          }));
+          setReportCount(summaryJson.reportCount || 0);
+        } else {
+          setReportCount(0);
+        }
+
+        // Reset error if success
+        setDbError(null);
+      } catch (error: any) {
+        console.error("Error fetching dashboard data:", error);
+        setDbError(error.message?.includes('JSON') 
+          ? "Error de formato en la respuesta del servidor." 
+          : "No fue posible conectar con la Base de Datos. Revisa DATABASE_URL en Vercel.");
+        setMachinesData([]);
+        setTrendsData([]);
+        setOperatorsData([]);
+        setReportCount(0);
+      } finally {
+        setIsLoading(false);
+      }
+    };
 
     void fetchData();
     const interval = setInterval(() => fetchData(), 60000);
@@ -447,11 +434,27 @@ export default function SupervisorDashboard() {
     }
   };
 
+  if (dbError) {
+    return (
+      <div className="flex h-screen bg-gray-50 text-red-600 items-center justify-center p-8 flex-col text-center gap-4">
+        <AlertTriangle size={48} className="mb-4" />
+        <h2 className="text-2xl font-black text-brand-dark">Fallo de Comunicación</h2>
+        <p className="max-w-md text-brand-gray font-medium">{dbError}</p>
+        <button 
+          onClick={() => window.location.reload()}
+          className="mt-4 px-8 py-3 bg-brand-primary text-white font-bold rounded-2xl shadow-xl shadow-brand-primary/20 hover:scale-105 transition-all"
+        >
+          Reintentar Conexión
+        </button>
+      </div>
+    );
+  }
+
   if (isLoading) {
     return (
       <div className="flex h-screen bg-white text-brand-gray items-center justify-center flex-col gap-6">
         <Loader2 size={64} className="text-brand-primary animate-spin" />
-        <p className="text-xl font-bold animate-pulse text-brand-dark">Conectando con Planta de Incubación...</p>
+        <p className="text-xl font-bold animate-pulse text-brand-dark tracking-tight">Cargando Monitor...</p>
       </div>
     );
   }
@@ -886,16 +889,18 @@ export default function SupervisorDashboard() {
               </div>
 
               <div className="bg-brand-secondary/10 border border-brand-secondary/30 rounded-2xl px-5 py-3 flex flex-col justify-center min-w-[200px]">
-                <div className="flex items-center gap-2 mb-1">
-                  <Clock className="text-brand-primary" size={14} />
-                  <p className="text-[10px] text-brand-primary uppercase font-black tracking-widest">{currentTime.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})} - {currentShiftName}</p>
-                </div>
-                <p className="text-xs font-black text-brand-dark leading-none truncate max-w-[190px]">
-                  Operador: <span className="text-brand-primary font-bold">{activeOperatorsList}</span>
-                </p>
-                <p className="text-[9px] text-brand-gray/80 font-bold mt-1">
-                  {currentTime.toLocaleDateString()}
-                </p>
+                  <div className="flex items-center gap-2 mb-1">
+                    <Clock className="text-brand-primary" size={14} />
+                    <p className="text-[10px] text-brand-primary uppercase font-black tracking-widest">
+                      {currentTime.toLocaleTimeString('es-CO', {hour: '2-digit', minute:'2-digit'})} - {currentShiftName}
+                    </p>
+                  </div>
+                  <p className="text-xs font-black text-brand-dark leading-none truncate max-w-[190px]">
+                    Operador: <span className="text-brand-primary font-bold">{activeOperatorsList}</span>
+                  </p>
+                  <p className="text-[9px] text-brand-gray/80 font-bold mt-1">
+                    {currentTime.toLocaleDateString('es-CO')}
+                  </p>
               </div>
             </div>
           </div>

@@ -65,10 +65,10 @@ type PredefinedUser = {
 const predefinedUsers: PredefinedUser[] = [
   { id: 'admin',          nombre: 'Administrador',  pin_acceso: '4753',   rol: 'JEFE',       turno: 'Gestión' },
   { id: 'elkin-cavadia',  nombre: 'Elkin Cavadia',  pin_acceso: '11168',  rol: 'JEFE',       turno: 'Gestión' },
-  { id: 'juan-alejandro', nombre: 'Juan Alejandro', pin_acceso: '1111',   rol: 'OPERARIO',   turno: 'Turno 1' },
+  { id: 'juan-alejandro', nombre: 'Juan Alejandro', pin_acceso: '1111',   rol: 'OPERARIO',   turno: 'Turno 3' },
   { id: 'juan-suaza',     nombre: 'Juan Suaza',     pin_acceso: '2222',   rol: 'OPERARIO',   turno: 'Turno 1' },
   { id: 'ferney-tabares', nombre: 'Ferney Tabares', pin_acceso: '3333',   rol: 'OPERARIO',   turno: 'Turno 2' },
-  { id: 'turnero',        nombre: 'Turnero',        pin_acceso: '4444',   rol: 'OPERARIO',   turno: 'Turno 1' },
+  { id: 'luis-cortes',        nombre: 'Luis Cortes',        pin_acceso: '4444',   rol: 'OPERARIO',   turno: 'Turno 2' },
   { id: 'jhon-piedrahita',nombre: 'Jhon Piedrahita',pin_acceso: 'jp2026', rol: 'SUPERVISOR', turno: 'Turno 1' },
 ];
 

@@ -18,6 +18,13 @@
       "source": "/api/(.*)",
             "destination": "https://incubant.onrender.com/api/$1"
     },
+        {
+                "source": "/(.*)",
+                "destination": "/index.html"
+    }
+  ]
+}
+    },
     {
       "source": "/(.*)",
       "destination": "/index.html"

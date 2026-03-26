@@ -541,7 +541,43 @@ export default function SupervisorDashboard() {
             <Clock size={20} />
             <span className="font-bold tracking-tight">Horarios</span>
           </button>
+
+          {/* SECCIÓN DE ALMACENAMIENTO CLOUD */}
+          <div className="pt-4 mt-4 border-t border-gray-100 flex flex-col gap-2">
+            <p className="px-2 text-[10px] text-brand-gray font-black uppercase tracking-[0.2em] opacity-60 mb-2">Bóveda de Evidencia</p>
+            
+            <a 
+              href="https://drive.google.com/drive/folders/1LSI9hpfQiYD0w0U79Noh6tI1BDgnHwqn?usp=sharing" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="w-full flex items-center gap-4 px-5 py-3 rounded-2xl text-brand-gray hover:bg-brand-primary/10 hover:text-brand-primary transition-all font-bold text-xs group"
+            >
+              <Camera size={18} className="group-hover:scale-110 transition-transform" />
+              <span>Fotos Planta</span>
+            </a>
+            
+            <a 
+              href="https://drive.google.com/drive/folders/15NhdznwFJycDOFsQs9dZwTS6vR_srfXi?usp=sharing" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="w-full flex items-center gap-4 px-5 py-3 rounded-2xl text-brand-gray hover:bg-brand-primary/10 hover:text-brand-primary transition-all font-bold text-xs group"
+            >
+              <FileText size={18} className="group-hover:scale-110 transition-transform" />
+              <span>Informes Por Hora</span>
+            </a>
+            
+            <a 
+              href="https://drive.google.com/drive/folders/1tI5ROHJ_RxeSWE2Q38BXxAVk82TYrdtG?usp=sharing" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="w-full flex items-center gap-4 px-5 py-3 rounded-2xl text-brand-gray hover:bg-brand-primary/10 hover:text-brand-primary transition-all font-bold text-xs group"
+            >
+              <FolderOpen size={18} className="group-hover:scale-110 transition-transform" />
+              <span>Cierres de Turno</span>
+            </a>
+          </div>
         </nav>
+
 
         <div className="p-6 border-t border-gray-50">
           <button

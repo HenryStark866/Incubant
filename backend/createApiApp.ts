@@ -613,7 +613,7 @@ export function createApiApp(): Express {
         select: { fecha_hora: true }
       });
 
-      // 1. Identificar Turno Actual desde la base de datos (dinámico)
+      const currentTime = new Date();
       const shifts = await prisma.shift.findMany();
       const timeStr = currentTime.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', hour12: false });
       
@@ -627,7 +627,19 @@ export function createApiApp(): Express {
 
       const currentShift = currentShiftObj?.nombre || getShiftName(currentTime);
 
-      // 2. Buscar operarios asignados para HOY en este turno
+      // 2. Buscar operarios asignados y ONLINE
+      const fifteenMinsAgo = new Date(currentTime.getTime() - 15 * 60 * 1000);
+      const onlineUsers = await prisma.user.findMany({
+        where: {
+          ultimo_acceso: { gte: fifteenMinsAgo },
+          rol: 'OPERARIO'
+        },
+        select: { nombre: true }
+      });
+
+      const onlineNames = onlineUsers.map(u => u.nombre.split(' ')[0]);
+
+      // 3. Buscar asignados por horario (para mostrar quién debería estar)
       const today = new Date();
       today.setHours(0,0,0,0);
 
@@ -639,14 +651,21 @@ export function createApiApp(): Express {
         include: { user: true }
       });
 
-      const activeOpsNames = assignments.map(a => a.user.nombre.split(' ')[0]).join(', ') || 'N/A';
-      const activeOpsCount = assignments.length;
+      const assignedNames = assignments.map(a => a.user.nombre.split(' ')[0]);
+
+      // Priorizar mostrar los que están ONLINE ahora mismo
+      let displayNames = 'N/A';
+      if (onlineNames.length > 0) {
+        displayNames = onlineNames.join(', ') + ' (Online)';
+      } else if (assignedNames.length > 0) {
+        displayNames = assignedNames.join(', ') + ' (Asignado)';
+      }
 
       return res.json({ 
         reportCount, 
         lastReportTime: lastLog?.fecha_hora || null,
-        activeOperatorsCount: activeOpsCount,
-        activeOperatorsNames: activeOpsNames,
+        activeOperatorsCount: onlineNames.length || assignedNames.length,
+        activeOperatorsNames: displayNames,
         currentShift
       });
     } catch (error) {
@@ -1027,6 +1046,7 @@ export function createApiApp(): Express {
       return res.status(500).json({ error: 'No se pudo registrar el incidente' });
     }
   });
+
 
   // ── Advanced Shifts & Schedules (Admin) ──────────────────────────────────
   app.get('/api/admin/shifts', requireRoles(SUPERVISOR_ROLES), async (_req, res) => {

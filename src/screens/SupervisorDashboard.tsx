@@ -864,44 +864,45 @@ export default function SupervisorDashboard() {
                 </div>
               </div>
 
-              {/* CARD CAMBIO - RELOJ Y ESTADO ACTIVO */}
-              <div className="bg-white border-2 border-brand-primary/10 shadow-sm rounded-2xl px-5 py-3 flex items-center gap-4 min-w-[200px] hover:border-brand-primary/30 transition-all">
-                <div className="p-2 bg-brand-primary/10 rounded-xl text-brand-primary shadow-inner">
-                  <Clock size={20} className="animate-pulse" />
+              {/* CARD ÚNICA: MONITOR DE TURNO INTEGRADO */}
+              <div className="bg-white border-2 border-brand-primary/20 shadow-lg shadow-brand-primary/5 rounded-3xl px-6 py-4 flex items-center gap-6 min-w-[320px] hover:border-brand-primary/40 transition-all group">
+                <div className="relative">
+                  <div className="p-3 bg-brand-primary/10 rounded-2xl text-brand-primary shadow-inner group-hover:bg-brand-primary group-hover:text-white transition-colors duration-500">
+                    <Clock size={24} className="animate-pulse" />
+                  </div>
+                  <div className="absolute -top-1 -right-1 w-3 h-3 bg-green-500 rounded-full border-2 border-white shadow-sm"></div>
                 </div>
-                <div>
-                  <p className="text-[10px] text-brand-primary font-black uppercase tracking-widest leading-none mb-1">
-                    CAMBIO, {currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                  </p>
-                  <h3 className="text-sm font-black text-brand-dark flex flex-col">
-                    <span>{summaryData.currentShift}</span>
-                    <span className="text-[9px] text-brand-gray font-bold lowercase">
-                      {summaryData.activeOperatorsCount} operarios activos
-                    </span>
-                  </h3>
-                  <div className="mt-2 pt-1 border-t border-gray-100 flex items-center gap-2">
-                    <CheckCircle2 size={10} className="text-green-500" />
-                    <p className="text-[9px] text-brand-gray font-black uppercase tracking-tight">
-                      Ult. Reporte: {summaryData.lastReportTime ? new Date(summaryData.lastReportTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'N/A'}
+                
+                <div className="flex-1 space-y-1">
+                  <div className="flex items-center justify-between gap-4">
+                    <p className="text-[10px] text-brand-primary font-black uppercase tracking-[0.2em] leading-none">
+                      {currentShiftName} | {currentTime.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })}
                     </p>
+                    <span className="flex items-center gap-1.5 px-2 py-0.5 bg-green-50 text-[10px] font-black text-green-600 rounded-full border border-green-100 uppercase tracking-tighter">
+                      En línea
+                    </span>
+                  </div>
+                  
+                  <div className="flex flex-col">
+                    <h3 className="text-base font-black text-brand-dark tracking-tight truncate max-w-[200px]">
+                      Operador: <span className="text-brand-primary">{activeOperatorsList}</span>
+                    </h3>
+                    <div className="flex items-center gap-3 mt-1.5 opacity-80">
+                      <div className="flex items-center gap-1">
+                        <CheckCircle2 size={12} className="text-green-500" />
+                        <p className="text-[9px] text-brand-gray font-black uppercase tracking-tight">
+                        Ult. Reporte: {summaryData.lastReportTime ? new Date(summaryData.lastReportTime).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' }) : 'N/A'}
+                        </p>
+                      </div>
+                      <span className="w-1 h-1 bg-gray-300 rounded-full"></span>
+                      <p className="text-[9px] text-brand-gray font-black uppercase tracking-tight">
+                        {currentTime.toLocaleDateString('es-CO', { weekday: 'short', day: 'numeric', month: 'short' })}
+                      </p>
+                    </div>
                   </div>
                 </div>
               </div>
 
-              <div className="bg-brand-secondary/10 border border-brand-secondary/30 rounded-2xl px-5 py-3 flex flex-col justify-center min-w-[200px]">
-                  <div className="flex items-center gap-2 mb-1">
-                    <Clock className="text-brand-primary" size={14} />
-                    <p className="text-[10px] text-brand-primary uppercase font-black tracking-widest">
-                      {currentTime.toLocaleTimeString('es-CO', {hour: '2-digit', minute:'2-digit'})} - {currentShiftName}
-                    </p>
-                  </div>
-                  <p className="text-xs font-black text-brand-dark leading-none truncate max-w-[190px]">
-                    Operador: <span className="text-brand-primary font-bold">{activeOperatorsList}</span>
-                  </p>
-                  <p className="text-[9px] text-brand-gray/80 font-bold mt-1">
-                    {currentTime.toLocaleDateString('es-CO')}
-                  </p>
-              </div>
             </div>
           </div>
         </header>

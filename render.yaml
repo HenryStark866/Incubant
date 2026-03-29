@@ -40,11 +40,11 @@ services:
       - key: VITE_SUPABASE_ANON_KEY
         sync: false
       - key: GEMINI_API_KEY
-        sync: false
+        value: AIzaSyDPn38Tqg7Z-ueeQU6ZPU_juwRFladUq88
       - key: GOOGLE_CLIENT_EMAIL
-        sync: false
+        value: incubant@incubant-backend.iam.gserviceaccount.com
       - key: GOOGLE_PRIVATE_KEY
-        sync: false
+        value: AQ.Ab8RN6LU8ohIyir_2f6g7XF1j6X2UtAEvbqqW-ESBUtAYJPGrw
 
 # ============================================
 # Variables de Entorno Requeridas en Render

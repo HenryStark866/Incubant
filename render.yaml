@@ -41,6 +41,10 @@ services:
         sync: false
       - key: GEMINI_API_KEY
         sync: false
+      - key: GOOGLE_CLIENT_EMAIL
+        sync: false
+      - key: GOOGLE_PRIVATE_KEY
+        sync: false
 
 # ============================================
 # Variables de Entorno Requeridas en Render

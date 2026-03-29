@@ -3,7 +3,10 @@ import crypto from 'crypto';
 import cron from 'node-cron';
 import express, { type Express, type NextFunction, type Request, type Response } from 'express';
 import cors from 'cors';
+import multer from 'multer';
 import type { PrismaClient } from '@prisma/client';
+
+import { processMachineReport } from './controllers/report.controller';
 
 type UserRole = 'OPERARIO' | 'SUPERVISOR' | 'JEFE';
 
@@ -399,6 +402,8 @@ async function seedPredefinedUsers() {
 export function createApiApp(): Express {
   const app = express();
 
+  const upload = multer({ storage: multer.memoryStorage() });
+
   app.use(express.json({ limit: '10mb' }));
   
   // CORS Configuration
@@ -429,6 +434,9 @@ export function createApiApp(): Express {
   app.get('/api/health', (_req, res) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
   });
+
+  // ── Smart Reporting (Gemini + Drive + PDF) ────────────────────────────────
+  app.post('/api/reports', requireAuthenticatedUser, upload.single('evidence'), processMachineReport);
 
   // ── Session ──────────────────────────────────────────────────────────────
   app.get('/api/session', (req: AuthenticatedRequest, res) => {

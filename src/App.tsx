@@ -101,7 +101,11 @@ export default function App() {
     if (viewMode === 'supervisor' && !canAccessSupervisor) {
       setViewMode('mobile');
     }
-  }, [canAccessSupervisor, viewMode]);
+    // Auto-navegar al panel de administrador instantáneamente si el usuario es supervisor
+    if (canAccessSupervisor && viewMode === 'mobile') {
+      setViewMode('supervisor');
+    }
+  }, [canAccessSupervisor]);
 
   if (!isSessionReady) {
     const isWaitingApi = isApiHealthy === false;

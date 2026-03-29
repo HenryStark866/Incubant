@@ -1,5 +1,8 @@
+// Ubicación: prisma/schema.prisma
+
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
+  previewFeatures = ["driverAdapters"]
 }
 
 datasource db {
@@ -7,6 +10,10 @@ datasource db {
   url       = env("DATABASE_URL")
   directUrl = env("DIRECT_URL")
 }
+
+// ==========================================
+// ENUMS
+// ==========================================
 
 enum Role {
   OPERARIO
@@ -19,29 +26,109 @@ enum MachineType {
   NACEDORA
 }
 
+// ==========================================
+// MODELOS PRINCIPALES
+// ==========================================
+
 model User {
-  id         String      @id @default(uuid())
-  nombre     String
-  pin_acceso String      @unique
-  rol        Role        @default(OPERARIO)
-  turno      String      @default("Turno 1")
-  estado            String      @default("Activo")
-  ultimo_acceso     DateTime?
-  session_expires   DateTime?
+  id              String      @id @default(uuid())
+  nombre          String
+  pin_acceso      String      @unique
+  rol             Role        @default(OPERARIO)
+  turno           String      @default("Turno 1")
+  estado          String      @default("Activo")
+  ultimo_acceso   DateTime?
+  session_expires DateTime?
   
-  logs              HourlyLog[]
-  incidents         Incident[]
-  assignments       ScheduleAssignment[]
-  sessions          Session[]
+  // Relaciones
+  logs            HourlyLog[]
+  incidents       Incident[]
+  assignments     ScheduleAssignment[]
+  sessions        Session[]
+  reports         Report[]             
+  breaks          Break[]              
 }
 
 model Machine {
   id             String      @id @default(uuid())
   tipo           MachineType
   numero_maquina Int
+  
+  // Relaciones
   logs           HourlyLog[]
   incidents      Incident[]
+  reports        Report[]            
 }
+
+// ==========================================
+// NUEVO: REPORTES Y DESCANSOS (FASE 1)
+// ==========================================
+
+model Report {
+  id            String   @id @default(uuid())
+  fecha_hora    DateTime @default(now())
+  imageUrl      String?  
+  pdfUrl        String?  
+  
+  temperature   Float    
+  humidity      Float    
+  processStatus String   
+  
+  // Claves Foráneas
+  user_id       String
+  machine_id    String
+
+  // Relaciones
+  user          User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  machine       Machine  @relation(fields: [machine_id], references: [id], onDelete: Cascade)
+}
+
+model Break {
+  id          String   @id @default(uuid())
+  fecha_hora  DateTime @default(now())
+  tipo        String   
+  duracion    Int?     
+  estado      String   @default("EN_CURSO") 
+  
+  // Clave Foránea
+  user_id     String
+
+  // Relación
+  user        User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+}
+
+// ==========================================
+// TURNOS Y ASIGNACIONES
+// ==========================================
+
+model Shift {
+  id          String   @id @default(uuid())
+  nombre      String   @unique 
+  hora_inicio String   
+  hora_fin    String   
+  color       String?  @default("#f5a623")
+
+  assignments ScheduleAssignment[]
+}
+
+model ScheduleAssignment {
+  id       String   @id @default(uuid())
+  fecha    DateTime 
+
+  // Claves Foráneas
+  user_id  String
+  shift_id String
+
+  // Relaciones
+  user     User  @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  shift    Shift @relation(fields: [shift_id], references: [id], onDelete: Cascade)
+
+  @@unique([user_id, fecha]) 
+}
+
+// ==========================================
+// LOGS, INCIDENTES Y SESIONES PREEXISTENTES
+// ==========================================
 
 model HourlyLog {
   id                       String   @id @default(uuid())
@@ -50,22 +137,23 @@ model HourlyLog {
   machine_id               String
   photo_url                String?
   
-  temp_principal_actual    Float
-  temp_principal_consigna  Float
+  temp_principal_actual    Float    
+  temp_principal_consigna  Float    
   co2_actual               Float
   co2_consigna             Float
   fan_speed                Float
-  temp_secundaria_actual   Float
-  temp_secundaria_consigna Float
+  temp_secundaria_actual   Float    
+  temp_secundaria_consigna Float    
   
   is_na                    Boolean  @default(false)
-  temp_superior_actual     Float?
+  temp_superior_actual     Float?   
   
   observaciones            String?
 
-  user    User    @relation(fields: [user_id], references: [id])
-  machine Machine @relation(fields: [machine_id], references: [id])
+  user    User    @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  machine Machine @relation(fields: [machine_id], references: [id], onDelete: Cascade)
 }
+
 model Incident {
   id          String   @id @default(uuid())
   fecha_hora  DateTime @default(now())
@@ -73,32 +161,10 @@ model Incident {
   machine_id  String?
   titulo      String
   descripcion String
-  tipo        String   // 'ALARM' | 'INCIDENT' | 'MAINTENANCE'
+  tipo        String   
   
-  user    User     @relation(fields: [user_id], references: [id])
-  machine Machine? @relation(fields: [machine_id], references: [id])
-}
-
-model Shift {
-  id        String   @id @default(uuid())
-  nombre    String   @unique // Ej: "Turno 1", "Turno 2"
-  hora_inicio String // "HH:mm"
-  hora_fin    String // "HH:mm"
-  color       String? @default("#f5a623")
-
-  assignments ScheduleAssignment[]
-}
-
-model ScheduleAssignment {
-  id       String   @id @default(uuid())
-  user_id  String
-  shift_id String
-  fecha    DateTime // El día específico de la asignación
-
-  user  User  @relation(fields: [user_id], references: [id])
-  shift Shift @relation(fields: [shift_id], references: [id])
-
-  @@unique([user_id, fecha])
+  user    User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  machine Machine? @relation(fields: [machine_id], references: [id], onDelete: Cascade)
 }
 
 model Session {
@@ -107,5 +173,5 @@ model Session {
   user_id   String
   expiresAt DateTime
 
-  user User @relation(fields: [user_id], references: [id])
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
 }

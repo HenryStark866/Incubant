@@ -1,81 +1,215 @@
-# Incubant Monitor  
+# Incubant Monitor
 
-Panel operativo y panel administrativo para monitoreo de incubadoras y nacedoras.
+**Sistema de Gestión y Monitoreo para Plantas de Incubación**
 
-## Estado actual
+Panel operativo y administrativo para el monitoreo de incubadoras y nacedoras - Antioqueña de Incubación S.A.S.
 
-- Login con sesion HTTP segura para operarios, supervisores y jefes.
-- Panel supervisor protegido por rol; ya no se abre sin autenticacion valida.
-- Dashboard web con contador de reportes real; si la base no responde, muestra `0` y listas vacias en vez de datos demo.
-- API preparada para desarrollo local con `Express` y para despliegue en Vercel con `api/[...path].ts`.
-- Carga de evidencias a Supabase con fallback seguro si faltan credenciales o el upload falla.
+![Versión](https://img.shields.io/badge/versión-0.1.0-blue)
+![React](https://img.shields.io/badge/React-19-61dafb)
+![TypeScript](https://img.shields.io/badge/TypeScript-5.8-3178c6)
+![Vite](https://img.shields.io/badge/Vite-6-646cff)
 
-## Stack
+---
 
-- `React 19` + `Vite`
-- `Express`
-- `Prisma`
-- `Supabase Storage`
-- `Tailwind CSS`
-- `Zustand`
+## Características
 
-## Variables de entorno
+- **Multiplataforma**: Web app progresiva (PWA) compatible con iOS y Android
+- **Roles de usuario**: Operario, Supervisor y Jefe
+- **Monitoreo en tiempo real**: Parámetros de incubadoras y nacedoras
+- **Captura de evidencias**: Fotos subidas a Supabase Storage
+- **Panel supervisor**: Dashboard administrativo con métricas
+- **Gestión de turnos**: Asignación y recordatorios automáticos
+- **Incidentes y alarmas**: Registro y seguimiento de eventos
 
-Crea un archivo `.env` local a partir de `.env.example`.
+---
 
-Variables usadas por el proyecto:
+## Stack Tecnológico
 
-- `DATABASE_URL`: conexion PostgreSQL para Prisma.
-- `SESSION_SECRET`: firma de cookies de sesion del backend.
-- `VITE_SUPABASE_URL`: URL del proyecto de Supabase.
-- `VITE_SUPABASE_ANON_KEY`: llave publica anon para Storage.
-- `GEMINI_API_KEY`: opcional; solo se conserva por compatibilidad de build.
+| Capa | Tecnología |
+|------|------------|
+| **Frontend** | React 19 + Vite + TypeScript |
+| **Estilos** | Tailwind CSS 4 + Motion |
+| **Estado** | Zustand |
+| **Backend** | Express (Node.js) |
+| **Base de datos** | PostgreSQL (Supabase) |
+| **ORM** | Prisma |
+| **Storage** | Supabase Storage |
+| **Deploy** | Vercel (frontend) + Render (backend) |
 
-## Desarrollo local
+---
 
-1. Instala dependencias con `npm install`.
-2. Crea `.env` con tus credenciales.
-3. Ejecuta `npm run dev`.
-4. Abre `http://localhost:3000`.
+## Inicio Rápido
 
-Comandos utiles:
+### 1. Clonar el repositorio
 
-- `npm run lint`
-- `npm run build`
-- `npm run preview`
+```bash
+git clone https://github.com/HenryStark866/Incubant.git
+cd Incubant
+```
 
-## Despliegue en Vercel
+### 2. Configurar entorno
 
-La app esta configurada para:
+Ejecuta el script de configuración:
 
-- servir el frontend desde `dist`
-- enrutar `/api/*` al backend serverless en `api/[...path].ts`
-- enrutar el resto del trafico a `index.html`
+**Windows:**
+```bash
+setup.bat
+```
 
-Antes de desplegar en Vercel:
+**Linux/Mac:**
+```bash
+chmod +x setup.sh && ./setup.sh
+```
 
-1. Configura las variables `DATABASE_URL`, `SESSION_SECRET`, `VITE_SUPABASE_URL` y `VITE_SUPABASE_ANON_KEY`.
-2. Verifica que el commit se publique con un correo asociado a la cuenta de GitHub para evitar bloqueos de deploy.
-3. Confirma que la base de datos responda desde el entorno de despliegue.
+O manualmente:
 
-## Notas de base de datos
+```bash
+# Copiar archivo de entorno
+cp .env.example .env
 
-- Si PostgreSQL no esta disponible, el sistema mantiene el login de respaldo y evita mostrar datos falsos en el dashboard.
-- El dashboard supervisor usa conteo real de `HourlyLog`; si no hay conectividad, responde `0`.
-- La sincronizacion de revisiones intenta resolver usuarios y maquinas antes de insertar logs en la base.
+# Instalar dependencias
+npm install
 
-## Estructura principal
+# Generar Prisma Client
+npx prisma generate
+```
 
-- `src/`: frontend React.
-- `backend/createApiApp.ts`: API compartida entre local y Vercel.
-- `api/[...path].ts`: entrada serverless para Vercel.
-- `server.ts`: servidor local con Vite middleware.
-- `prisma/schema.prisma`: modelos de base de datos.
+### 3. Configurar variables de entorno
 
-## Verificacion recomendada
+Edita `.env` con tus credenciales de Supabase:
 
-- `npm run lint`
-- `npm run build`
-- login con usuario de prueba
-- acceso a panel supervisor solo con `JEFE` o `SUPERVISOR`
-- sincronizacion de una revision operativa
+```env
+DATABASE_URL=postgresql://postgres:[PASSWORD]@db.[REF].supabase.co:5432/postgres
+DIRECT_URL=postgresql://postgres:[PASSWORD]@db.[REF].supabase.co:5432/postgres
+SESSION_SECRET=tu-secreto-seguro-min-32-caracteres
+VITE_SUPABASE_URL=https://[REF].supabase.co
+VITE_SUPABASE_ANON_KEY=tu-anon-key
+```
+
+### 4. Configurar Supabase
+
+1. Crea un proyecto en [supabase.com](https://supabase.com)
+2. Ejecuta `supabase/migrations/001_init_schema.sql` en el SQL Editor
+3. Crea un bucket `evidencias` en Storage (público)
+4. Ejecuta `supabase/storage-setup.sql` para políticas
+
+### 5. Iniciar desarrollo
+
+```bash
+npm run dev
+```
+
+Abre [http://localhost:3000](http://localhost:3000)
+
+---
+
+## Credenciales de Prueba
+
+| Usuario | PIN | Rol | Turno |
+|---------|-----|-----|-------|
+| `admin` | `4753` | JEFE | Gestión |
+| `elkin-cavadia` | `11168` | JEFE | Gestión |
+| `jhon-piedrahita` | `jp2026` | SUPERVISOR | Turno 1 |
+| `juan-alejandro` | `1111` | OPERARIO | Turno 3 |
+| `juan-suaza` | `2222` | OPERARIO | Turno 1 |
+| `ferney-tabares` | `3333` | OPERARIO | Turno 2 |
+| `luis-cortes` | `4444` | OPERARIO | Turno 2 |
+
+---
+
+## Comandos Disponibles
+
+```bash
+npm run dev          # Iniciar servidor de desarrollo
+npm run build        # Build de producción
+npm run preview      # Preview del build
+npm run db:push      # Aplicar schema a la DB
+npx prisma studio    # Ver datos en la DB
+npx prisma generate  # Regenerar Prisma Client
+```
+
+---
+
+## Despliegue en Producción
+
+Para desplegar en Vercel + Render + Supabase, sigue la guía completa:
+
+📖 Ver [DEPLOYMENT.md](./DEPLOYMENT.md)
+
+### Resumen del despliegue
+
+1. **Supabase**: Base de datos PostgreSQL + Storage
+2. **Render**: Backend API (Express)
+3. **Vercel**: Frontend (React + Vite)
+
+---
+
+## Estructura del Proyecto
+
+```
+Incubant/
+├── api/                    # Backend serverless (Vercel)
+├── backend/                # Lógica compartida del backend
+│   └── createApiApp.ts     # API Express principal
+├── prisma/
+│   └── schema.prisma       # Schema de base de datos
+├── src/
+│   ├── components/         # Componentes React reutilizables
+│   ├── screens/            # Pantallas principales
+│   │   ├── LoginScreen.tsx
+│   │   ├── DashboardScreen.tsx
+│   │   ├── CameraScreen.tsx
+│   │   ├── FormScreen.tsx
+│   │   └── SupervisorDashboard.tsx
+│   ├── hooks/              # Hooks personalizados
+│   ├── lib/                # Utilidades y configuración
+│   ├── store/              # Estado global (Zustand)
+│   └── utils/              # Funciones auxiliares
+├── supabase/
+│   ├── migrations/         # Scripts SQL
+│   └── storage-setup.sql   # Configuración Storage
+├── public/                 # Assets estáticos
+├── .env                    # Variables de entorno
+├── .env.example            # Ejemplo de variables
+├── vercel.json             # Configuración Vercel
+├── render.yaml             # Configuración Render
+├── vite.config.ts          # Configuración Vite
+└── package.json
+```
+
+---
+
+## Instalación en Dispositivos Móviles
+
+### iOS (iPhone/iPad)
+
+1. Abre Safari y ve a la app desplegada
+2. Toca **Compartir** → **"Agregar a inicio"**
+3. La app se instala como nativa
+
+### Android
+
+1. Abre Chrome y ve a la app desplegada
+2. Toca **menú** → **"Instalar aplicación"**
+3. La app se instala como nativa
+
+---
+
+## Capturas de Pantalla
+
+_(Agregar capturas del dashboard, login y panel supervisor)_
+
+---
+
+## Licencia
+
+© 2026 Antioqueña de Incubación S.A.S.
+
+---
+
+## Soporte
+
+Para problemas o preguntas, consulta:
+- [DEPLOYMENT.md](./DEPLOYMENT.md) - Guía de despliegue
+- Logs de Vercel/Render para errores en producción
+- `npx prisma studio` para verificar datos en la DB

@@ -1,0 +1,69 @@
+# ============================================
+# Render Configuration
+# ============================================
+# Este archivo define la configuración para desplegar el backend en Render
+#
+# Pasos para desplegar:
+# 1. Sube este repositorio a GitHub
+# 2. En Render, crea un nuevo "Web Service"
+# 3. Conecta tu repositorio de GitHub
+# 4. Configura las variables de entorno (ver más abajo)
+# 5. Deploy
+
+services:
+  - type: web
+    name: incubant-backend
+    env: node
+    region: us-east-1 # Virginia (más cercano a Colombia)
+    plan: starter
+    branch: main
+
+    # Build settings
+    buildCommand: npm install && npm run build && npx prisma db push --accept-data-loss
+    startCommand: npm run start
+
+    # Health check
+    healthCheckPath: /api/health
+
+    # Environment variables (configurar en Render UI)
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false
+      - key: DIRECT_URL
+        sync: false
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: VITE_SUPABASE_URL
+        sync: false
+      - key: VITE_SUPABASE_ANON_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+
+# ============================================
+# Variables de Entorno Requeridas en Render
+# ============================================
+#
+# DATABASE_URL: postgresql://postgres:[PASSWORD]@db.[PROJECT-REF].supabase.co:5432/postgres
+# DIRECT_URL: postgresql://postgres:[PASSWORD]@db.[PROJECT-REF].supabase.co:5432/postgres
+# SESSION_SECRET: (generar valor aleatorio seguro)
+# VITE_SUPABASE_URL: https://[PROJECT-REF].supabase.co
+# VITE_SUPABASE_ANON_KEY: [tu-anon-key]
+#
+# ============================================
+
+# ============================================
+# Configuración de Base de Datos (Supabase)
+# ============================================
+#
+# La aplicación usa Supabase como base de datos PostgreSQL.
+# Asegúrate de:
+#
+# 1. Habilitar "Connection Pooling" en Supabase (Settings > Database)
+# 2. Configurar el password de postgres
+# 3. En "Allowed IPs", permitir acceso desde Render (0.0.0.0/0 para desarrollo)
+#    O mejor: usar Supabase Transaction Pooler con pgbouncer
+#
+# ============================================

@@ -12,7 +12,8 @@ export default defineConfig(({mode}) => {
       tailwindcss(),
       VitePWA({
         registerType: 'autoUpdate',
-        includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'mask-icon.svg'],
+        injectRegister: 'auto',
+        includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'mask-icon.svg', 'logo.png'],
         manifest: {
           name: 'Incubant Monitor',
           short_name: 'Incubant',
@@ -20,27 +21,66 @@ export default defineConfig(({mode}) => {
           theme_color: '#f5a623',
           background_color: '#ffffff',
           display: 'standalone',
+          orientation: 'portrait',
+          start_url: '/',
+          scope: '/',
           icons: [
             {
               src: 'pwa-192x192.png',
               sizes: '192x192',
-              type: 'image/png'
-            },
-            {
-              src: 'pwa-512x512.png',
-              sizes: '512x512',
-              type: 'image/png'
+              type: 'image/png',
+              purpose: 'any'
             },
             {
               src: 'pwa-512x512.png',
               sizes: '512x512',
               type: 'image/png',
-              purpose: 'any maskable'
+              purpose: 'any'
+            },
+            {
+              src: 'pwa-512x512.png',
+              sizes: '512x512',
+              type: 'image/png',
+              purpose: 'maskable'
+            }
+          ],
+          screenshots: [],
+          categories: ['business', 'productivity'],
+          lang: 'es',
+          dir: 'ltr'
+        },
+        workbox: {
+          globPatterns: ['**/*.{js,css,html,ico,png,svg,json}'],
+          runtimeCaching: [
+            {
+              urlPattern: /^https:\/\/.*\.supabase\.co\/.*/i,
+              handler: 'NetworkFirst',
+              options: {
+                cacheName: 'supabase-cache',
+                expiration: {
+                  maxEntries: 50,
+                  maxAgeSeconds: 60 * 60 * 24 // 24 hours
+                },
+                cacheableResponse: {
+                  statuses: [0, 200]
+                }
+              }
+            },
+            {
+              urlPattern: /\.(?:png|jpg|jpeg|svg|gif|webp)$/,
+              handler: 'CacheFirst',
+              options: {
+                cacheName: 'images-cache',
+                expiration: {
+                  maxEntries: 100,
+                  maxAgeSeconds: 60 * 60 * 24 * 7 // 7 days
+                }
+              }
             }
           ]
         },
-        workbox: {
-          globPatterns: ['**/*.{js,css,html,ico,png,svg}']
+        devOptions: {
+          enabled: false
         }
       })
     ],

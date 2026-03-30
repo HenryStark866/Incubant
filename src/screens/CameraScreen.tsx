@@ -34,7 +34,14 @@ export default function CameraScreen() {
   };
 
   const captureAndProcess = async () => {
-    const image = webcamRef.current?.getScreenshot();
+    // Intentar captura, o usar mock si se invoca desde el botón de demo y no hay cámara
+    let image = webcamRef.current?.getScreenshot();
+    
+    if (!image) {
+      // Imagen Mock 1x1 base64 (Un píxel negro transparente)
+      image = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==';
+    }
+
     if (!image || !activeMachineId) return;
 
     setImageSrc(image);

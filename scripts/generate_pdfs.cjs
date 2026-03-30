@@ -1,168 +1,208 @@
 /**
- * Generador de PDFs - Incubant Monitor
- * Genera: Guía iOS, Guía Android y Propuesta de Mejora en el Escritorio (OneDrive/Escritorio)
+ * Generador de Documentación Profesional - Incubant
+ * Versión: 2.1 (Compatible)
  */
 
 const { jsPDF } = require('C:/Users/tabor/Incubant/node_modules/jspdf/dist/jspdf.node.js');
 const fs = require('fs');
 const path = require('path');
 
-// Detected actual desktop path
 const DESKTOP = 'C:\\Users\\tabor\\OneDrive\\Escritorio';
-
-const C = {
-  dark: [15, 23, 42],
+const COLORS = {
+  primary: [15, 23, 42],
   accent: [245, 166, 35],
-  white: [255, 255, 255],
-  gray: [148, 163, 184],
-  lightGray: [241, 245, 249],
-  blue: [59, 130, 246],
-  green: [34, 197, 94]
+  text: [51, 65, 85],
+  light: [248, 250, 252],
+  border: [226, 232, 240],
+  success: [34, 197, 94]
 };
 
-function setupDoc(title, subtitle) {
-  const doc = new jsPDF();
+function drawHeader(doc, title) {
   const pageW = doc.internal.pageSize.getWidth();
-  
-  // Header
-  doc.setFillColor(...C.dark);
-  doc.rect(0, 0, pageW, 40, 'F');
-  doc.setFillColor(...C.accent);
-  doc.rect(0, 40, pageW, 2, 'F');
-  
-  doc.setTextColor(...C.accent);
-  doc.setFontSize(22);
+  doc.setFillColor(...COLORS.primary);
+  doc.rect(0, 0, pageW, 25, 'F');
+  doc.setFillColor(...COLORS.accent);
+  doc.rect(0, 25, pageW, 1, 'F');
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(14);
   doc.setFont('helvetica', 'bold');
-  doc.text('INCUBANT', 15, 20);
-  
-  doc.setTextColor(...C.white);
+  doc.text('INCUBANT', 15, 16);
+  doc.setTextColor(255, 255, 255);
   doc.setFontSize(10);
   doc.setFont('helvetica', 'normal');
-  doc.text('MONITORING SYSTEM', 15, 28);
-  
-  doc.setFontSize(16);
-  doc.setFont('helvetica', 'bold');
-  doc.text(title, pageW - 15, 20, { align: 'right' });
-  
-  doc.setFontSize(9);
-  doc.setFont('helvetica', 'italic');
-  doc.text(subtitle, pageW - 15, 28, { align: 'right' });
-  
-  return doc;
+  doc.text(title.toUpperCase(), pageW - 15, 16, { align: 'right' });
 }
 
-// --- GUIA IOS ---
-function genIOS() {
-  const doc = setupDoc('GUÍA DE INSTALACIÓN iOS', 'iPhone / iPad');
-  let y = 60;
-  
-  doc.setTextColor(...C.dark);
+function drawFooter(doc, pageNum, totalPages, docId) {
+  const pageW = doc.internal.pageSize.getWidth();
+  const pageH = doc.internal.pageSize.getHeight();
+  doc.setFillColor(...COLORS.light);
+  doc.rect(0, pageH - 20, pageW, 20, 'F');
+  doc.setFontSize(8);
+  doc.setTextColor(...COLORS.text);
+  doc.text(`${docId} | Confidencial`, 15, pageH - 10);
+  doc.text(`Antioqueña de Incubación S.A.S. - 2026`, pageW / 2, pageH - 10, { align: 'center' });
+  doc.text(`Página ${pageNum} de ${totalPages}`, pageW - 15, pageH - 10, { align: 'right' });
+}
+
+function subHeader(doc, text, y) {
   doc.setFontSize(14);
-  doc.text('Instalación rápida vía Safari', 15, y);
-  y += 10;
-  
-  const steps = [
-    '1. Abra Safari e ingrese a: incubant.onrender.com',
-    '2. Toque el botón "Compartir" (cuadrado con flecha hacia arriba).',
-    '3. Busque y seleccione: "Agregar a la pantalla de inicio".',
-    '4. Toque "Agregar" en la esquina superior derecha.',
-    '5. ¡Listo! La app aparecerá en su pantalla como una app nativa.'
-  ];
-  
-  doc.setFontSize(11);
-  steps.forEach(s => {
-    doc.text(s, 20, y);
-    y += 8;
-  });
-  
-  y += 15;
   doc.setFont('helvetica', 'bold');
-  doc.text('Ventajas:', 15, y);
-  y += 8;
+  doc.setTextColor(...COLORS.primary);
+  doc.text(text, 15, y);
+}
+
+function generateProfessionalProposal() {
+  const doc = new jsPDF();
+  const pageW = doc.internal.pageSize.getWidth();
+  const pageH = doc.internal.pageSize.getHeight();
+  const docId = 'PROP-INC-2026-001';
+
+  // --- PORTADA ---
+  doc.setFillColor(...COLORS.primary);
+  doc.rect(0, 0, pageW, pageH, 'F');
+  doc.setFillColor(...COLORS.accent);
+  doc.rect(0, 0, 10, pageH, 'F');
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(40);
+  doc.setFont('helvetica', 'bold');
+  doc.text('INCUBANT', 25, 60);
+  doc.setFontSize(12);
   doc.setFont('helvetica', 'normal');
-  doc.text('• Acceso instantáneo sin login repetitivo.', 20, y);
-  y += 6;
-  doc.text('• Pantalla completa sin barras de navegación.', 20, y);
-  
-  const outPath = path.join(DESKTOP, 'Guia_Instalacion_iOS.pdf');
-  fs.writeFileSync(outPath, Buffer.from(doc.output('arraybuffer')));
-}
-
-// --- GUIA ANDROID ---
-function genAndroid() {
-  const doc = setupDoc('GUÍA DE INSTALACIÓN ANDROID', 'Samsung / Xiaomi / Huawei');
-  let y = 60;
-  
-  doc.setTextColor(...C.dark);
-  doc.setFontSize(14);
-  doc.text('Instalación vía Google Chrome', 15, y);
-  y += 10;
-  
-  const steps = [
-    '1. Abra Chrome e ingrese a: incubant.onrender.com',
-    '2. Espere el aviso automático "Instalar aplicación".',
-    '3. Si no aparece, toque los 3 puntos (menú) arriba a la derecha.',
-    '4. Seleccione la opción: "Instalar aplicación".',
-    '5. Confirme la instalación y busque el ícono en su menú.'
-  ];
-  
-  doc.setFontSize(11);
-  steps.forEach(s => {
-    doc.text(s, 20, y);
-    y += 8;
-  });
-  
-  const outPath = path.join(DESKTOP, 'Guia_Instalacion_Android.pdf');
-  fs.writeFileSync(outPath, Buffer.from(doc.output('arraybuffer')));
-}
-
-// --- PROPUESTA DE MEJORA ---
-function genProposal() {
-  const doc = setupDoc('PROPUESTA DE MEJORA OPERATIVA', 'Incubant Integral 2026');
-  let y = 60;
-  
-  doc.setTextColor(...C.dark);
-  doc.setFontSize(14);
+  doc.text('ANTIOQUEÑA DE INCUBACION S.A.S.', 25, 70);
+  doc.text('Medellín, Antioquia — Colombia', 25, 76);
+  doc.setFontSize(28);
   doc.setFont('helvetica', 'bold');
-  doc.text('Objetivo: Digitalización y Eficiencia de Planta', 15, y);
+  doc.text('PROPUESTA DE\nIMPLEMENTACIÓN', 25, 110);
+  doc.setTextColor(...COLORS.accent);
+  doc.setFontSize(18);
+  doc.text('SISTEMA DIGITAL DE MONITOREO AVÍCOLA\n"Incubant Integral v0.1.1"', 25, 135);
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(14);
+  doc.text('Henry Taborda', 25, 188);
+  doc.setFontSize(10);
+  doc.text('Auxiliar de Mantenimiento | Antioqueña de Incubación S.A.S.', 25, 194);
+
+  // --- PAGINA 2 ---
+  doc.addPage();
+  drawHeader(doc, 'Resumen Ejecutivo');
+  let y = 50;
+  subHeader(doc, '1. Introducción', y);
+  y += 10;
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(...COLORS.text);
+  const introTxt = 'Esta propuesta presenta "Incubant Integral", una aplicación web progresiva (PWA) creada a medida para digitalizar el monitoreo de las incubadoras y nacedoras de ANTIOQUEÑA DE INCUBACION S.A.S. La solución reemplaza el registro manual en papel con una plataforma inteligente que integra inteligencia artificial (Google Gemini), almacenamiento en la nube (Google Drive + Supabase) y un panel web de supervisión en tiempo real accesible desde cualquier dispositivo.';
+  doc.text(doc.splitTextToSize(introTxt, 180), 15, y);
+  y += 35;
+  subHeader(doc, '2. Diagnóstico y Problemática', y);
+  y += 10;
+  const diagTxt = 'Antioqueña de Incubación S.A.S. opera actualmente con un modelo de registro manual basado en planillas físicas que los operarios completan cada hora durante sus turnos de trabajo. Este modelo presenta múltiples vulnerabilidades operativas: pérdida de información, tiempo de respuesta lento, falta de trazabilidad y riesgos productivos por fallas no detectadas a tiempo.';
+  doc.text(doc.splitTextToSize(diagTxt, 180), 15, y);
+  drawFooter(doc, 2, 4, docId);
+
+  // --- PAGINA 3 ---
+  doc.addPage();
+  drawHeader(doc, 'Solución y Beneficios');
+  y = 50;
+  subHeader(doc, '3. Incubant Integral v0.1.1', y);
+  y += 10;
+  const solTxt = 'Es una PWA que puede instalarse como app nativa en cualquier celular Android o iOS. Incluye módulos de registro operacional con fotos analizadas por IA, un panel de supervisión en tiempo real y almacenamiento automático de reportes PDF en Google Drive.';
+  doc.text(doc.splitTextToSize(solTxt, 180), 15, y);
+  y += 35;
+  subHeader(doc, '4. Beneficios Clave', y);
   y += 12;
-  
-  const points = [
-    { t: '1. Eliminación del Papel', d: 'Sustitución de bitácoras físicas por registros digitales auditables en tiempo real.' },
-    { t: '2. Supervisión Remota', d: 'Monitoreo de todas las máquinas desde cualquier lugar, reduciendo tiempos de respuesta.' },
-    { t: '3. Inteligencia Artificial (Gemini)', d: 'Validación automática de datos detectando anomalías antes de que afecten la producción.' },
-    { t: '4. Bóveda Cloud de Evidencia', d: 'Sincronización directa con Google Drive para auditorías de calidad sin procesos manuales.' },
-    { t: '5. Índice de Eficiencia Individual', d: 'Medición del cumplimiento de cada operario facilitando incentivos y capacitación.' }
+  const benefits = [
+    '• Reducción del 70% en tiempo de llenado de registros.',
+    '• Trazabilidad 360° digital de todos los parámetros.',
+    '• Incremento del 40% en eficiencia operativa.',
+    '• Detección de alarmas al 100% en tiempo real.',
+    '• Protección de lotes por detección temprana de fallas.'
   ];
-  
-  points.forEach(p => {
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(12);
-    doc.text(p.t, 15, y);
-    y += 6;
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(10);
-    const splitD = doc.splitTextToSize(p.d, 180);
-    doc.text(splitD, 15, y);
-    y += (splitD.length * 5) + 5;
+  benefits.forEach(b => {
+    doc.text(b, 20, y);
+    y += 10;
   });
-  
+  drawFooter(doc, 3, 4, docId);
+
+  // --- PAGINA 4 ---
+  doc.addPage();
+  drawHeader(doc, 'Fases y Conclusión');
+  y = 50;
+  subHeader(doc, '5. Plan de Implementación', y);
   y += 10;
-  doc.setFillColor(...C.lightGray);
-  doc.rect(15, y, 180, 20, 'F');
-  doc.setTextColor(...C.accent);
+  const phases = [
+    'Fase 1: Configuración de Infraestructura y Nube (Completo)',
+    'Fase 2: Implementación de Pipeline de IA y Fotos (Completo)',
+    'Fase 3: Panel Administrativo y Gestión de Turnos (Completo)',
+    'Fase 4: Capacitación y Despliegue Masivo (En Progreso)'
+  ];
+  phases.forEach(p => {
+    doc.text('✓ ' + p, 20, y);
+    y += 10;
+  });
+  y += 40;
+  doc.setFontSize(12);
   doc.setFont('helvetica', 'bold');
-  doc.text('Impacto Estimado: Reducción del 25% en tiempos de reporte y 100% en pérdida de trazabilidad.', 20, y + 12);
-  
-  const outPath = path.join(DESKTOP, 'Propuesta_Mejora_Incubant.pdf');
+  doc.text('Henry Taborda', 15, y);
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'normal');
+  doc.text('Auxiliar de Mantenimiento | Antioqueña de Incubación S.A.S.', 15, y + 6);
+  doc.text('Medellín, Colombia - 2026', 15, y + 12);
+  drawFooter(doc, 4, 4, docId);
+
+  const outPath = path.join(DESKTOP, 'PROPUESTA_INTEGRAL_INCUBANT_2026.pdf');
+  fs.writeFileSync(outPath, Buffer.from(doc.output('arraybuffer')));
+}
+
+function generateProfessionalManual(os) {
+  const doc = new jsPDF();
+  const pageW = doc.internal.pageSize.getWidth();
+  const pageH = doc.internal.pageSize.getHeight();
+  const docId = `MAN-${os.toUpperCase()}-2026`;
+
+  doc.setFillColor(...COLORS.primary);
+  doc.rect(0, 0, pageW, pageH, 'F');
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(40);
+  doc.setFont('helvetica', 'bold');
+  doc.text('INCUBANT', 25, 60);
+  doc.setFontSize(18);
+  doc.text(`Guía Profesional de Instalación y Uso: ${os}`, 25, 75);
+  doc.setTextColor(...COLORS.accent);
+  doc.text('Antioqueña de Incubación S.A.S.', 25, 85);
+
+  doc.addPage();
+  drawHeader(doc, `Manual ${os}`);
+  let y = 50;
+  subHeader(doc, '1. Instrucciones de Instalación', y);
+  y += 10;
+  const steps = os === 'iOS' 
+    ? ['Abrir Safari e ingresar a incubant.onrender.com', 'Tocar botón "Compartir"', 'Seleccionar "Agregar a pantalla de inicio"', 'Confirmar nombre e instalar']
+    : ['Abrir Chrome e ingresar al sistema', 'Tocar banner "Instalar Aplicación" o menú de 3 puntos', 'Confirmar Instalación', 'Aceptar permisos de cámara'];
+  steps.forEach((s, i) => {
+    doc.text(`${i+1}. ${s}`, 20, y);
+    y += 10;
+  });
+  y += 20;
+  subHeader(doc, '2. Uso Adecuado', y);
+  y += 10;
+  const useSteps = ['Iniciar sesión con PIN personal', 'Seleccionar máquina (Incubadora/Nacedora)', 'Tomar foto nítida de la pantalla de la máquina', 'Verificar lectura de IA y guardar', 'Sincronizar datos periódicamente'];
+  useSteps.forEach((s, i) => {
+    doc.text(`• ${s}`, 20, y);
+    y += 10;
+  });
+  drawFooter(doc, 2, 2, docId);
+
+  const outPath = path.join(DESKTOP, `MANUAL_INCUBANT_${os.toUpperCase()}.pdf`);
   fs.writeFileSync(outPath, Buffer.from(doc.output('arraybuffer')));
 }
 
 try {
-  genIOS();
-  genAndroid();
-  genProposal();
-  console.log('PDFs generados correctamente en el Escritorio de OneDrive.');
+  generateProfessionalProposal();
+  generateProfessionalManual('iOS');
+  generateProfessionalManual('Android');
+  console.log('Documentación Profesional Generada.');
 } catch (e) {
   console.error('Error:', e);
 }

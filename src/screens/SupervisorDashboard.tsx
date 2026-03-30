@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { 
   Activity, AlertTriangle, Clock, Users, LayoutDashboard, 
   Settings, ChevronDown, X, Image as ImageIcon, CheckCircle2,
-  Download, Loader2, Egg, Menu, RefreshCw, LogOut
+  Download, Loader2, Egg, Menu, RefreshCw, LogOut, Camera, FileText, FolderOpen
 } from 'lucide-react';
 import { 
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer 

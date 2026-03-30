@@ -179,22 +179,39 @@ export default function CameraScreen() {
                 </div>
               )}
             </div>
-            <button 
-              onClick={() => window.location.reload()}
-              className="px-8 py-3 bg-white text-black font-black rounded-2xl uppercase text-xs shadow-lg active:scale-95 transition-all"
-            >
-              Reintentar Permisos
-            </button>
+            <div className="flex flex-col gap-3">
+              <button 
+                onClick={() => window.location.reload()}
+                className="px-8 py-4 bg-white text-black font-black rounded-2xl uppercase text-[10px] shadow-lg active:scale-95 transition-all w-full"
+              >
+                Reintentar Permisos
+              </button>
+              <button 
+                onClick={captureAndProcess}
+                className="px-8 py-4 bg-blue-600 text-white font-black rounded-2xl uppercase text-[10px] shadow-lg active:scale-95 transition-all w-full"
+              >
+                Simular Captura IA
+              </button>
+            </div>
+            <p className="text-[9px] text-slate-500 italic max-w-xs mx-auto">TIP: Usa este botón para mostrar el funcionamiento del reporte automático si la cámara está deshabilitada.</p>
           </div>
         ) : (
           <Webcam
             audio={false}
             ref={webcamRef}
             screenshotFormat="image/jpeg"
-            videoConstraints={{ facingMode }}
-            onUserMediaError={() => setPermissionState('denied')}
+            videoConstraints={{ 
+              facingMode: facingMode,
+              width: { ideal: 1280 },
+              height: { ideal: 720 }
+            }}
+            onUserMediaError={(err) => {
+              console.error('Camera error:', err);
+              setPermissionState('denied');
+            }}
             onUserMedia={() => setPermissionState('granted')}
             className="w-full h-full object-cover"
+            playsInline
           />
         )}
         

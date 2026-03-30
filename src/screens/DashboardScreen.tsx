@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useMachineStore, MachineType, Machine } from '../store/useMachineStore';
-import { CheckCircle2, Clock, UploadCloud, Loader2, LogOut, ChevronRight, Egg, AlertTriangle, X, Download, FileText } from 'lucide-react';
+import { CheckCircle2, Clock, UploadCloud, Loader2, LogOut, ChevronRight, Egg, AlertTriangle, X, Download, FileText, Camera } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { getApiUrl, apiFetch } from '../lib/api';
+import ReportUploader from '../components/ReportUploader';
 
 // Specialized Confirmation Modal
 const ConfirmationModal = ({ 
@@ -75,6 +76,7 @@ export default function DashboardScreen() {
   const [syncSuccess, setSyncSuccess] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [syncPhase, setSyncPhase] = useState<'uploading' | 'database' | 'pdf'>('uploading');
+  const [reportUploaderMachine, setReportUploaderMachine] = useState<Machine | null>(null);
   
   const machines = useMachineStore(state => state.machines);
   const setActiveMachine = useMachineStore(state => state.setActiveMachine);
@@ -190,10 +192,17 @@ export default function DashboardScreen() {
     }
   };
 
-  const handleMachineClick = (machineId: string, status: string) => {
-    if (status === 'pending') {
-      setActiveMachine(machineId);
+  const handleMachineClick = (machine: Machine) => {
+    if (machine.status === 'pending') {
+      // Primero abrir el ReportUploader de foto rápida con IA
+      // Si el usuario lo cierra sin subir, puede continuar con el formulario manual
+      setActiveMachine(machine.id);
     }
+  };
+
+  const handleOpenReportUploader = (e: React.MouseEvent, machine: Machine) => {
+    e.stopPropagation();
+    setReportUploaderMachine(machine);
   };
 
   const generatePDF = async (syncedMachines: Machine[]) => {
@@ -540,7 +549,7 @@ export default function DashboardScreen() {
           {filteredMachines.map(machine => (
             <button
               key={machine.id}
-              onClick={() => handleMachineClick(machine.id, machine.status)}
+              onClick={() => handleMachineClick(machine)}
               disabled={machine.status === 'completed'}
               className={`relative p-4 rounded-2xl border flex flex-row items-center justify-between transition-all active:scale-95 overflow-hidden ${
                 machine.status === 'completed'
@@ -563,13 +572,22 @@ export default function DashboardScreen() {
                 </span>
               </div>
               
-              <div className="z-10 relative">
+              <div className="z-10 relative flex flex-col items-center gap-1">
                 {machine.status === 'completed' ? (
                   <div className="bg-white rounded-full p-1 shadow-sm border border-green-100">
                     <CheckCircle2 size={16} className="text-green-500" strokeWidth={3} />
                   </div>
                 ) : (
-                  <ChevronRight size={20} className="text-gray-400 bg-white/50 rounded-full backdrop-blur-sm p-0.5" />
+                  <>
+                    <button
+                      onClick={(e) => handleOpenReportUploader(e, machine)}
+                      className="bg-brand-primary text-white rounded-full p-1.5 shadow-sm hover:bg-[#E6951F] transition-colors"
+                      title="Subir Foto con IA"
+                    >
+                      <Camera size={12} />
+                    </button>
+                    <ChevronRight size={16} className="text-gray-400" />
+                  </>
                 )}
               </div>
             </button>
@@ -592,6 +610,18 @@ export default function DashboardScreen() {
           Sincronizar Operación
         </button>
       </div>
+
+      {/* Modal de ReportUploader con IA */}
+      {reportUploaderMachine && (
+        <ReportUploader
+          machineId={reportUploaderMachine.id}
+          machineName={`${reportUploaderMachine.type === 'incubadora' ? 'Incubadora' : 'Nacedora'} #${reportUploaderMachine.number}`}
+          onClose={() => setReportUploaderMachine(null)}
+          onSuccess={() => {
+            setReportUploaderMachine(null);
+          }}
+        />
+      )}
     </div>
   );
 }

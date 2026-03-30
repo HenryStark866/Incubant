@@ -40,7 +40,7 @@ services:
       - key: VITE_SUPABASE_ANON_KEY
         sync: false
       - key: GEMINI_API_KEY
-        value: AIzaSyDPn38Tqg7Z-ueeQU6ZPU_juwRFladUq88
+        value: AIzaSyDm6v8Ud-Kc_C3KnSrkOlLvebno7Mg_Jok
       - key: GOOGLE_CLIENT_EMAIL
         value: incubant@incubant-backend.iam.gserviceaccount.com
       - key: GOOGLE_PRIVATE_KEY

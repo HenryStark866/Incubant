@@ -9,7 +9,7 @@ export async function analyzeIncubatorImage(base64Image: string, mimeType: strin
   }
 
   try {
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
 
     const prompt = `Analiza detalladamente esta imagen que corresponde al panel de control digital o físico de una incubadora o nacedora industrial.
     Extrae estrictamente los siguientes valores obligatorios en formato JSON sin Markdown (solo el objeto JSON literal):

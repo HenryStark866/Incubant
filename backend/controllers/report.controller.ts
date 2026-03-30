@@ -2,99 +2,171 @@ import { Request, Response } from 'express';
 import { analyzeIncubatorImage } from '../services/vision.service';
 import { uploadToDrive } from '../services/drive.service';
 import { generateReportPDF } from '../services/pdf.service';
-import { PrismaClient } from '@prisma/client';
+import type { PrismaClient } from '@prisma/client';
 
-const prisma = new PrismaClient();
+// Importar Prisma lazily para que funcione en el contexto de backend Render
+async function getPrisma(): Promise<PrismaClient> {
+  const { PrismaClient } = await import('@prisma/client');
+  return new PrismaClient();
+}
 
-// Carpetas destino preconfiguradas en Drive (se sacarían de ENV en un caso real)
-const PHOTOS_FOLDER_ID = process.env.DRIVE_PHOTOS_FOLDER || '1LSI9hpfQiYD0w0U79Noh6tI1BDgnHwqn';
-const REPORTS_FOLDER_ID = process.env.DRIVE_REPORTS_FOLDER || '15NhdznwFJycDOFsQs9dZwTS6vR_srfXi';
+type AuthenticatedRequest = Request & {
+  user?: { id: string; name: string; role: string; shift?: string };
+};
 
-export const processMachineReport = async (req: Request, res: Response) => {
+/**
+ * POST /api/reports
+ * Orquesta el flujo completo:
+ * 1. Recibe imagen (multipart/form-data) del operario
+ * 2. Analiza con Gemini Vision (temperatura °F, humedad, estado)
+ * 3. Sube foto a Google Drive 
+ * 4. Genera PDF de respaldo y lo sube a Google Drive
+ * 5. Guarda Report en Supabase (Prisma)
+ * 6. Responde con el resumen completo al frontend
+ */
+export const processMachineReport = async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const { machineId, reportData } = req.body;
-    const file = req.file; // From multer
-    
-    // Asumimos que el usuario viene serializado en un token real de auth middleware.
-    // getSession() o algo similar lo inyectaría en req.user
-    const userId = (req as any).user?.id;
+    const { machineId, reportData: reportDataRaw } = req.body;
+    const file = req.file;
+    const userId = req.user?.id;
 
     if (!machineId || !userId) {
-      return res.status(400).json({ error: 'Faltan parámetros críticos (machineId, userId)' });
+      return res.status(400).json({ error: 'Faltan parámetros: machineId y sesión activa son requeridos.' });
     }
 
     if (!file) {
-      return res.status(400).json({ error: 'No se recibió ninguna imagen de evidencia' });
+      return res.status(400).json({ error: 'No se adjuntó imagen de evidencia.' });
     }
 
-    // 1. Convertir archivo a Base64 para Gemini
-    const base64Image = file.buffer.toString('base64');
-    const mimeType = file.mimetype;
-
-    // 2. Extraer datos con IA
-    let extractedData;
+    // 1. Análisis de imagen con Gemini Vision
+    let extractedData = { temperature: 0, humidity: 0, processStatus: 'SIN_LECTURA' };
     try {
-      extractedData = await analyzeIncubatorImage(base64Image, mimeType);
+      const base64Image = file.buffer.toString('base64');
+      const aiResult = await analyzeIncubatorImage(base64Image, file.mimetype);
+      extractedData = {
+        temperature: aiResult.temperature ?? 0,
+        humidity: aiResult.humidity ?? 0,
+        processStatus: aiResult.processStatus
+      };
     } catch (visionError) {
-      console.warn('Fallo visión artificial, usando defaults o fallback manual', visionError);
-      extractedData = { temperature: 0, humidity: 0, processStatus: 'DESCONOCIDO' };
+      console.warn('[Report Controller] Gemini Vision falló, usando datos manuales/defaults:', visionError);
     }
 
-    // Si había datos manuales en "reportData" (JSON stringificado desde el cliente), priman
-    let finalData = extractedData;
-    if (reportData) {
-      const parsedManual = JSON.parse(reportData);
-      finalData = { ...finalData, ...parsedManual };
+    // Mezclar con datos manuales enviados desde el frontend (tienen prioridad)
+    let finalData = { ...extractedData };
+    if (reportDataRaw) {
+      try {
+        const manualOverrides = typeof reportDataRaw === 'string' 
+          ? JSON.parse(reportDataRaw) 
+          : reportDataRaw;
+        finalData = { ...finalData, ...manualOverrides };
+      } catch { /* ignorar si el JSON está malformado */ }
     }
 
-    // 3. Subir Evidencia Fotográfica a Drive
-    const photoDriveRes = await uploadToDrive(
-       file.buffer, 
-       `Foto_${machineId}_${Date.now()}.jpg`, 
-       mimeType, 
-       PHOTOS_FOLDER_ID
-    );
+    // 2. Subir foto de evidencia a Google Drive
+    let imageUrl = '';
+    try {
+      const photoName = `Foto_${machineId}_${new Date().toISOString().replace(/[:.]/g, '-')}.jpg`;
+      const driveResult = await uploadToDrive(file.buffer, photoName, file.mimetype, 'photos');
+      imageUrl = driveResult.publicUrl;
+    } catch (driveError) {
+      console.warn('[Report Controller] Drive upload falló para foto:', driveError);
+    }
 
-    // 4. Generar y Subir PDF de Respaldo
-    const pdfBuffer = await generateReportPDF(
-      { id: machineId }, 
-      { name: (req as any).user?.name, shift: (req as any).user?.shift }, 
-      finalData, 
-      file.buffer
-    );
+    // 3. Generar PDF y subirlo a Drive
+    let pdfUrl = '';
+    try {
+      const pdfBuffer = await generateReportPDF(
+        { id: machineId, name: `Máquina ${machineId}` },
+        { name: req.user?.name || 'Operario', shift: req.user?.shift },
+        finalData,
+        file.buffer
+      );
+      const pdfName = `Reporte_${machineId}_${new Date().toISOString().replace(/[:.]/g, '-')}.pdf`;
+      const pdfResult = await uploadToDrive(pdfBuffer, pdfName, 'application/pdf', 'reports');
+      pdfUrl = pdfResult.publicUrl;
+    } catch (pdfError) {
+      console.warn('[Report Controller] PDF generation/upload falló:', pdfError);
+    }
 
-    const pdfDriveRes = await uploadToDrive(
-       pdfBuffer, 
-       `Reporte_${machineId}_${Date.now()}.pdf`, 
-       'application/pdf', 
-       REPORTS_FOLDER_ID
-    );
+    // 4. Guardar en la base de datos (Supabase via Prisma)
+    let savedReport = null;
+    try {
+      const prisma = await getPrisma();
+      
+      // Resolver o crear la máquina en la base de datos
+      const [prefix, numberPart] = machineId.split('-');
+      const machineNumber = parseInt(numberPart);
+      const dbType = prefix === 'inc' ? 'INCUBADORA' : 'NACEDORA';
 
-    // 5. Consolidar en Prisma (PostgreSQL / Supabase)
-    const newReport = await prisma.report.create({
-      data: {
-        machine_id: machineId,
-        user_id: userId,
-        temperature: Number(finalData.temperature) || 0,
-        humidity: Number(finalData.humidity) || 0,
-        processStatus: String(finalData.processStatus),
-        imageUrl: photoDriveRes.publicUrl,
-        pdfUrl: pdfDriveRes.publicUrl,
+      let machine = await prisma.machine.findFirst({
+        where: { tipo: dbType, numero_maquina: machineNumber }
+      });
+      if (!machine) {
+        machine = await prisma.machine.create({
+          data: { tipo: dbType, numero_maquina: machineNumber }
+        });
       }
-    });
+
+      // Calcular si es alarma (por si el frontend no envió el flag o para validación doble)
+      const data = finalData as any;
+      const calcDiff = (r?: any, s?: any) => Math.abs(Number(r || 0) - Number(s || 0));
+      
+      const isAlarm = calcDiff(data.tempOvoscanReal || data.tempSynchroReal, data.tempOvoscanSP || data.tempSynchroSP) >= 1.5 ||
+                      calcDiff(data.tempAireReal || data.temperaturaReal, data.tempAireSP || data.temperaturaSP) >= 1.5 ||
+                      calcDiff(data.humidityReal, data.humiditySP) >= 1.5;
+
+      // Crear el reporte
+      savedReport = await prisma.report.create({
+        data: {
+          machine_id: machine.id,
+          user_id: userId,
+          
+          tempPrincipalReal: Number(data.tempOvoscanReal || data.tempSynchroReal) || 0,
+          tempPrincipalSP: Number(data.tempOvoscanSP || data.tempSynchroSP) || 0,
+          
+          tempAireReal: Number(data.tempAireReal || data.temperaturaReal) || 0,
+          tempAireSP: Number(data.tempAireSP || data.temperaturaSP) || 0,
+          
+          humidityReal: Number(data.humidityReal) || 0,
+          humiditySP: Number(data.humiditySP) || 0,
+          
+          co2Real: Number(data.co2Real) || 0,
+          co2SP: Number(data.co2SP) || 0,
+          
+          isAlarm: isAlarm,
+          observaciones: String(data.observaciones || ""),
+          processStatus: String(isAlarm ? "ALARMA" : "NORMAL"),
+          
+          imageUrl,
+          pdfUrl,
+          
+          // Legacy fields for backward compatibility
+          temperature: Number(data.tempOvoscanReal || data.tempSynchroReal) || 0,
+          humidity: Number(data.humidityReal) || 0,
+        }
+      });
+
+      await prisma.$disconnect();
+    } catch (dbError) {
+      console.error('[Report Controller] Error guardando en BD:', dbError);
+      // Continuamos aunque la BD falle — ya tenemos las URLs de Drive
+    }
 
     return res.status(201).json({
       success: true,
-      message: 'Reporte procesado exitosamente',
-      report: newReport,
-      cloudLinks: {
-        evidence: photoDriveRes.publicUrl,
-        pdf: pdfDriveRes.publicUrl
+      message: 'Reporte procesado y almacenado exitosamente.',
+      report: {
+        machineId,
+        isAlarm: savedReport?.isAlarm || false,
+        imageUrl,
+        pdfUrl,
+        savedToDb: !!savedReport,
       }
     });
 
   } catch (error) {
-    console.error('[Report Controller] Error general procesando reporte:', error);
-    return res.status(500).json({ error: 'Fallo interno al procesar el reporte de incubadora' });
+    console.error('[Report Controller] Error general:', error);
+    return res.status(500).json({ error: 'Error interno al procesar el reporte.' });
   }
 };

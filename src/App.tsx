@@ -9,6 +9,7 @@ import CameraScreen from './screens/CameraScreen';
 import FormScreen from './screens/FormScreen';
 import LoginScreen from './screens/LoginScreen';
 import SupervisorDashboard from './screens/SupervisorDashboard';
+import UpdatePrompt from './components/UpdatePrompt';
 import { useMachineStore } from './store/useMachineStore';
 import { canUseSupervisorPanel } from './lib/fallbackAuth';
 import { Smartphone, Monitor, Loader2, Wifi, WifiOff } from 'lucide-react';
@@ -159,6 +160,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-gray-900 flex flex-col items-center justify-center p-4 relative">
+      <UpdatePrompt />
       {canAccessSupervisor && (
         <div className="w-full max-w-[400px] flex justify-end mb-4 z-50">
           <button 

@@ -19,11 +19,12 @@ export default defineConfig(({mode}) => {
           short_name: 'Incubant',
           description: 'Sistema de Gestión y Monitoreo - Antioqueña de Incubación S.A.S.',
           theme_color: '#f5a623',
-          background_color: '#ffffff',
+          background_color: '#0f172a',
           display: 'standalone',
           orientation: 'portrait',
           start_url: '/',
           scope: '/',
+          id: '/',
           icons: [
             {
               src: 'pwa-192x192.png',
@@ -50,16 +51,38 @@ export default defineConfig(({mode}) => {
           dir: 'ltr'
         },
         workbox: {
-          globPatterns: ['**/*.{js,css,html,ico,png,svg,json}'],
+          // Limpiar cachés obsoletos automáticamente al actualizar
+          cleanupOutdatedCaches: true,
+          // Activar el nuevo SW de inmediato, sin esperar al cierre del tab
+          skipWaiting: true,
+          clientsClaim: true,
+          globPatterns: ['**/*.{js,css,html,ico,png,svg,json,woff2}'],
           runtimeCaching: [
+            {
+              // Cache de APIs del backend
+              urlPattern: /^https?:\/\/.*\/api\/.*/i,
+              handler: 'NetworkFirst',
+              options: {
+                cacheName: 'api-cache',
+                networkTimeoutSeconds: 10,
+                expiration: {
+                  maxEntries: 32,
+                  maxAgeSeconds: 60 * 5 // 5 minutos
+                },
+                cacheableResponse: {
+                  statuses: [0, 200]
+                }
+              }
+            },
             {
               urlPattern: /^https:\/\/.*\.supabase\.co\/.*/i,
               handler: 'NetworkFirst',
               options: {
                 cacheName: 'supabase-cache',
+                networkTimeoutSeconds: 10,
                 expiration: {
                   maxEntries: 50,
-                  maxAgeSeconds: 60 * 60 * 24 // 24 hours
+                  maxAgeSeconds: 60 * 60 * 24
                 },
                 cacheableResponse: {
                   statuses: [0, 200]
@@ -73,7 +96,7 @@ export default defineConfig(({mode}) => {
                 cacheName: 'images-cache',
                 expiration: {
                   maxEntries: 100,
-                  maxAgeSeconds: 60 * 60 * 24 * 7 // 7 days
+                  maxAgeSeconds: 60 * 60 * 24 * 7
                 }
               }
             }

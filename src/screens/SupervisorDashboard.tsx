@@ -218,35 +218,48 @@ export default function SupervisorDashboard() {
           apiFetch(getApiUrl('/api/dashboard/summary'))
         ]);
 
+        // Manejo detallado de errores HTTP
+        if (!statusRes.ok || !trendsRes.ok || !operatorsRes.ok || !summaryRes.ok) {
+          const badRes = !statusRes.ok ? statusRes : !trendsRes.ok ? trendsRes : !operatorsRes.ok ? operatorsRes : summaryRes;
+          
+          if (badRes.status === 401 || badRes.status === 403) {
+            setDbError(`Error ${badRes.status}: Acceso denegado. Tu sesión puede haber expirado o no tienes permisos.`);
+          } else {
+            setDbError(`Error ${badRes.status}: El servidor respondió con error. Revisa el estado de la base de datos.`);
+          }
+          
+          setIsLoading(false);
+          return;
+        }
+
         const statusJson = await statusRes.json();
         const trendsJson = await trendsRes.json();
         const operatorsJson = await operatorsRes.json();
         const summaryJson = await summaryRes.json();
 
-        if (statusRes.ok && Array.isArray(statusJson)) {
+        if (Array.isArray(statusJson)) {
           setMachinesData(statusJson);
         } else {
           setMachinesData([]);
         }
 
-        if (trendsRes.ok && Array.isArray(trendsJson)) {
+        if (Array.isArray(trendsJson)) {
           setTrendsData(trendsJson);
         } else {
           setTrendsData([]);
         }
 
-        if (operatorsRes.ok && Array.isArray(operatorsJson)) {
+        if (Array.isArray(operatorsJson)) {
           setOperatorsData(operatorsJson);
         } else {
           setOperatorsData([]);
           if (operatorsJson?.error) setDbError(operatorsJson.error);
         }
 
-        if (summaryRes.ok && summaryJson) {
+        if (summaryJson) {
           setSummaryData(prev => ({
             ...prev,
             ...summaryJson,
-            // Aseguramos que los campos requeridos tengan un valor base
             activeOperatorsNames: summaryJson.activeOperatorsNames || 'N/A',
             currentShift: summaryJson.currentShift || prev.currentShift || 'Turno actual'
           }));
@@ -255,13 +268,18 @@ export default function SupervisorDashboard() {
           setReportCount(0);
         }
 
-        // Reset error if success
         setDbError(null);
       } catch (error: any) {
         console.error("Error fetching dashboard data:", error);
-        setDbError(error.message?.includes('JSON')
-          ? "Error de formato en la respuesta del servidor."
-          : "No fue posible conectar con la Base de Datos. Revisa DATABASE_URL en Vercel.");
+        
+        let msg = error.message || "Error desconocido";
+        if (msg.includes('fetch')) {
+          msg = "Error de red/CORS: No se pudo alcanzar el servidor Render. ¿Está apagado el backend?";
+        } else if (msg.includes('JSON')) {
+          msg = "Error de formato: El servidor no devolvió datos válidos (JSON). Revisa el estado de Render.";
+        }
+        
+        setDbError(msg);
         setMachinesData([]);
         setTrendsData([]);
         setOperatorsData([]);

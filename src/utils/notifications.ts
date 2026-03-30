@@ -1,6 +1,6 @@
 export async function requestNotificationPermission() {
   if (!('Notification' in window)) {
-    console.warn('Este navegador no soporta notificaciones de escritorio');
+    console.warn('Este navegador no soporta notificaciones');
     return false;
   }
 
@@ -8,18 +8,47 @@ export async function requestNotificationPermission() {
     return true;
   }
 
-  if (Notification.permission !== 'denied') {
+  try {
     const permission = await Notification.requestPermission();
     return permission === 'granted';
+  } catch (e) {
+    console.error('Error solicitando permisos de notificación:', e);
+    return false;
+  }
+}
+
+/**
+ * Muestra una notificación de forma segura tanto en PC como en Móvil (PWA)
+ */
+export async function showAppNotification(title: string, options?: NotificationOptions) {
+  if (!('Notification' in window) || Notification.permission !== 'granted') {
+    return;
   }
 
-  return false;
+  try {
+    // Intento 1: Service Worker (Requerido en Android/Chrome móvil)
+    if ('serviceWorker' in navigator) {
+      const registration = await navigator.serviceWorker.ready;
+      if (registration) {
+        await (registration as any).showNotification(title, {
+          ...options,
+          icon: options?.icon || '/logo.png',
+          badge: '/logo.png',
+          vibrate: [200, 100, 200],
+        });
+        return;
+      }
+    }
+
+    // Intento 2: Constructor estándar (Solo funciona en Desktop)
+    new Notification(title, options);
+  } catch (e) {
+    console.warn('Fallo al mostrar notificación nativa, usando fallback...');
+    // Fallback silencioso o log
+  }
 }
 
 export function scheduleHourlyNotifications() {
-  // Clear any existing intervals if we were to store them, but for simplicity we'll just set a timeout
-  // to the next hour, and then an interval.
-
   const now = new Date();
   const nextHour = new Date(now);
   nextHour.setHours(now.getHours() + 1);
@@ -29,22 +58,14 @@ export function scheduleHourlyNotifications() {
 
   const timeToNextHour = nextHour.getTime() - now.getTime();
 
-  console.log(`Notificación programada en ${Math.round(timeToNextHour / 60000)} minutos.`);
-
-  const showNotification = () => {
-    if (Notification.permission === 'granted') {
-      new Notification('AgriMonitor - Recorrido de Rutina', {
-        body: 'Es momento de registrar los parámetros de las incubadoras y nacedoras.',
-        icon: '/vite.svg' // Placeholder icon
-      });
-    }
+  const trigger = () => {
+    showAppNotification('AgriMonitor - Recorrido de Rutina', {
+      body: 'Es momento de registrar los parámetros de las incubadoras y nacedoras.',
+    });
   };
 
-  // Schedule the first one at the top of the next hour
   setTimeout(() => {
-    showNotification();
-    
-    // Then schedule every hour (3600000 ms)
-    setInterval(showNotification, 3600000);
+    trigger();
+    setInterval(trigger, 3600000);
   }, timeToNextHour);
 }

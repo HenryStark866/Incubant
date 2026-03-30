@@ -163,10 +163,18 @@ export default function CameraScreen() {
               <Camera size={48} className="text-red-500" />
             </div>
             <h3 className="text-xl font-black uppercase tracking-tight">Cámara Bloqueada</h3>
-            <p className="text-slate-400 text-sm leading-relaxed">Debes habilitar el permiso de cámara en la configuración de tu navegador o celular para usar el monitor autónomo.</p>
+            <div className="space-y-4">
+              <p className="text-slate-400 text-sm leading-relaxed">Debes habilitar el permiso de cámara en la configuración de tu navegador o celular.</p>
+              
+              {!window.isSecureContext && (
+                <div className="bg-orange-500/10 border border-orange-500/20 rounded-2xl p-4 text-xs text-orange-400 font-bold">
+                  ⚠️ NOTA: Los celulares bloquean la cámara en sitios "HTTP". Asegúrate de usar una conexión "HTTPS" segura o localhost.
+                </div>
+              )}
+            </div>
             <button 
               onClick={() => window.location.reload()}
-              className="px-8 py-3 bg-white text-black font-black rounded-2xl uppercase text-xs"
+              className="px-8 py-3 bg-white text-black font-black rounded-2xl uppercase text-xs shadow-lg active:scale-95 transition-all"
             >
               Reintentar Permisos
             </button>
@@ -199,7 +207,15 @@ export default function CameraScreen() {
       </div>
 
       {/* Capture Button Area */}
-      <div className="h-40 bg-black flex flex-col items-center justify-center px-8">
+      <div className="h-44 bg-black flex flex-col items-center justify-center px-8 relative">
+        {/* Hidden Demo button for video recording without physical camera */}
+        <button 
+          onClick={captureAndProcess}
+          className="absolute top-2 right-4 text-[7px] text-white/20 font-black uppercase tracking-widest border border-white/5 px-2 py-1 rounded"
+        >
+          Demostración IA
+        </button>
+        
         <button 
           onClick={captureAndProcess}
           disabled={permissionState !== 'granted'}

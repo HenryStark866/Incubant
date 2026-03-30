@@ -185,9 +185,15 @@ function generateProfessionalManual(os) {
     y += 10;
   });
   y += 20;
-  subHeader(doc, '2. Uso Adecuado', y);
+  subHeader(doc, '2. Uso Adecuado (Zero-Touch)', y);
   y += 10;
-  const useSteps = ['Iniciar sesión con PIN personal', 'Seleccionar máquina (Incubadora/Nacedora)', 'Tomar foto nítida de la pantalla de la máquina', 'Verificar lectura de IA y guardar', 'Sincronizar datos periódicamente'];
+  const useSteps = [
+    'Iniciar sesión con PIN personal.',
+    'Seleccionar máquina (Incubadora/Nacedora).',
+    'Apunte y capture una foto nítida de la pantalla.',
+    '¡LISTO! La IA procesa y guarda automáticamente en 5 segundos.',
+    'Verifique la confirmación verde y continúe con la siguiente.'
+  ];
   useSteps.forEach((s, i) => {
     doc.text(`• ${s}`, 20, y);
     y += 10;
@@ -198,11 +204,48 @@ function generateProfessionalManual(os) {
   fs.writeFileSync(outPath, Buffer.from(doc.output('arraybuffer')));
 }
 
+function generateDemoRoles() {
+  const doc = new jsPDF();
+  const pageW = doc.internal.pageSize.getWidth();
+  const pageH = doc.internal.pageSize.getHeight();
+  const docId = 'DEMO-ROLES-2026';
+
+  drawHeader(doc, 'Demostración de Roles');
+  let y = 50;
+  
+  subHeader(doc, '1. Rol: OPERARIO (Zero-Touch AI)', y);
+  y += 10;
+  doc.setFontSize(10);
+  doc.text('• Acceso: PIN 1111 (Juan Alejandro)', 20, y);
+  y += 6;
+  doc.text('• Acción: Elige máquina -> Foto -> Autoguardado IA.', 20, y);
+  y += 10;
+
+  subHeader(doc, '2. Rol: SUPERVISOR (Dashboard)', y);
+  y += 10;
+  doc.text('• Acceso: PIN jp2026 (Jhon Piedrahita)', 20, y);
+  y += 6;
+  doc.text('• Acción: Visualiza estado de planta en tiempo real.', 20, y);
+  y += 10;
+
+  subHeader(doc, '3. Rol: JEFE (Administración Total)', y);
+  y += 10;
+  doc.text('• Acceso: PIN 4753 (Administrador)', 20, y);
+  y += 6;
+  doc.text('• Acción: Gestión de usuarios, turnos y boveda Drive.', 20, y);
+  y += 15;
+
+  drawFooter(doc, 1, 1, docId);
+  const outPath = path.join(DESKTOP, 'GUIA_DEMOSTRACION_ROLES.pdf');
+  fs.writeFileSync(outPath, Buffer.from(doc.output('arraybuffer')));
+}
+
 try {
   generateProfessionalProposal();
   generateProfessionalManual('iOS');
   generateProfessionalManual('Android');
-  console.log('Documentación Profesional Generada.');
+  generateDemoRoles();
+  console.log('Documentación Profesional Generada con Guía de Demo.');
 } catch (e) {
   console.error('Error:', e);
 }

@@ -90,10 +90,14 @@ export default function DashboardScreen() {
   useEffect(() => {
     if (!currentUser) return;
     
-    // Check permission
-    if ('Notification' in window && Notification.permission === 'default') {
-      Notification.requestPermission();
-    }
+    // Lazy import the notification utility
+    const notifyChange = async (user: any) => {
+      const { showAppNotification } = await import('../utils/notifications');
+      await showAppNotification('¡Atención: Cambio de Turno!', {
+        body: `Un Administrador te ha reasignado al ${user.shift}. Se actualizará tu panel automáticamente.`,
+        icon: '/pwa-192x192.png'
+      });
+    };
 
     const checkRealtimeStatus = async () => {
       try {
@@ -102,14 +106,7 @@ export default function DashboardScreen() {
           const { user } = await res.json();
           if (user && user.shift !== currentUser.shift) {
             // El Jefe acaba de actualizar el turno de este operario en la DB!
-            if ('Notification' in window && Notification.permission === 'granted') {
-              new Notification('¡Atención: Cambio de Turno!', {
-                body: `Un Administrador te ha reasignado al ${user.shift}. Se actualizará tu panel automáticamente.`,
-                icon: '/pwa-192x192.png'
-              });
-            } else {
-              alert(`¡ATENCIÓN! Un Supervisor te asigó a un nuevo horario: ${user.shift}.`);
-            }
+            void notifyChange(user);
             login(user); // Refrescamos DB -> App state
           }
         }

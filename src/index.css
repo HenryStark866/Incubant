@@ -1,12 +1,12 @@
 @import "tailwindcss";
 
 @theme {
-  --color-brand-primary: #f5a623;
-  --color-brand-secondary: #ffd05b;
-  --color-brand-dark: #1a1a1a;
-  --color-brand-gray: #7a7a7a;
-  --color-brand-light: #f9f9f9;
-  --radius-brand: 1.5rem;
+  --color-brand-primary: #f7931a; /* Updated vibrant orange */
+  --color-brand-secondary: #ffb800;
+  --color-brand-dark: #0f172a;
+  --color-brand-gray: #64748b;
+  --color-brand-light: #f8fafc;
+  --radius-brand: 2rem;
 }
 
 /* iOS Safe Areas & Mobile Optimizations */

@@ -159,34 +159,30 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-900 flex flex-col items-center justify-center p-4 relative">
+    <div className="h-full w-full bg-slate-50 relative flex flex-col items-center justify-center overscroll-none overflow-hidden">
       <UpdatePrompt />
+      
+      {/* Botón flotante para supervisores en modo móvil si es necesario */}
       {canAccessSupervisor && (
-        <div className="w-full max-w-[400px] flex justify-end mb-4 z-50">
+        <div className="fixed top-6 right-6 z-[100]">
           <button 
             onClick={() => setViewMode('supervisor')}
-            className="bg-slate-800 hover:bg-slate-700 text-white px-5 py-2.5 rounded-xl shadow-xl flex items-center gap-2 font-bold transition-all border border-slate-700"
+            className="bg-brand-dark/80 backdrop-blur-md hover:bg-brand-dark text-white px-5 py-3 rounded-2xl shadow-xl flex items-center gap-2 font-black transition-all border border-white/10 active:scale-95"
           >
-            <Monitor size={18} className="text-blue-400" />
-            Panel Supervisor
+            <Monitor size={18} className="text-brand-primary" />
+            PANEL ADMIN
           </button>
         </div>
       )}
 
-      <div className="w-full max-w-[400px] h-[800px] max-h-[90vh] bg-black rounded-[3rem] p-2 shadow-2xl relative overflow-hidden ring-4 ring-gray-800">
-        <div className="absolute top-0 inset-x-0 h-7 bg-black z-50 rounded-b-3xl w-40 mx-auto flex justify-center items-end pb-1">
-          <div className="w-12 h-1.5 bg-gray-800 rounded-full"></div>
-        </div>
-        
-        <div className="w-full h-full bg-white rounded-[2.5rem] overflow-hidden relative">
-          {!currentUser ? (
-            <LoginScreen />
-          ) : activeMachineId ? (
-            capturedPhoto ? <FormScreen /> : <CameraScreen />
-          ) : (
-            <DashboardScreen />
-          )}
-        </div>
+      <div className="w-full h-full relative overflow-hidden bg-white safe-top safe-bottom">
+        {!currentUser ? (
+          <LoginScreen />
+        ) : activeMachineId ? (
+          capturedPhoto ? <FormScreen /> : <CameraScreen />
+        ) : (
+          <DashboardScreen />
+        )}
       </div>
     </div>
   );

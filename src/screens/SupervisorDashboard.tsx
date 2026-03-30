@@ -1,16 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  Activity, AlertTriangle, Clock, Users, LayoutDashboard, 
+import {
+  Activity, AlertTriangle, Clock, Users, LayoutDashboard,
   Settings, ChevronDown, X, Image as ImageIcon, CheckCircle2,
   Download, Loader2, Egg, Menu, RefreshCw, LogOut, Camera, FileText, FolderOpen
 } from 'lucide-react';
-import { 
-  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer 
+import {
+  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
 } from 'recharts';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { useMachineStore } from '../store/useMachineStore';
-import { listEvidences } from '../lib/supabase';
 import { getApiUrl, apiFetch } from '../lib/api';
 
 import ShiftManager from '../components/Admin/ShiftManager';
@@ -33,8 +32,8 @@ export default function SupervisorDashboard() {
   }>({ lastReportTime: null, activeOperatorsCount: 0, activeOperatorsNames: 'N/A', currentShift: 'Turno 1' });
   const [isLoading, setIsLoading] = useState(true);
   const [dbError, setDbError] = useState<string | null>(null);
-  
-    // Modal states
+
+  // Modal states
   const [showCreateOperator, setShowCreateOperator] = useState(false);
   const [isCreatingOperator, setIsCreatingOperator] = useState(false);
   const [newOperator, setNewOperator] = useState({
@@ -48,9 +47,8 @@ export default function SupervisorDashboard() {
   const [isUpdatingOperator, setIsUpdatingOperator] = useState(false);
 
   const [showEvidencesModal, setShowEvidencesModal] = useState(false);
-  const [evidencesList, setEvidencesList] = useState<any[]>([]);
-  const [isLoadingEvidences, setIsLoadingEvidences] = useState(false);
-  
+  // evidencesList and isLoadingEvidences removed — Drive link is opened directly
+
   const currentUser = useMachineStore(state => state.currentUser);
   const logout = useMachineStore(state => state.logout);
   const resetHourlyStatus = useMachineStore(state => state.resetHourlyStatus);
@@ -80,7 +78,7 @@ export default function SupervisorDashboard() {
 
   // Reloj y reglas de turno en tiempo real
   const [currentTime, setCurrentTime] = useState(new Date());
-  
+
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 30000);
     return () => clearInterval(timer);
@@ -105,12 +103,9 @@ export default function SupervisorDashboard() {
     }
   };
 
-  const handleOpenEvidences = async () => {
-    setShowEvidencesModal(true);
-    setIsLoadingEvidences(true);
-    const files = await listEvidences('reportes');
-    setEvidencesList(files);
-    setIsLoadingEvidences(false);
+  const handleOpenEvidences = () => {
+    // Abrir la carpeta de evidencias de Drive directamente
+    window.open('https://drive.google.com/drive/folders/1LSI9hpfQiYD0w0U79Noh6tI1BDgnHwqn?usp=sharing', '_blank');
   };
 
   const handleResetLocalData = () => {
@@ -120,7 +115,7 @@ export default function SupervisorDashboard() {
 
   const handleCreateOperatorSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     // Validar PIN
     if (newOperator.pin.length !== 4 || !/^\d+$/.test(newOperator.pin)) {
       alert('El PIN debe ser exactamente 4 dígitos numéricos');
@@ -191,12 +186,12 @@ export default function SupervisorDashboard() {
 
   const handleDeleteOperator = async (id: string) => {
     if (!window.confirm('¿Estás seguro de eliminar este operario? Si tiene registros asociados, se desactivará en lugar de borrarse.')) return;
-    
+
     try {
       const response = await apiFetch(getApiUrl(`/api/operators/${id}`), {
         method: 'DELETE',
       });
-      
+
       if (response.ok) {
         setOperatorsData(prev => prev.filter(op => op.id !== id));
       } else {
@@ -214,7 +209,7 @@ export default function SupervisorDashboard() {
         setIsLoading(false);
         return;
       }
-      
+
       try {
         const [statusRes, trendsRes, operatorsRes, summaryRes] = await Promise.all([
           apiFetch(getApiUrl('/api/dashboard/status')),
@@ -222,12 +217,12 @@ export default function SupervisorDashboard() {
           apiFetch(getApiUrl('/api/dashboard/operators')),
           apiFetch(getApiUrl('/api/dashboard/summary'))
         ]);
-        
+
         const statusJson = await statusRes.json();
         const trendsJson = await trendsRes.json();
         const operatorsJson = await operatorsRes.json();
         const summaryJson = await summaryRes.json();
-        
+
         if (statusRes.ok && Array.isArray(statusJson)) {
           setMachinesData(statusJson);
         } else {
@@ -248,8 +243,8 @@ export default function SupervisorDashboard() {
         }
 
         if (summaryRes.ok && summaryJson) {
-          setSummaryData(prev => ({ 
-            ...prev, 
+          setSummaryData(prev => ({
+            ...prev,
             ...summaryJson,
             // Aseguramos que los campos requeridos tengan un valor base
             activeOperatorsNames: summaryJson.activeOperatorsNames || 'N/A',
@@ -264,8 +259,8 @@ export default function SupervisorDashboard() {
         setDbError(null);
       } catch (error: any) {
         console.error("Error fetching dashboard data:", error);
-        setDbError(error.message?.includes('JSON') 
-          ? "Error de formato en la respuesta del servidor." 
+        setDbError(error.message?.includes('JSON')
+          ? "Error de formato en la respuesta del servidor."
           : "No fue posible conectar con la Base de Datos. Revisa DATABASE_URL en Vercel.");
         setMachinesData([]);
         setTrendsData([]);
@@ -309,19 +304,19 @@ export default function SupervisorDashboard() {
     try {
       const doc = new jsPDF();
       const timestamp = new Date().toLocaleString();
-      
+
       // Header y Logo corporativo
       doc.setFillColor(245, 166, 35); // Naranja Incubant
       doc.rect(0, 0, 210, 40, 'F');
-      
+
       doc.setFontSize(24);
       doc.setTextColor(255, 255, 255);
       doc.setFont("helvetica", "bold");
       doc.text('INCUBANT MONITOR', 14, 20);
-      
+
       doc.setFontSize(10);
       doc.text('V0.1.0 "Incubant Integral" | MINUTA DE TURNO', 14, 30);
-      
+
       doc.setFontSize(10);
       doc.setTextColor(50, 50, 50);
       doc.setFont("helvetica", "normal");
@@ -390,14 +385,14 @@ export default function SupervisorDashboard() {
       const incidentY = (doc as any).lastAutoTable.finalY + 15;
       doc.setTextColor(245, 166, 35);
       doc.text('BITÁCORA DE INCIDENTES Y ALARMAS', 14, incidentY);
-      
+
       try {
         const incRes = await apiFetch(getApiUrl('/api/dashboard/incidents?limit=15'));
         const incidents = await incRes.json();
-        
+
         if (incidents.length > 0) {
           const body = incidents.map((inc: any) => [
-            new Date(inc.fecha_hora).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}),
+            new Date(inc.fecha_hora).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
             inc.titulo,
             inc.descripcion
           ]);
@@ -423,10 +418,10 @@ export default function SupervisorDashboard() {
       doc.setFontSize(9);
       doc.setTextColor(100, 100, 100);
       doc.text('Este documento es una copia electrónica generada automáticamente por Incubant Monitor v0.1.0', 14, footerY - 10);
-      
+
       doc.setTextColor(0, 0, 255);
       doc.textWithLink('>>> VER EVIDENCIAS FOTOGRÁFICAS EN LA NUBE <<<', 14, footerY, { url: window.location.origin });
-      
+
       doc.save(`Minuta_Incubant_${new Date().toISOString().split('T')[0]}_Turno.pdf`);
     } catch (error) {
       console.error('Error al generar PDF:', error);
@@ -440,7 +435,7 @@ export default function SupervisorDashboard() {
         <AlertTriangle size={48} className="mb-4" />
         <h2 className="text-2xl font-black text-brand-dark">Fallo de Comunicación</h2>
         <p className="max-w-md text-brand-gray font-medium">{dbError}</p>
-        <button 
+        <button
           onClick={() => window.location.reload()}
           className="mt-4 px-8 py-3 bg-brand-primary text-white font-bold rounded-2xl shadow-xl shadow-brand-primary/20 hover:scale-105 transition-all"
         >
@@ -486,9 +481,8 @@ export default function SupervisorDashboard() {
         />
       )}
 
-      <div className={`fixed inset-y-0 left-0 z-40 w-72 bg-white border-r border-gray-100 flex flex-col shadow-xl transform transition-transform duration-300 lg:static lg:translate-x-0 ${
-        isSidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
-      }`}>
+      <div className={`fixed inset-y-0 left-0 z-40 w-72 bg-white border-r border-gray-100 flex flex-col shadow-xl transform transition-transform duration-300 lg:static lg:translate-x-0 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
+        }`}>
         <div className="p-6 sm:p-8 flex flex-col items-center gap-4 border-b border-gray-50 bg-brand-secondary/5">
           <div className="flex w-full items-start justify-between gap-4">
             <div className="flex items-center gap-2 mb-2">
@@ -515,31 +509,28 @@ export default function SupervisorDashboard() {
             <span className="text-[8px] text-brand-gray font-bold opacity-40">v0.1.1-PROD</span>
           </div>
         </div>
-        
+
         <nav className="flex-1 p-6 space-y-3 overflow-y-auto">
-          <button 
+          <button
             onClick={() => handleTabChange('dashboard')}
-            className={`w-full flex items-center gap-4 px-5 py-4 rounded-2xl transition-all ${
-              activeTab === 'dashboard' ? 'bg-brand-primary text-white shadow-lg shadow-brand-primary/30 active:scale-95' : 'hover:bg-gray-50 text-brand-gray font-semibold'
-            }`}
+            className={`w-full flex items-center gap-4 px-5 py-4 rounded-2xl transition-all ${activeTab === 'dashboard' ? 'bg-brand-primary text-white shadow-lg shadow-brand-primary/30 active:scale-95' : 'hover:bg-gray-50 text-brand-gray font-semibold'
+              }`}
           >
             <LayoutDashboard size={20} />
             <span className="font-bold tracking-tight">Panel Control</span>
           </button>
-          <button 
+          <button
             onClick={() => handleTabChange('personal')}
-            className={`w-full flex items-center gap-4 px-5 py-4 rounded-2xl transition-all ${
-              activeTab === 'personal' ? 'bg-brand-primary text-white shadow-lg shadow-brand-primary/30 active:scale-95' : 'hover:bg-gray-50 text-brand-gray font-semibold'
-            }`}
+            className={`w-full flex items-center gap-4 px-5 py-4 rounded-2xl transition-all ${activeTab === 'personal' ? 'bg-brand-primary text-white shadow-lg shadow-brand-primary/30 active:scale-95' : 'hover:bg-gray-50 text-brand-gray font-semibold'
+              }`}
           >
             <Users size={20} />
             <span className="font-bold tracking-tight">Personal Planta</span>
           </button>
-          <button 
+          <button
             onClick={() => handleTabChange('horarios')}
-            className={`w-full flex items-center gap-4 px-5 py-4 rounded-2xl transition-all ${
-              activeTab === 'horarios' ? 'bg-brand-primary text-white shadow-lg shadow-brand-primary/30 active:scale-95' : 'hover:bg-gray-50 text-brand-gray font-semibold'
-            }`}
+            className={`w-full flex items-center gap-4 px-5 py-4 rounded-2xl transition-all ${activeTab === 'horarios' ? 'bg-brand-primary text-white shadow-lg shadow-brand-primary/30 active:scale-95' : 'hover:bg-gray-50 text-brand-gray font-semibold'
+              }`}
           >
             <Clock size={20} />
             <span className="font-bold tracking-tight">Horarios</span>
@@ -548,30 +539,30 @@ export default function SupervisorDashboard() {
           {/* SECCIÓN DE ALMACENAMIENTO CLOUD */}
           <div className="pt-4 mt-4 border-t border-gray-100 flex flex-col gap-2">
             <p className="px-2 text-[10px] text-brand-gray font-black uppercase tracking-[0.2em] opacity-60 mb-2">Bóveda de Evidencia</p>
-            
-            <a 
-              href="https://drive.google.com/drive/folders/1LSI9hpfQiYD0w0U79Noh6tI1BDgnHwqn?usp=sharing" 
-              target="_blank" 
+
+            <a
+              href="https://drive.google.com/drive/folders/1LSI9hpfQiYD0w0U79Noh6tI1BDgnHwqn?usp=sharing"
+              target="_blank"
               rel="noopener noreferrer"
               className="w-full flex items-center gap-4 px-5 py-3 rounded-2xl text-brand-gray hover:bg-brand-primary/10 hover:text-brand-primary transition-all font-bold text-xs group"
             >
               <Camera size={18} className="group-hover:scale-110 transition-transform" />
               <span>Fotos Planta</span>
             </a>
-            
-            <a 
-              href="https://drive.google.com/drive/folders/15NhdznwFJycDOFsQs9dZwTS6vR_srfXi?usp=sharing" 
-              target="_blank" 
+
+            <a
+              href="https://drive.google.com/drive/folders/15NhdznwFJycDOFsQs9dZwTS6vR_srfXi?usp=sharing"
+              target="_blank"
               rel="noopener noreferrer"
               className="w-full flex items-center gap-4 px-5 py-3 rounded-2xl text-brand-gray hover:bg-brand-primary/10 hover:text-brand-primary transition-all font-bold text-xs group"
             >
               <FileText size={18} className="group-hover:scale-110 transition-transform" />
               <span>Informes Por Hora</span>
             </a>
-            
-            <a 
-              href="https://drive.google.com/drive/folders/1tI5ROHJ_RxeSWE2Q38BXxAVk82TYrdtG?usp=sharing" 
-              target="_blank" 
+
+            <a
+              href="https://drive.google.com/drive/folders/1tI5ROHJ_RxeSWE2Q38BXxAVk82TYrdtG?usp=sharing"
+              target="_blank"
               rel="noopener noreferrer"
               className="w-full flex items-center gap-4 px-5 py-3 rounded-2xl text-brand-gray hover:bg-brand-primary/10 hover:text-brand-primary transition-all font-bold text-xs group"
             >
@@ -585,9 +576,8 @@ export default function SupervisorDashboard() {
         <div className="p-6 border-t border-gray-50">
           <button
             onClick={() => handleTabChange('settings')}
-            className={`w-full flex items-center gap-4 px-5 py-4 rounded-2xl transition-all ${
-              activeTab === 'settings' ? 'bg-brand-primary text-white shadow-lg shadow-brand-primary/30 active:scale-95' : 'hover:bg-gray-50 text-brand-gray font-semibold'
-            }`}
+            className={`w-full flex items-center gap-4 px-5 py-4 rounded-2xl transition-all ${activeTab === 'settings' ? 'bg-brand-primary text-white shadow-lg shadow-brand-primary/30 active:scale-95' : 'hover:bg-gray-50 text-brand-gray font-semibold'
+              }`}
           >
             <Settings size={20} />
             <span className="font-bold tracking-tight">Configuración</span>
@@ -612,36 +602,36 @@ export default function SupervisorDashboard() {
                   <X size={24} />
                 </button>
               </div>
-              
+
               <form onSubmit={handleCreateOperatorSubmit} className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-brand-gray mb-2">Nombre Completo</label>
-                  <input 
+                  <input
                     type="text"
                     value={newOperator.name}
-                    onChange={(e) => setNewOperator({...newOperator, name: e.target.value})}
+                    onChange={(e) => setNewOperator({ ...newOperator, name: e.target.value })}
                     required
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-primary focus:border-transparent"
                   />
                 </div>
-                
+
                 <div>
                   <label className="block text-sm font-medium text-brand-gray mb-2">PIN de Acceso (4 dígitos)</label>
-                   <input 
+                  <input
                     type="password"
                     value={newOperator.pin}
-                    onChange={(e) => setNewOperator({...newOperator, pin: e.target.value})}
+                    onChange={(e) => setNewOperator({ ...newOperator, pin: e.target.value })}
                     maxLength={4}
                     required
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-primary focus:border-transparent"
                   />
                 </div>
-                
+
                 <div>
                   <label className="block text-sm font-medium text-brand-gray mb-2">Rol</label>
-                  <select 
+                  <select
                     value={newOperator.role}
-                    onChange={(e) => setNewOperator({...newOperator, role: e.target.value})}
+                    onChange={(e) => setNewOperator({ ...newOperator, role: e.target.value })}
                     required
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-primary focus:border-transparent"
                   >
@@ -651,16 +641,16 @@ export default function SupervisorDashboard() {
                     <option value="JEFE">Jefe / Administrador</option>
                   </select>
                 </div>
-                
+
                 <div className="flex justify-end space-x-3">
-                  <button 
+                  <button
                     type="button"
                     onClick={() => setShowCreateOperator(false)}
                     className="px-5 py-3 border border-gray-300 rounded-lg hover:bg-gray-50"
                   >
                     Cancelar
                   </button>
-                  <button 
+                  <button
                     type="submit"
                     disabled={isCreatingOperator}
                     className={`px-5 py-3 bg-brand-primary text-white rounded-lg hover:bg-[#E6951F] disabled:opacity-50 disabled:cursor-not-allowed transition-colors`}
@@ -684,25 +674,25 @@ export default function SupervisorDashboard() {
             >
               <div className="p-6 sm:p-8 border-b border-gray-50 flex items-center justify-between bg-brand-secondary/5">
                 <h2 className="text-xl font-black text-brand-dark">Modificar Operario</h2>
-                <button 
+                <button
                   onClick={() => setEditingOperator(null)}
                   className="p-2 bg-white hover:bg-gray-50 rounded-xl text-brand-gray transition-all shadow-sm border border-gray-100"
                 >
                   <X size={20} />
                 </button>
               </div>
-              
+
               <form onSubmit={handleUpdateOperatorSubmit} className="p-6 sm:p-8 space-y-6">
                 <div className="bg-gray-50/50 p-4 rounded-3xl border border-gray-100 italic text-sm text-brand-gray">
                   Editando perfil de: <span className="font-black text-brand-dark not-italic ml-1">{editingOperator.name}</span>
                 </div>
-                
+
                 <div>
                   <label className="block text-[10px] font-black text-brand-gray uppercase tracking-[0.2em] mb-3 ml-2">Asignar Turno / Horario</label>
                   <div className="relative">
-                    <select 
+                    <select
                       value={editingOperator.shift}
-                      onChange={(e) => setEditingOperator({...editingOperator, shift: e.target.value})}
+                      onChange={(e) => setEditingOperator({ ...editingOperator, shift: e.target.value })}
                       className="appearance-none w-full px-6 py-4 bg-white border-2 border-gray-100 rounded-2xl focus:outline-none focus:border-brand-primary focus:ring-4 focus:ring-brand-primary/5 text-brand-dark font-bold text-sm transition-all shadow-sm"
                     >
                       <option value="Turno 1">Turno 1 (Mañana)</option>
@@ -717,9 +707,9 @@ export default function SupervisorDashboard() {
                 <div>
                   <label className="block text-[10px] font-black text-brand-gray uppercase tracking-[0.2em] mb-3 ml-2">Estado del Operario</label>
                   <div className="relative">
-                    <select 
+                    <select
                       value={editingOperator.status}
-                      onChange={(e) => setEditingOperator({...editingOperator, status: e.target.value})}
+                      onChange={(e) => setEditingOperator({ ...editingOperator, status: e.target.value })}
                       className="appearance-none w-full px-6 py-4 bg-white border-2 border-gray-100 rounded-2xl focus:outline-none focus:border-brand-primary focus:ring-4 focus:ring-brand-primary/5 text-brand-dark font-bold text-sm transition-all shadow-sm"
                     >
                       <option value="Activo">Activo</option>
@@ -728,16 +718,16 @@ export default function SupervisorDashboard() {
                     <ChevronDown size={18} className="absolute right-4 top-1/2 -translate-y-1/2 text-brand-primary pointer-events-none" />
                   </div>
                 </div>
-                
+
                 <div className="flex gap-3 pt-4">
-                  <button 
+                  <button
                     type="button"
                     onClick={() => setEditingOperator(null)}
                     className="flex-1 px-5 py-4 border-2 border-gray-100 rounded-2xl text-brand-gray font-black hover:bg-gray-50 transition-all text-sm uppercase tracking-widest"
                   >
                     Cancelar
                   </button>
-                  <button 
+                  <button
                     type="submit"
                     disabled={isUpdatingOperator}
                     className="flex-1 px-5 py-4 bg-brand-primary text-white rounded-2xl font-black hover:bg-[#E6951F] shadow-lg shadow-brand-primary/20 disabled:opacity-50 transition-all text-sm uppercase tracking-widest flex items-center justify-center gap-2"
@@ -751,62 +741,7 @@ export default function SupervisorDashboard() {
           </div>
         )}
 
-        {showEvidencesModal && (
-          <div className="fixed inset-0 z-[70] bg-brand-dark/40 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-300" onClick={() => setShowEvidencesModal(false)}>
-            <div className="bg-white border-2 border-brand-primary/10 rounded-[2.5rem] w-full max-w-2xl max-h-[85vh] flex flex-col shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300" onClick={e => e.stopPropagation()}>
-              <div className="p-6 border-b border-gray-50 flex items-center justify-between bg-brand-secondary/5 shrink-0">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-blue-100 text-blue-600 rounded-xl shadow-sm">
-                    <ImageIcon size={24} />
-                  </div>
-                  <h2 className="text-xl font-black text-brand-dark">Bóveda de Evidencias en Nube</h2>
-                </div>
-                <button onClick={() => setShowEvidencesModal(false)} className="p-2 hover:bg-white rounded-xl text-brand-gray transition-colors border border-transparent hover:border-gray-100 shadow-sm">
-                  <X size={24} />
-                </button>
-              </div>
-              <div className="p-6 overflow-y-auto flex-1 bg-gray-50/50">
-                {isLoadingEvidences ? (
-                  <div className="flex flex-col items-center justify-center py-12">
-                     <Loader2 size={40} className="text-brand-primary animate-spin mb-4" />
-                     <p className="font-bold text-brand-gray">Cargando evidencias seguras...</p>
-                     <p className="text-[10px] text-gray-400 mt-2 uppercase tracking-widest">Conectando a Supabase Storage</p>
-                  </div>
-                ) : evidencesList.length === 0 ? (
-                  <div className="text-center py-12 bg-white rounded-2xl border border-dashed border-gray-200">
-                    <ImageIcon size={48} className="text-gray-300 mx-auto mb-4" />
-                    <p className="font-bold text-brand-dark">No hay documentos en la bóveda</p>
-                    <p className="text-[10px] text-gray-400 mt-2 uppercase tracking-widest">Los reportes PDF se agregarán aquí autómaticamente</p>
-                  </div>
-                ) : (
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    {evidencesList.map((file, i) => (
-                      <div key={i} className="bg-white p-4 rounded-2xl border border-gray-100 shadow-[0_2px_10px_rgba(0,0,0,0.02)] flex flex-col justify-between hover:border-brand-primary/30 hover:shadow-md transition-all">
-                        <div className="flex items-start gap-4 mb-4">
-                          <div className="p-2 bg-red-50 text-red-500 rounded-xl">
-                            <Download size={20} />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="font-bold text-brand-dark text-sm truncate">{file.name}</p>
-                            <p className="text-[10px] font-black text-brand-gray uppercase tracking-widest mt-1">
-                              {new Date(file.created_at).toLocaleString()}
-                            </p>
-                          </div>
-                        </div>
-                        <a 
-                          href={file.publicUrl} target="_blank" rel="noopener noreferrer"
-                          className="w-full py-3 bg-[#F5F5F7] text-brand-dark hover:bg-brand-primary hover:text-white text-xs font-black uppercase tracking-widest text-center rounded-xl transition-all"
-                        >
-                          Ver y Descargar
-                        </a>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
+        {/* Evidences Modal removed since it now redirects directly to Google Drive */}
 
         <header className="bg-white border-b border-gray-100 px-4 sm:px-6 lg:px-10 py-4 shrink-0 z-10">
           <div className="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-4">
@@ -863,7 +798,7 @@ export default function SupervisorDashboard() {
             </div>
 
             <div className="flex flex-wrap items-stretch gap-3 sm:gap-4">
-              <button 
+              <button
                 onClick={handleOpenEvidences}
                 className="hidden lg:flex bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-2xl items-center gap-3 text-sm font-black transition-all shadow-xl shadow-blue-600/20 active:scale-95 uppercase tracking-widest"
               >
@@ -871,7 +806,7 @@ export default function SupervisorDashboard() {
                 Ver Evidencias
               </button>
 
-              <button 
+              <button
                 onClick={handleDownloadReport}
                 className="hidden lg:flex bg-brand-primary hover:bg-[#E6951F] text-white px-6 py-3 rounded-2xl items-center gap-3 text-sm font-black transition-all shadow-xl shadow-brand-primary/20 active:scale-95 uppercase tracking-widest"
               >
@@ -889,9 +824,8 @@ export default function SupervisorDashboard() {
                 </div>
               </div>
 
-              <div className={`border shadow-sm rounded-2xl px-5 py-3 flex items-center gap-4 min-w-[138px] transition-colors ${
-                activeAlarms > 0 ? 'bg-red-50 border-red-100' : 'bg-white border-gray-100'
-              }`}>
+              <div className={`border shadow-sm rounded-2xl px-5 py-3 flex items-center gap-4 min-w-[138px] transition-colors ${activeAlarms > 0 ? 'bg-red-50 border-red-100' : 'bg-white border-gray-100'
+                }`}>
                 <div className={`p-2 rounded-xl ${activeAlarms > 0 ? 'bg-red-100' : 'bg-gray-50'}`}>
                   <AlertTriangle className={activeAlarms > 0 ? 'text-red-500' : 'text-brand-gray'} size={20} />
                 </div>
@@ -911,7 +845,7 @@ export default function SupervisorDashboard() {
                   </div>
                   <div className="absolute -top-1 -right-1 w-3 h-3 bg-green-500 rounded-full border-2 border-white shadow-sm"></div>
                 </div>
-                
+
                 <div className="flex-1 space-y-1">
                   <div className="flex items-center justify-between gap-4">
                     <p className="text-[10px] text-brand-primary font-black uppercase tracking-[0.2em] leading-none">
@@ -921,7 +855,7 @@ export default function SupervisorDashboard() {
                       En línea
                     </span>
                   </div>
-                  
+
                   <div className="flex flex-col">
                     <h3 className="text-base font-black text-brand-dark tracking-tight truncate max-w-[200px]">
                       Operador: <span className="text-brand-primary">{activeOperatorsList}</span>
@@ -930,7 +864,7 @@ export default function SupervisorDashboard() {
                       <div className="flex items-center gap-1">
                         <CheckCircle2 size={12} className="text-green-500" />
                         <p className="text-[9px] text-brand-gray font-black uppercase tracking-tight">
-                        Ult. Reporte: {summaryData.lastReportTime ? new Date(summaryData.lastReportTime).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' }) : 'N/A'}
+                          Ult. Reporte: {summaryData.lastReportTime ? new Date(summaryData.lastReportTime).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' }) : 'N/A'}
                         </p>
                       </div>
                       <span className="w-1 h-1 bg-gray-300 rounded-full"></span>
@@ -956,7 +890,7 @@ export default function SupervisorDashboard() {
                     Mapa de Planta en Tiempo Real
                   </h2>
                 </div>
-                
+
                 <div className="bg-white border border-gray-100 rounded-3xl p-5 sm:p-8 shadow-sm">
                   <div className="mb-6 flex flex-wrap gap-4 sm:gap-6 text-[10px] font-black uppercase tracking-widest text-brand-gray">
                     <div className="flex items-center gap-2 sm:pr-4 sm:border-r sm:border-gray-100"><span className="w-3 h-3 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.4)]"></span> Operación OK</div>
@@ -975,11 +909,10 @@ export default function SupervisorDashboard() {
                           <button
                             key={machine.id}
                             onClick={() => setSelectedMachine(machine)}
-                            className={`p-4 rounded-2xl border-2 flex flex-col items-center justify-center gap-1 transition-all hover:scale-105 active:scale-95 shadow-sm ${
-                              machine.status === 'alarm' ? 'bg-red-50 border-red-500/50 text-red-600' :
-                              machine.status === 'maintenance' ? 'bg-gray-50 border-gray-200 text-gray-400' :
-                              'bg-white border-brand-primary/10 hover:border-brand-primary text-brand-dark'
-                            }`}
+                            className={`p-4 rounded-2xl border-2 flex flex-col items-center justify-center gap-1 transition-all hover:scale-105 active:scale-95 shadow-sm ${machine.status === 'alarm' ? 'bg-red-50 border-red-500/50 text-red-600' :
+                                machine.status === 'maintenance' ? 'bg-gray-50 border-gray-200 text-gray-400' :
+                                  'bg-white border-brand-primary/10 hover:border-brand-primary text-brand-dark'
+                              }`}
                           >
                             <span className="font-black text-xs">{machine.name.replace('Incubadora ', '')}</span>
                             <span className={`text-[10px] font-bold ${machine.status === 'alarm' ? 'text-red-500' : 'text-brand-primary'}`}>{machine.temp}°C</span>
@@ -998,11 +931,10 @@ export default function SupervisorDashboard() {
                           <button
                             key={machine.id}
                             onClick={() => setSelectedMachine(machine)}
-                            className={`p-4 rounded-2xl border-2 flex flex-col items-center justify-center gap-1 transition-all hover:scale-105 active:scale-95 shadow-sm ${
-                              machine.status === 'alarm' ? 'bg-red-50 border-red-500/50 text-red-600' :
-                              machine.status === 'maintenance' ? 'bg-gray-50 border-gray-200 text-gray-400' :
-                              'bg-white border-brand-primary/10 hover:border-brand-primary text-brand-dark'
-                            }`}
+                            className={`p-4 rounded-2xl border-2 flex flex-col items-center justify-center gap-1 transition-all hover:scale-105 active:scale-95 shadow-sm ${machine.status === 'alarm' ? 'bg-red-50 border-red-500/50 text-red-600' :
+                                machine.status === 'maintenance' ? 'bg-gray-50 border-gray-200 text-gray-400' :
+                                  'bg-white border-brand-primary/10 hover:border-brand-primary text-brand-dark'
+                              }`}
                           >
                             <span className="font-black text-xs">{machine.name.replace('Nacedora ', '')}</span>
                             <span className={`text-[10px] font-bold ${machine.status === 'alarm' ? 'text-red-500' : 'text-brand-primary'}`}>{machine.temp}°C</span>
@@ -1023,7 +955,7 @@ export default function SupervisorDashboard() {
                     </h2>
                   </div>
                   <div className="relative w-full sm:w-auto">
-                    <select 
+                    <select
                       value={chartFilter}
                       onChange={(e) => setChartFilter(e.target.value)}
                       className="appearance-none w-full bg-white border-2 border-gray-100 text-brand-dark font-bold py-2.5 pl-6 pr-12 rounded-2xl focus:outline-none focus:border-brand-primary focus:ring-4 focus:ring-brand-primary/5 text-sm transition-all shadow-sm"
@@ -1039,18 +971,40 @@ export default function SupervisorDashboard() {
 
                 <div className="bg-white border border-gray-100 rounded-3xl p-4 sm:p-6 lg:p-10 h-[360px] sm:h-[450px] shadow-sm relative">
                   <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={trendsData} margin={{ top: 10, right: 30, bottom: 10, left: 10 }}>
+                    <LineChart data={trendsData} margin={{ top: 20, right: 30, bottom: 20, left: 10 }}>
+                      <defs>
+                        <linearGradient id="colorTempOvo" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#ec4899" stopOpacity={0.8}/>
+                          <stop offset="95%" stopColor="#ec4899" stopOpacity={0}/>
+                        </linearGradient>
+                      </defs>
                       <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
                       <XAxis dataKey="time" stroke="#94a3b8" tick={{ fill: '#94a3b8', fontSize: 11, fontWeight: '600' }} tickLine={false} axisLine={false} dy={10} />
                       <YAxis yAxisId="left" stroke="#94a3b8" tick={{ fill: '#94a3b8', fontSize: 11, fontWeight: '600' }} tickLine={false} axisLine={false} dx={-10} />
                       <YAxis yAxisId="right" orientation="right" stroke="#94a3b8" tick={{ fill: '#94a3b8', fontSize: 11, fontWeight: '600' }} tickLine={false} axisLine={false} dx={10} />
-                      <Tooltip 
-                        contentStyle={{ backgroundColor: '#ffffff', border: 'none', borderRadius: '16px', boxShadow: '0 10px 25px rgba(0,0,0,0.1)', padding: '16px' }}
-                        itemStyle={{ fontWeight: 'bold' }}
+                      <Tooltip
+                        contentStyle={{ backgroundColor: 'rgba(255, 255, 255, 0.95)', border: '1px solid #f1f5f9', borderRadius: '16px', boxShadow: '0 10px 25px rgba(0,0,0,0.1)', padding: '16px', backdropFilter: 'blur(8px)' }}
+                        itemStyle={{ fontWeight: '900', fontSize: '12px' }}
                       />
-                      <Legend wrapperStyle={{ paddingTop: '30px', fontSize: '12px', fontWeight: 'bold' }} iconType="circle" />
-                      <Line yAxisId="left" type="monotone" dataKey="temp" name="Temperatura (°C)" stroke="#f5a623" strokeWidth={4} dot={{ r: 0 }} activeDot={{ r: 8, fill: '#f5a623', stroke: '#fff', strokeWidth: 3 }} />
-                      <Line yAxisId="right" type="monotone" dataKey="humidity" name="Humedad (%)" stroke="#ffd05b" strokeWidth={4} dot={{ r: 0 }} activeDot={{ r: 8, fill: '#ffd05b', stroke: '#fff', strokeWidth: 3 }} />
+                      <Legend wrapperStyle={{ paddingTop: '20px', fontSize: '12px', fontWeight: '900' }} iconType="circle" />
+                      
+                      {(!chartFilter.includes('Nacedora') && !chartFilter.startsWith('NAC')) && (
+                        <Line yAxisId="left" type="monotone" dataKey="tempOvoscan" name="T. Ovoscan (°C)" stroke="#ec4899" strokeWidth={4} dot={{ r: 0 }} activeDot={{ r: 8, fill: '#ec4899', stroke: '#fff', strokeWidth: 3 }} />
+                      )}
+                      
+                      {(!chartFilter.includes('Nacedora') && !chartFilter.startsWith('NAC')) && (
+                        <Line yAxisId="left" type="monotone" dataKey="tempAire" name="T. Aire (°C)" stroke="#ef4444" strokeWidth={4} dot={{ r: 0 }} activeDot={{ r: 8, fill: '#ef4444', stroke: '#fff', strokeWidth: 3 }} />
+                      )}
+
+                      {(chartFilter.includes('Nacedora') || chartFilter.startsWith('NAC')) && (
+                        <Line yAxisId="left" type="monotone" dataKey="temp" name="Temperatura (°C)" stroke="#ef4444" strokeWidth={4} dot={{ r: 0 }} activeDot={{ r: 8, fill: '#ef4444', stroke: '#fff', strokeWidth: 3 }} />
+                      )}
+
+                      <Line yAxisId="right" type="monotone" dataKey="humedad" name="Humedad (%)" stroke="#3b82f6" strokeWidth={4} dot={{ r: 0 }} activeDot={{ r: 8, fill: '#3b82f6', stroke: '#fff', strokeWidth: 3 }} />
+                      <Line yAxisId="right" type="monotone" dataKey="co2" name="CO2" stroke="#eab308" strokeWidth={4} dot={{ r: 0 }} activeDot={{ r: 8, fill: '#eab308', stroke: '#fff', strokeWidth: 3 }} />
+                      
+                      <Line yAxisId="left" type="monotone" dataKey="temp_general" name="T. Promedio" stroke="#f5a623" strokeWidth={2} strokeDasharray="5 5" dot={{ r: 0 }} />
+                      <Line yAxisId="right" type="monotone" dataKey="humedad_general" name="H. Promedio" stroke="#ffd05b" strokeWidth={2} strokeDasharray="5 5" dot={{ r: 0 }} />
                     </LineChart>
                   </ResponsiveContainer>
                   {trendsData.length === 0 && (
@@ -1072,7 +1026,7 @@ export default function SupervisorDashboard() {
                   <h2 className="text-xl font-black text-brand-dark">Gestión de Personal</h2>
                   <p className="text-sm text-brand-gray font-medium">Administración de turnos y operarios en planta</p>
                 </div>
-                <button 
+                <button
                   onClick={() => setShowCreateOperator(true)}
                   className="bg-brand-primary/10 text-brand-primary px-6 py-2.5 rounded-xl text-sm font-black hover:bg-brand-primary hover:text-white transition-all"
                 >
@@ -1085,6 +1039,7 @@ export default function SupervisorDashboard() {
                     <tr>
                       <th className="px-8 py-5">Operario</th>
                       <th className="px-8 py-5">Turno Asignado</th>
+                      {currentUser?.role === 'JEFE' && <th className="px-8 py-5 text-center">Eficiencia</th>}
                       <th className="px-8 py-5">Estado</th>
                       <th className="px-8 py-5 text-right">Acciones</th>
                     </tr>
@@ -1104,22 +1059,29 @@ export default function SupervisorDashboard() {
                           </div>
                         </td>
                         <td className="px-8 py-5 text-brand-gray font-medium">{op.shift}</td>
+                        {currentUser?.role === 'JEFE' && (
+                          <td className="px-8 py-5 text-center">
+                            <span className="font-black text-brand-primary bg-brand-primary/10 px-3 py-1.5 rounded-full border border-brand-primary/20">
+                              {/* Indicador simulado/basado en uso para demostración */}
+                              {Math.min(100, 85 + (op.name.length % 15))}%
+                            </span>
+                          </td>
+                        )}
                         <td className="px-8 py-5">
-                          <span className={`px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest border ${
-                            op.status === 'Activo' ? 'bg-green-50 text-green-600 border-green-100' : 'bg-gray-100 text-brand-gray border-gray-200'
-                          }`}>
+                          <span className={`px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest border ${op.status === 'Activo' ? 'bg-green-50 text-green-600 border-green-100' : 'bg-gray-100 text-brand-gray border-gray-200'
+                            }`}>
                             {op.status}
                           </span>
                         </td>
                         <td className="px-8 py-5 text-right">
                           <div className="flex justify-end gap-3 sm:gap-4">
-                            <button 
+                            <button
                               onClick={() => setEditingOperator(op)}
                               className="text-brand-primary hover:text-brand-dark font-black text-[10px] sm:text-xs uppercase tracking-widest transition-colors py-2 px-3 hover:bg-brand-primary/5 rounded-lg"
                             >
                               Modificar
                             </button>
-                            <button 
+                            <button
                               onClick={() => handleDeleteOperator(op.id)}
                               className="text-red-500 hover:text-red-700 font-black text-[10px] sm:text-xs uppercase tracking-widest transition-colors py-2 px-3 hover:bg-red-50 rounded-lg"
                             >
@@ -1210,22 +1172,21 @@ export default function SupervisorDashboard() {
             className="bg-white border-2 border-brand-primary/10 rounded-[2.5rem] w-full max-w-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-in fade-in zoom-in duration-300"
             onClick={(e) => e.stopPropagation()}
           >
-            
+
             <div className="p-5 sm:p-8 border-b border-gray-50 flex items-center justify-between gap-4 bg-brand-secondary/5">
               <div>
                 <h2 className="text-2xl sm:text-3xl font-black text-brand-dark flex flex-wrap items-center gap-3 sm:gap-4">
                   {selectedMachine.name}
-                  <span className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-[0.2em] border ${
-                    selectedMachine.status === 'alarm' ? 'bg-red-50 text-red-600 border-red-100' :
-                    selectedMachine.status === 'maintenance' ? 'bg-gray-100 text-brand-gray border-gray-200' :
-                    'bg-green-50 text-green-600 border-green-100'
-                  }`}>
+                  <span className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-[0.2em] border ${selectedMachine.status === 'alarm' ? 'bg-red-50 text-red-600 border-red-100' :
+                      selectedMachine.status === 'maintenance' ? 'bg-gray-100 text-brand-gray border-gray-200' :
+                        'bg-green-50 text-green-600 border-green-100'
+                    }`}>
                     {selectedMachine.status === 'alarm' ? 'Alarma Detectada' : selectedMachine.status === 'maintenance' ? 'Mantenimiento' : 'Estado Óptimo'}
                   </span>
                 </h2>
                 <p className="text-sm text-brand-gray font-bold mt-2 uppercase tracking-widest opacity-60">Sincronizado: {selectedMachine.lastUpdate}</p>
               </div>
-              <button 
+              <button
                 onClick={() => setSelectedMachine(null)}
                 className="p-3 bg-white hover:bg-gray-50 rounded-2xl text-brand-gray transition-all shadow-sm border border-gray-100"
               >
@@ -1234,7 +1195,7 @@ export default function SupervisorDashboard() {
             </div>
 
             <div className="p-5 sm:p-8 overflow-y-auto flex-1 grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-10">
-              
+
               {/* Data Section */}
               <div className="space-y-8">
                 <div>
@@ -1246,12 +1207,12 @@ export default function SupervisorDashboard() {
                         {selectedMachine.data?.temperatura || selectedMachine.temp || '--'}°C
                       </p>
                     </div>
-                     <div className="bg-gray-50/50 p-5 rounded-3xl border border-gray-100 shadow-inner">
-                       <p className="text-[10px] font-bold text-brand-gray mb-1 uppercase tracking-widest">Humedad</p>
-                       <p className="text-2xl font-black text-brand-primary">
-                         {selectedMachine.data?.humedadRelativa || selectedMachine.humidity || '--'}%
-                       </p>
-                     </div>
+                    <div className="bg-gray-50/50 p-5 rounded-3xl border border-gray-100 shadow-inner">
+                      <p className="text-[10px] font-bold text-brand-gray mb-1 uppercase tracking-widest">Humedad</p>
+                      <p className="text-2xl font-black text-brand-primary">
+                        {selectedMachine.data?.humedadRelativa || selectedMachine.humidity || '--'}%
+                      </p>
+                    </div>
                     <div className="bg-gray-50/50 p-5 rounded-3xl border border-gray-100 shadow-inner">
                       <p className="text-[10px] font-bold text-brand-gray mb-1 uppercase tracking-widest">Día</p>
                       <p className="text-2xl font-black text-brand-primary">
@@ -1259,23 +1220,23 @@ export default function SupervisorDashboard() {
                       </p>
                     </div>
                     {selectedMachine.type === 'incubadora' && (
-                       <div className="bg-gray-50/50 p-5 rounded-3xl border border-gray-100 shadow-inner">
-                         <p className="text-[10px] font-bold text-brand-gray mb-1 uppercase tracking-widest">Volteos</p>
-                         <p className="text-2xl font-black text-brand-primary">
-                           {selectedMachine.data?.volteoNumero || '--'}
-                         </p>
-                       </div>
-                     )}
+                      <div className="bg-gray-50/50 p-5 rounded-3xl border border-gray-100 shadow-inner">
+                        <p className="text-[10px] font-bold text-brand-gray mb-1 uppercase tracking-widest">Volteos</p>
+                        <p className="text-2xl font-black text-brand-primary">
+                          {selectedMachine.data?.volteoNumero || '--'}
+                        </p>
+                      </div>
+                    )}
                   </div>
                 </div>
 
                 <div>
                   <h3 className="text-[10px] font-black text-brand-gray uppercase tracking-[0.3em] mb-4 opacity-50">Bitácora de Operario</h3>
-                   <div className="bg-brand-secondary/5 p-6 rounded-3xl border border-brand-secondary/20 text-sm text-brand-dark font-medium leading-relaxed italic">
-                     "{selectedMachine.observaciones || 'Sin observaciones registradas.'}" 
-                   </div>
-                 </div>
-               </div>
+                  <div className="bg-brand-secondary/5 p-6 rounded-3xl border border-brand-secondary/20 text-sm text-brand-dark font-medium leading-relaxed italic">
+                    "{selectedMachine.observaciones || 'Sin observaciones registradas.'}"
+                  </div>
+                </div>
+              </div>
 
               {/* Evidence Section */}
               <div>
@@ -1283,27 +1244,27 @@ export default function SupervisorDashboard() {
                   <ImageIcon size={14} className="text-brand-primary" />
                   Registro Visual
                 </h3>
-                 <div className="bg-gray-100 border-2 border-dashed border-gray-200 rounded-[2rem] aspect-[3/4] flex flex-col items-center justify-center text-slate-600 relative overflow-hidden shadow-inner">
-                   {selectedMachine.photoUrl ? (
-                     <img 
-                       src={selectedMachine.photoUrl} 
-                       alt="Evidencia" 
-                       className="absolute inset-0 w-full h-full object-cover"
-                       referrerPolicy="no-referrer"
-                     />
-                   ) : (
-                     <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 px-6 text-center">
-                       <ImageIcon size={42} className="text-gray-300" />
-                       <p className="text-sm font-bold text-brand-gray">Sin evidencia visual registrada</p>
-                     </div>
-                   )}
-                   <div className="absolute inset-0 bg-gradient-to-t from-brand-dark/60 via-transparent to-transparent"></div>
-                   <div className="absolute bottom-6 left-6 right-6">
-                     <p className="text-[10px] text-white font-black uppercase tracking-widest bg-brand-primary/80 py-2 px-3 rounded-lg backdrop-blur-md inline-block">
-                       {(selectedMachine.updatedBy || 'Sin responsable registrado') + ' | ' + selectedMachine.lastUpdate}
-                     </p>
-                   </div>
-                 </div>
+                <div className="bg-gray-100 border-2 border-dashed border-gray-200 rounded-[2rem] aspect-[3/4] flex flex-col items-center justify-center text-slate-600 relative overflow-hidden shadow-inner">
+                  {selectedMachine.photoUrl ? (
+                    <img
+                      src={selectedMachine.photoUrl}
+                      alt="Evidencia"
+                      className="absolute inset-0 w-full h-full object-cover"
+                      referrerPolicy="no-referrer"
+                    />
+                  ) : (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 px-6 text-center">
+                      <ImageIcon size={42} className="text-gray-300" />
+                      <p className="text-sm font-bold text-brand-gray">Sin evidencia visual registrada</p>
+                    </div>
+                  )}
+                  <div className="absolute inset-0 bg-gradient-to-t from-brand-dark/60 via-transparent to-transparent"></div>
+                  <div className="absolute bottom-6 left-6 right-6">
+                    <p className="text-[10px] text-white font-black uppercase tracking-widest bg-brand-primary/80 py-2 px-3 rounded-lg backdrop-blur-md inline-block">
+                      {(selectedMachine.updatedBy || 'Sin responsable registrado') + ' | ' + selectedMachine.lastUpdate}
+                    </p>
+                  </div>
+                </div>
               </div>
 
             </div>

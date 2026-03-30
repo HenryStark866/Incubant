@@ -122,6 +122,25 @@ export default function ShiftManager() {
     }
   };
 
+  const deleteShift = async (id: string) => {
+    if (!confirm('¿Estás seguro de que deseas eliminar este turno permanentemente?')) return;
+    try {
+      const res = await apiFetch(getApiUrl(`/api/admin/shifts/${id}`), { method: 'DELETE' });
+      if (res.ok) {
+        setFeedback({ type: 'success', text: 'Turno eliminado' });
+        if (selectedShift === id) setSelectedShift('');
+        fetchData();
+      } else {
+        const errJson = await res.json().catch(() => ({}));
+        setFeedback({ type: 'error', text: errJson.error || 'Error al eliminar turno' });
+      }
+    } catch (err) {
+      setFeedback({ type: 'error', text: 'Error de red al eliminar' });
+    } finally {
+      setTimeout(() => setFeedback(null), 4000);
+    }
+  };
+
   return (
     <div className="bg-white/40 backdrop-blur-xl border border-white/40 rounded-[2.5rem] shadow-2xl p-8 overflow-hidden">
       
@@ -186,18 +205,27 @@ export default function ShiftManager() {
                 <label className="text-xs font-bold text-gray-400 uppercase tracking-tighter pl-1">Seleccionar Horario</label>
                 <div className="grid grid-cols-2 gap-3">
                   {shifts.map(s => (
-                    <button
-                      key={s.id}
-                      type="button"
-                      onClick={() => setSelectedShift(s.id)}
-                      className={`flex flex-col items-start p-4 rounded-2xl border-2 transition-all ${selectedShift === s.id ? 'border-brand-primary bg-brand-primary/5 ring-4 ring-brand-primary/10' : 'bg-gray-50 border-gray-100'}`}
-                    >
-                      <div className="flex items-center gap-2 mb-1">
-                         <div className="w-3 h-3 rounded-full shadow-sm" style={{ backgroundColor: s.color || '#f5a623' }}></div>
-                         <span className="font-black text-gray-800 text-xs">{s.nombre}</span>
-                      </div>
-                      <span className="text-[10px] text-brand-gray font-bold tracking-tight">{s.hora_inicio} - {s.hora_fin}</span>
-                    </button>
+                    <div key={s.id} className="relative group">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedShift(s.id)}
+                        className={`w-full flex flex-col items-start p-4 rounded-2xl border-2 transition-all ${selectedShift === s.id ? 'border-brand-primary bg-brand-primary/5 ring-4 ring-brand-primary/10' : 'bg-gray-50 border-gray-100 hover:border-gray-200'}`}
+                      >
+                        <div className="flex items-center gap-2 mb-1">
+                           <div className="w-3 h-3 rounded-full shadow-sm" style={{ backgroundColor: s.color || '#f5a623' }}></div>
+                           <span className="font-black text-gray-800 text-xs">{s.nombre}</span>
+                        </div>
+                        <span className="text-[10px] text-brand-gray font-bold tracking-tight">{s.hora_inicio} - {s.hora_fin}</span>
+                      </button>
+                      <button 
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); deleteShift(s.id); }}
+                        className="absolute top-2 right-2 w-7 h-7 bg-red-50 text-red-500 rounded-lg flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-100"
+                        title="Eliminar Turno"
+                      >
+                         <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
                   ))}
                   {shifts.length === 0 && (
                     <div className="col-span-2 p-4 bg-orange-50 border border-orange-100 rounded-xl text-center">

@@ -794,24 +794,38 @@ export function createApiApp(): Express {
         orderBy: { fecha_hora: 'asc' },
       });
 
-      const grouped: Record<string, { tempSum: number; humSum: number; count: number }> = {};
+      const grouped: Record<string, {
+        tempOvoSum: number; tempAireSum: number;
+        humSum: number; co2Sum: number; count: number;
+      }> = {};
 
       logs.forEach((log) => {
         const hour = `${log.fecha_hora.toISOString().substring(11, 13)}:00`;
         if (!grouped[hour]) {
-          grouped[hour] = { tempSum: 0, humSum: 0, count: 0 };
+          grouped[hour] = { tempOvoSum: 0, tempAireSum: 0, humSum: 0, co2Sum: 0, count: 0 };
         }
-
-        grouped[hour].tempSum += log.temp_principal_actual;
-        grouped[hour].humSum += log.co2_actual;
-        grouped[hour].count += 1;
+        grouped[hour].tempOvoSum  += log.temp_principal_actual;
+        grouped[hour].tempAireSum += log.temp_secundaria_actual;
+        grouped[hour].humSum      += log.temp_superior_actual ?? 0;
+        grouped[hour].co2Sum      += log.co2_actual;
+        grouped[hour].count       += 1;
       });
 
-      const trendsData = Object.keys(grouped).map((hour) => ({
-        time: hour,
-        temp: Number((grouped[hour].tempSum / grouped[hour].count).toFixed(1)),
-        humidity: Number((grouped[hour].humSum / grouped[hour].count).toFixed(1)),
-      }));
+      const trendsData = Object.keys(grouped).map((hour) => {
+        const g = grouped[hour];
+        const avg = (v: number) => Number((v / g.count).toFixed(1));
+        return {
+          time:        hour,
+          tempOvoscan: avg(g.tempOvoSum),
+          tempAire:    avg(g.tempAireSum),
+          humedad:     avg(g.humSum),
+          co2:         avg(g.co2Sum),
+          // Aliases para modo Planta Completa (mantiene compatibilidad)
+          temp:        avg(g.tempOvoSum),
+          temp_general:   avg(g.tempOvoSum),
+          humedad_general: avg(g.humSum),
+        };
+      });
 
       return res.json(trendsData);
     } catch (error) {
@@ -1082,6 +1096,27 @@ export function createApiApp(): Express {
       return res.status(201).json(shift);
     } catch (error) {
       return res.status(500).json({ error: 'No se pudo crear el turno' });
+    }
+  });
+
+  app.delete('/api/admin/shifts/:id', requireRoles(['JEFE']), async (req, res) => {
+    try {
+      const { id } = req.params;
+      const prisma = await getPrismaClient();
+      
+      const assignments = await prisma.scheduleAssignment.count({
+        where: { shift_id: id }
+      });
+      
+      if (assignments > 0) {
+        return res.status(400).json({ error: 'Turno en uso: No se puede eliminar porque tiene operarios asignados.' });
+      }
+
+      await prisma.shift.delete({ where: { id } });
+      sendEventToAll({ type: 'SHIFT_UPDATE', message: 'Un turno ha sido eliminado.' });
+      return res.status(204).end();
+    } catch (error) {
+      return res.status(500).json({ error: 'Error al eliminar el turno' });
     }
   });
 

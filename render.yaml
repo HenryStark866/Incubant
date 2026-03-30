@@ -45,6 +45,12 @@ services:
         value: incubant@incubant-backend.iam.gserviceaccount.com
       - key: GOOGLE_PRIVATE_KEY
         value: AQ.Ab8RN6LU8ohIyir_2f6g7XF1j6X2UtAEvbqqW-ESBUtAYJPGrw
+      - key: DRIVE_FOLDER_PHOTOS_ID
+        value: 1LSI9hpfQiYD0w0U79Noh6tI1BDgnHwqn
+      - key: DRIVE_FOLDER_REPORTS_ID
+        value: 15NhdznwFJycDOFsQs9dZwTS6vR_srfXi
+      - key: DRIVE_FOLDER_CLOSING_REPORTS_ID
+        value: 1tI5ROHJ_RxeSWE2Q38BXxAVk82TYrdtG
 
 # ============================================
 # Variables de Entorno Requeridas en Render

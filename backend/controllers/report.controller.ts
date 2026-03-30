@@ -63,22 +63,29 @@ export const processMachineReport = async (req: AuthenticatedRequest, res: Respo
       } catch { /* ignorar si el JSON está malformado */ }
     }
 
-    // 2. Subir foto de evidencia a Google Drive
+    // 2. Subir foto de evidencia a Google Drive (carpeta: Fotos)
     let imageUrl = '';
     try {
+      const folderIdPhotos = process.env.DRIVE_FOLDER_PHOTOS_ID;
+      if (!folderIdPhotos) throw new Error('DRIVE_FOLDER_PHOTOS_ID no está configurada en las variables de entorno.');
+      
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
       const userName = (req.user?.name || 'Operario').replace(/\s+/g, '_');
       const photoName = `Foto_${machineId}_${timestamp}_${userName}.jpg`;
-      const folderIdPhotos = process.env.DRIVE_FOLDER_PHOTOS_ID || 'photos';
       const driveResult = await uploadToDrive(file.buffer, photoName, file.mimetype, folderIdPhotos);
-      imageUrl = driveResult.publicUrl;
+      imageUrl = driveResult.publicUrl ?? '';
+      console.log(`[Drive] Foto subida OK: ${photoName}`);
     } catch (driveError) {
-      console.warn('[Report Controller] Drive upload falló para foto:', driveError);
+      console.error('[Drive] ERROR subiendo foto:', driveError);
+      // Continuamos — la foto fallida no debe bloquear guardar el reporte
     }
 
-    // 3. Generar PDF y subirlo a Drive
+    // 3. Generar PDF y subirlo a Drive (carpeta: Reportes por hora)
     let pdfUrl = '';
     try {
+      const folderIdReports = process.env.DRIVE_FOLDER_REPORTS_ID;
+      if (!folderIdReports) throw new Error('DRIVE_FOLDER_REPORTS_ID no está configurada en las variables de entorno.');
+
       const pdfBuffer = await generateReportPDF(
         { id: machineId, name: `Máquina ${machineId}` },
         { name: req.user?.name || 'Operario', shift: req.user?.shift },
@@ -88,11 +95,11 @@ export const processMachineReport = async (req: AuthenticatedRequest, res: Respo
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
       const userName = (req.user?.name || 'Operario').replace(/\s+/g, '_');
       const pdfName = `Reporte_${machineId}_${timestamp}_${userName}.pdf`;
-      const folderIdReports = process.env.DRIVE_FOLDER_REPORTS_ID || 'reports';
       const pdfResult = await uploadToDrive(pdfBuffer, pdfName, 'application/pdf', folderIdReports);
-      pdfUrl = pdfResult.publicUrl;
+      pdfUrl = pdfResult.publicUrl ?? '';
+      console.log(`[Drive] PDF subido OK: ${pdfName}`);
     } catch (pdfError) {
-      console.warn('[Report Controller] PDF generation/upload falló:', pdfError);
+      console.error('[Drive] ERROR generando/subiendo PDF:', pdfError);
     }
 
     // 4. Guardar en la base de datos (Supabase via Prisma)

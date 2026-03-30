@@ -67,6 +67,7 @@ interface MachineState {
   setActiveMachine: (id: string | null) => void;
   setCapturedPhoto: (photo: string | null) => void;
   saveMachineData: (id: string, data: MachineData, photoUrl: string) => void;
+  autoReportMachine: (id: string, photoUrl: string) => void;
   resetHourlyStatus: () => void;
 }
 
@@ -97,6 +98,15 @@ export const useMachineStore = create<MachineState>()(
         machines: state.machines.map(m => 
           m.id === id 
             ? { ...m, status: 'completed', lastChecked: new Date().toISOString(), data, photoUrl } 
+            : m
+        ),
+        activeMachineId: null,
+        capturedPhoto: null
+      })),
+      autoReportMachine: (id: string, photoUrl: string) => set((state) => ({
+        machines: state.machines.map(m => 
+          m.id === id 
+            ? { ...m, status: 'completed', lastChecked: new Date().toISOString(), photoUrl } 
             : m
         ),
         activeMachineId: null,

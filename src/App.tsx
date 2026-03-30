@@ -179,7 +179,7 @@ export default function App() {
         {!currentUser ? (
           <LoginScreen />
         ) : activeMachineId ? (
-          capturedPhoto ? <FormScreen /> : <CameraScreen />
+          <CameraScreen />
         ) : (
           <DashboardScreen />
         )}

@@ -3,6 +3,77 @@ import { useMachineStore, MachineData } from '../store/useMachineStore';
 import { ChevronLeft, Save, AlertCircle, Thermometer, Droplets, Calendar, RotateCw, Wind, Bell, MessageSquare, Activity, CheckCircle2, Egg } from 'lucide-react';
 
 // Focus Fix: Move InputField component OUTSIDE the main render function
+const DualInputField = React.memo(({ 
+  label, real, sp, onChangeReal, onChangeSp, unit, icon: Icon, error 
+}: { 
+  label: string, 
+  real: string,
+  sp: string,
+  onChangeReal: (val: string) => void, 
+  onChangeSp: (val: string) => void, 
+  unit: string,
+  icon: any,
+  error?: boolean
+}) => {
+  const diff = Math.abs(parseFloat(real || '0') - parseFloat(sp || '0'));
+  const isAlarm = !isNaN(diff) && diff >= 1.5;
+
+  return (
+    <div className={`bg-white rounded-3xl p-5 border-2 transition-all shadow-[0_2px_10px_rgba(0,0,0,0.02)] ${
+      isAlarm ? 'border-red-400 bg-red-50/20' : error ? 'border-red-300 bg-red-50/5' : 'border-gray-100'
+    }`}>
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-3">
+          <div className={`p-2 rounded-xl ${isAlarm ? 'bg-red-500 text-white' : 'bg-gray-50 text-brand-dark'}`}>
+            <Icon size={18} />
+          </div>
+          <label className={`text-[11px] font-black uppercase tracking-widest ${isAlarm ? 'text-red-600' : 'text-brand-dark opacity-80'}`}>
+            {label}
+          </label>
+        </div>
+        
+        {isAlarm && (
+          <div className="bg-red-500 text-white text-[8px] font-black px-2 py-1 rounded-full animate-pulse uppercase tracking-widest shadow-sm">
+            Alarma 1.5°F
+          </div>
+        )}
+      </div>
+      
+      <div className="grid grid-cols-2 gap-6 relative">
+        <div className="space-y-1">
+          <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest ml-1">Real</span>
+          <input
+            type="number"
+            step="0.1"
+            inputMode="decimal"
+            value={real}
+            onChange={(e) => onChangeReal(e.target.value)}
+            placeholder="0.0"
+            className="w-full bg-transparent text-3xl font-black text-brand-dark focus:outline-none placeholder:text-gray-200 transition-all leading-none"
+          />
+        </div>
+        
+        <div className="space-y-1 relative pl-6 border-l border-gray-100">
+          <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Setpoint</span>
+          <input
+            type="number"
+            step="0.1"
+            inputMode="decimal"
+            value={sp}
+            onChange={(e) => onChangeSp(e.target.value)}
+            placeholder="0.0"
+            className="w-full bg-transparent text-xl font-bold text-gray-400 focus:outline-none placeholder:text-gray-200 transition-all leading-none"
+          />
+        </div>
+
+        <div className="absolute right-0 bottom-1 flex items-center justify-center pointer-events-none opacity-20">
+           <span className="text-[14px] font-black uppercase">{unit}</span>
+        </div>
+      </div>
+    </div>
+  );
+});
+
 const InputField = React.memo(({ 
   label, value, onChange, placeholder, unit, icon: Icon, error 
 }: { 
@@ -198,14 +269,25 @@ export default function FormScreen() {
 
   const [formData, setFormData] = useState<MachineData>({
     tiempoIncubacion: { dias: '', horas: '', minutos: '' },
-    tempOvoscan: '',
-    tempAire: '',
+    // Incubadora
+    tempOvoscanReal: '',
+    tempOvoscanSP: '',
+    tempAireReal: '',
+    tempAireSP: '',
+    // Nacedora
+    tempSynchroReal: '',
+    tempSynchroSP: '',
+    temperaturaReal: '', 
+    temperaturaSP: '',
+    // Comunes
+    humedadReal: '',
+    humedadSP: '',
+    co2Real: '',
+    co2SP: '',
+    
     volteoNumero: '',
     volteoPosicion: '',
     alarma: 'No',
-    temperatura: '',
-    humedadRelativa: '',
-    co2: '',
     observaciones: '',
     ventiladorPrincipal: '' as any
   });
@@ -241,23 +323,33 @@ export default function FormScreen() {
     if (!formData.tiempoIncubacion.dias && !formData.tiempoIncubacion.horas && !formData.tiempoIncubacion.minutos) { 
       newErrors.tiempoIncubacion = true; hasErrors = true; 
     }
-    if (!formData.humedadRelativa) { newErrors.humedadRelativa = true; hasErrors = true; }
-    if (!formData.co2) { newErrors.co2 = true; hasErrors = true; }
-
     if (isIncubadora) {
-      if (!formData.tempOvoscan) { newErrors.tempOvoscan = true; hasErrors = true; }
-      if (!formData.tempAire) { newErrors.tempAire = true; hasErrors = true; }
+      if (!formData.tempOvoscanReal) { newErrors.tempOvoscanReal = true; hasErrors = true; }
+      if (!formData.tempAireReal) { newErrors.tempAireReal = true; hasErrors = true; }
       if (!formData.volteoNumero) { newErrors.volteoNumero = true; hasErrors = true; }
-      if (!formData.volteoPosicion) { newErrors.volteoPosicion = true; hasErrors = true; }
-      if (!formData.ventiladorPrincipal) { newErrors.ventiladorPrincipal = true; hasErrors = true; }
     } else {
-      if (!formData.temperatura) { newErrors.temperatura = true; hasErrors = true; }
-      if (!formData.ventiladorPrincipal) { newErrors.ventiladorPrincipal = true; hasErrors = true; }
+      if (!formData.tempSynchroReal) { newErrors.tempSynchroReal = true; hasErrors = true; }
+      if (!formData.temperaturaReal) { newErrors.temperaturaReal = true; hasErrors = true; }
+    }
+
+    // Calcular alarma de 1.5°F para validación de observaciones
+    const calculateDiff = (real?: string, sp?: string) => Math.abs(parseFloat(real || '0') - parseFloat(sp || '0'));
+    
+    const alarmOvo = isIncubadora ? calculateDiff(formData.tempOvoscanReal, formData.tempOvoscanSP) : calculateDiff(formData.tempSynchroReal, formData.tempSynchroSP);
+    const alarmAire = isIncubadora ? calculateDiff(formData.tempAireReal, formData.tempAireSP) : calculateDiff(formData.temperaturaReal, formData.temperaturaSP);
+    const alarmHumedad = calculateDiff(formData.humedadReal, formData.humedadSP);
+
+    const hasCriticalAlarm = alarmOvo >= 1.5 || alarmAire >= 1.5 || alarmHumedad >= 1.5;
+
+    if (hasCriticalAlarm && (!formData.observaciones || formData.observaciones.length < 5)) {
+      alert("⚠️ ALARMA DETECTADA: Debes poner una observación detallada del motivo de la diferencia de temperatura/humedad.");
+      newErrors.observaciones = true;
+      hasErrors = true;
     }
 
     if (hasErrors) {
       setErrors(newErrors);
-      navigator.vibrate?.([50, 50, 50]);
+      navigator.vibrate?.([100, 50, 100]);
       return;
     }
 
@@ -331,66 +423,66 @@ export default function FormScreen() {
 
           {isIncubadora ? (
             <>
-              <InputField 
-                label="Temperatura Ovoscan" 
-                value={formData.tempOvoscan || ''} 
-                onChange={(v) => handleInputChange('tempOvoscan', v)}
-                placeholder="" 
-                unit="°C" 
+              <DualInputField 
+                label="Temp Ovoscan" 
+                real={formData.tempOvoscanReal || ''} 
+                sp={formData.tempOvoscanSP || ''}
+                onChangeReal={(v) => handleInputChange('tempOvoscanReal', v)}
+                onChangeSp={(v) => handleInputChange('tempOvoscanSP', v)}
+                unit="°F" 
                 icon={Thermometer}
-                error={errors.tempOvoscan}
+                error={errors.tempOvoscanReal}
               />
-              <InputField 
-                label="Temperatura Aire" 
-                value={formData.tempAire || ''} 
-                onChange={(v) => handleInputChange('tempAire', v)}
-                placeholder="" 
-                unit="°C" 
+              <DualInputField 
+                label="Temp Aire" 
+                real={formData.tempAireReal || ''} 
+                sp={formData.tempAireSP || ''}
+                onChangeReal={(v) => handleInputChange('tempAireReal', v)}
+                onChangeSp={(v) => handleInputChange('tempAireSP', v)}
+                unit="°F" 
                 icon={Wind}
-                error={errors.tempAire}
+                error={errors.tempAireReal}
               />
 
-              <InputField 
+              <DualInputField 
                 label="Humedad Relativa" 
-                value={formData.humedadRelativa} 
-                onChange={(v) => handleInputChange('humedadRelativa', v)}
-                placeholder="" 
+                real={formData.humedadReal || ''} 
+                sp={formData.humedadSP || ''}
+                onChangeReal={(v) => handleInputChange('humedadReal', v)}
+                onChangeSp={(v) => handleInputChange('humedadSP', v)}
                 unit="%" 
                 icon={Droplets}
-                error={errors.humedadRelativa}
+                error={errors.humedadReal}
               />
 
-              <InputField 
+              <DualInputField 
                 label="Nivel CO2" 
-                value={formData.co2} 
-                onChange={(v) => handleInputChange('co2', v)}
-                placeholder="" 
+                real={formData.co2Real || ''} 
+                sp={formData.co2SP || ''}
+                onChangeReal={(v) => handleInputChange('co2Real', v)}
+                onChangeSp={(v) => handleInputChange('co2SP', v)}
                 unit="%" 
                 icon={Activity}
-                error={errors.co2}
+                error={errors.co2Real}
               />
 
-              <InputField 
-                label="Número de Volteos" 
-                value={formData.volteoNumero || ''} 
-                onChange={(v) => handleInputChange('volteoNumero', v)}
-                placeholder="" 
-                unit="CNT" 
-                icon={RotateCw}
-                error={errors.volteoNumero}
-              />
-              
-              <PosicionToggle 
-                value={formData.volteoPosicion as any || ''} 
-                onChange={(v) => handleInputChange('volteoPosicion', v)}
-                error={errors.volteoPosicion}
-              />
-
-              <AlarmToggle 
-                value={formData.alarma || ''} 
-                onChange={(v) => handleInputChange('alarma', v)}
-                error={errors.alarma}
-              />
+              <div className="grid grid-cols-2 gap-4">
+                <InputField 
+                  label="Número de Volteos" 
+                  value={formData.volteoNumero || ''} 
+                  onChange={(v) => handleInputChange('volteoNumero', v)}
+                  placeholder="0" 
+                  unit="CNT" 
+                  icon={RotateCw}
+                  error={errors.volteoNumero}
+                />
+                
+                <PosicionToggle 
+                  value={formData.volteoPosicion as any || ''} 
+                  onChange={(v) => handleInputChange('volteoPosicion', v)}
+                  error={errors.volteoPosicion}
+                />
+              </div>
 
               <YesNoToggle
                 label="Ventilador/EcoDrive OK"
@@ -403,32 +495,47 @@ export default function FormScreen() {
           ) : (
             <>
               {/* NACEDORA SPECIFIC FIELDS */}
-              <InputField 
-                label="Temperatura" 
-                value={formData.temperatura || ''} 
-                onChange={(v) => handleInputChange('temperatura', v)}
-                placeholder="" 
-                unit="°C" 
+              <DualInputField 
+                label="Temp Synchrohatch" 
+                real={formData.tempSynchroReal || ''} 
+                sp={formData.tempSynchroSP || ''}
+                onChangeReal={(v) => handleInputChange('tempSynchroReal', v)}
+                onChangeSp={(v) => handleInputChange('tempSynchroSP', v)}
+                unit="°F" 
                 icon={Thermometer}
-                error={errors.temperatura}
+                error={errors.tempSynchroReal}
               />
-              <InputField 
+              <DualInputField 
+                label="Temp Aire" 
+                real={formData.temperaturaReal || ''} 
+                sp={formData.temperaturaSP || ''}
+                onChangeReal={(v) => handleInputChange('temperaturaReal', v)}
+                onChangeSp={(v) => handleInputChange('temperaturaSP', v)}
+                unit="°F" 
+                icon={Wind}
+                error={errors.temperaturaReal}
+              />
+
+              <DualInputField 
                 label="Humedad Relativa" 
-                value={formData.humedadRelativa} 
-                onChange={(v) => handleInputChange('humedadRelativa', v)}
-                placeholder="" 
+                real={formData.humedadReal || ''} 
+                sp={formData.humedadSP || ''}
+                onChangeReal={(v) => handleInputChange('humedadReal', v)}
+                onChangeSp={(v) => handleInputChange('humedadSP', v)}
                 unit="%" 
                 icon={Droplets}
-                error={errors.humedadRelativa}
+                error={errors.humedadReal}
               />
-              <InputField 
+
+              <DualInputField 
                 label="Nivel CO2" 
-                value={formData.co2} 
-                onChange={(v) => handleInputChange('co2', v)}
-                placeholder="" 
+                real={formData.co2Real || ''} 
+                sp={formData.co2SP || ''}
+                onChangeReal={(v) => handleInputChange('co2Real', v)}
+                onChangeSp={(v) => handleInputChange('co2SP', v)}
                 unit="%" 
                 icon={Activity}
-                error={errors.co2}
+                error={errors.co2Real}
               />
 
               <YesNoToggle

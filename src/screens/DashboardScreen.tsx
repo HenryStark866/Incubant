@@ -237,10 +237,12 @@ export default function DashboardScreen() {
           m.number,
           m.status === 'completed' ? 'OK' : 'APAGADA',
           time,
-          d?.tempOvoscan || '--',
-          d?.tempAire || '--',
-          d?.humedadRelativa || '--',
-          d?.co2 || '--',
+          d?.tempOvoscanReal || '--',
+          d?.tempOvoscanSP || '--',
+          d?.tempAireReal || '--',
+          d?.tempAireSP || '--',
+          d?.humedadReal || '--',
+          d?.co2Real || '--',
           d?.volteoNumero || '--',
           d?.volteoPosicion || '--',
           d?.alarma || 'No',
@@ -257,7 +259,7 @@ export default function DashboardScreen() {
 
       autoTable(doc, {
         startY: 60,
-        head: [['N°', 'Est.', 'Tiempo', 'T.Ovo', 'T.Aire', 'Hum%', 'CO2', 'V/N', 'V/P', 'Alm', 'Vent', 'Evid.', 'Obs']],
+        head: [['N°', 'Est.', 'Tiempo', 'Real', 'SP', 'Aire', 'ASP', 'Hum%', 'CO2', 'V/N', 'V/P', 'Alm', 'Vent', 'Evid.', 'Obs']],
         body: incData,
         theme: 'grid',
         headStyles: { fillColor: [245, 166, 35] as [number, number, number], textColor: 255, fontSize: 8 },
@@ -286,9 +288,10 @@ export default function DashboardScreen() {
           m.number,
           m.status === 'completed' ? 'OK' : 'APAGADA',
           time,
-          d?.temperatura || '--',
-          d?.humedadRelativa || '--',
-          d?.co2 || '--',
+          d?.tempSynchroReal || '--',
+          d?.tempSynchroSP || '--',
+          d?.humedadReal || '--',
+          d?.co2Real || '--',
           d?.ventiladorPrincipal || '--',
           m.photoUrl ? 'VER FOTO' : '--',
           d?.observaciones || ''
@@ -352,11 +355,18 @@ export default function DashboardScreen() {
             status: 'completed' as const, // Marcar como revisada pero 'apagada'
             data: {
               tiempoIncubacion: { dias: '0', horas: '0', minutos: '0' },
-              tempOvoscan: '0',
-              tempAire: '0',
-              temperatura: '0',
-              humedadRelativa: '0',
-              co2: '0',
+              tempOvoscanReal: '0',
+              tempOvoscanSP: '0',
+              tempAireReal: '0',
+              tempAireSP: '0',
+              tempSynchroReal: '0',
+              tempSynchroSP: '0',
+              temperaturaReal: '0',
+              temperaturaSP: '0',
+              humedadReal: '0',
+              humedadSP: '0',
+              co2Real: '0',
+              co2SP: '0',
               observaciones: 'MÁQUINA APAGADA (Sin registro operario)',
               alarma: 'No' as const,
               volteoPosicion: '' as const,
@@ -546,52 +556,103 @@ export default function DashboardScreen() {
           Listado de {activeTab === 'incubadora' ? 'Incubadoras' : 'Nacedoras'}
         </h3>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-          {filteredMachines.map(machine => (
-            <button
-              key={machine.id}
-              onClick={() => handleMachineClick(machine)}
-              disabled={machine.status === 'completed'}
-              className={`relative p-4 rounded-2xl border flex flex-row items-center justify-between transition-all active:scale-95 overflow-hidden ${
-                machine.status === 'completed'
-                  ? 'bg-green-50/50 border-green-200 text-green-700'
-                  : 'bg-white border-gray-200 text-[#1A1A1A] shadow-sm hover:border-[#F5A623]/50'
-              }`}
-            >
-              {/* Background Image Layer */}
-              <div 
-                className="absolute inset-0 z-0 opacity-15 mix-blend-multiply bg-cover bg-center"
-                style={{ backgroundImage: 'url(/imagen1.png)' }}
-              />
+          {filteredMachines.map(machine => {
+            const d = machine.data;
+            let isAlarm = false;
+            let val1Real = '--', val1SP = '--', val2Real = '--', val2SP = '--';
+            let label1 = 'Ovo', label2 = 'Aire';
+
+            if (machine.status === 'completed' && d) {
+              const calcDiff = (r?: string, s?: string) => Math.abs(parseFloat(r || '0') - parseFloat(s || '0'));
               
-              <div className="flex flex-col items-start gap-1 z-10 relative">
-                <span className="text-2xl font-black tracking-tight">{machine.number}</span>
-                <span className={`text-[10px] font-bold uppercase tracking-wider ${
-                  machine.status === 'completed' ? 'text-green-600' : 'text-gray-400'
-                }`}>
-                  {machine.status === 'completed' ? 'Revisada' : 'Pendiente'}
-                </span>
-              </div>
-              
-              <div className="z-10 relative flex flex-col items-center gap-1">
-                {machine.status === 'completed' ? (
-                  <div className="bg-white rounded-full p-1 shadow-sm border border-green-100">
-                    <CheckCircle2 size={16} className="text-green-500" strokeWidth={3} />
+              if (machine.type === 'incubadora') {
+                val1Real = d.tempOvoscanReal || '--';
+                val1SP = d.tempOvoscanSP || '--';
+                val2Real = d.tempAireReal || '--';
+                val2SP = d.tempAireSP || '--';
+                isAlarm = calcDiff(d.tempOvoscanReal, d.tempOvoscanSP) >= 1.5 || calcDiff(d.tempAireReal, d.tempAireSP) >= 1.5;
+              } else {
+                label1 = 'Syn';
+                val1Real = d.tempSynchroReal || '--';
+                val1SP = d.tempSynchroSP || '--';
+                val2Real = d.temperaturaReal || '--';
+                val2SP = d.temperaturaSP || '--';
+                isAlarm = calcDiff(d.tempSynchroReal, d.tempSynchroSP) >= 1.5 || calcDiff(d.temperaturaReal, d.temperaturaSP) >= 1.5;
+              }
+            }
+
+            return (
+              <button
+                key={machine.id}
+                onClick={() => handleMachineClick(machine)}
+                disabled={machine.status === 'completed' && !isAlarm}
+                className={`relative p-4 rounded-[2rem] border-2 flex flex-col items-stretch justify-between transition-all active:scale-95 overflow-hidden min-h-[140px] ${
+                  machine.status === 'completed'
+                    ? isAlarm 
+                      ? 'bg-red-50 border-red-400 text-red-700 shadow-lg shadow-red-200 ring-4 ring-red-50' 
+                      : 'bg-green-50/50 border-green-200 text-green-700'
+                    : 'bg-white border-gray-100 text-[#1A1A1A] shadow-sm hover:border-[#F5A623]/50'
+                }`}
+              >
+                {/* Background Image Layer */}
+                <div 
+                  className="absolute inset-0 z-0 opacity-10 mix-blend-multiply bg-cover bg-center"
+                  style={{ backgroundImage: 'url(/imagen1.png)' }}
+                />
+                
+                <div className="flex items-center justify-between w-full mb-2 z-10 relative">
+                  <div className="flex flex-col items-start">
+                    <span className="text-3xl font-black tracking-tighter leading-none">{machine.number}</span>
+                    <span className={`text-[8px] font-black uppercase tracking-widest ${
+                      machine.status === 'completed' ? isAlarm ? 'text-red-600' : 'text-green-600' : 'text-gray-400'
+                    }`}>
+                      {machine.status === 'completed' ? isAlarm ? '⚠️ ALARMA' : 'REVISADA' : 'PENDIENTE'}
+                    </span>
                   </div>
-                ) : (
-                  <>
-                    <button
-                      onClick={(e) => handleOpenReportUploader(e, machine)}
-                      className="bg-brand-primary text-white rounded-full p-1.5 shadow-sm hover:bg-[#E6951F] transition-colors"
-                      title="Subir Foto con IA"
-                    >
-                      <Camera size={12} />
-                    </button>
-                    <ChevronRight size={16} className="text-gray-400" />
-                  </>
+                  
+                  {machine.status === 'completed' ? (
+                    <div className={`rounded-full p-1.5 shadow-sm border ${isAlarm ? 'bg-red-500 text-white border-red-400' : 'bg-green-500 text-white border-green-400'}`}>
+                      {isAlarm ? <AlertTriangle size={14} strokeWidth={3} /> : <CheckCircle2 size={14} strokeWidth={3} />}
+                    </div>
+                  ) : (
+                    <div className="flex gap-1">
+                      <div 
+                        onClick={(e) => handleOpenReportUploader(e, machine)}
+                        className="bg-brand-primary text-white rounded-xl p-2 shadow-sm hover:bg-[#E6951F] transition-colors"
+                      >
+                        <Camera size={14} />
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {machine.status === 'completed' && d && (
+                  <div className="mt-auto space-y-1 z-10 relative">
+                    <div className="flex justify-between items-end border-t border-black/5 pt-2">
+                       <div className="flex flex-col">
+                          <span className="text-[7px] font-black text-black/40 uppercase leading-none">{label1}</span>
+                          <span className="text-sm font-black tracking-tight">{val1Real}°</span>
+                       </div>
+                       <div className="flex flex-col items-end opacity-60">
+                          <span className="text-[7px] font-black text-black/40 uppercase leading-none">SP</span>
+                          <span className="text-[10px] font-bold">{val1SP}°</span>
+                       </div>
+                    </div>
+                    <div className="flex justify-between items-end">
+                       <div className="flex flex-col">
+                          <span className="text-[7px] font-black text-black/40 uppercase leading-none">{label2}</span>
+                          <span className="text-sm font-black tracking-tight">{val2Real}°</span>
+                       </div>
+                       <div className="flex flex-col items-end opacity-60">
+                          <span className="text-[7px] font-black text-black/40 uppercase leading-none">SP</span>
+                          <span className="text-[10px] font-bold">{val2SP}°</span>
+                       </div>
+                    </div>
+                  </div>
                 )}
-              </div>
-            </button>
-          ))}
+              </button>
+            );
+          })}
         </div>
       </div>
 

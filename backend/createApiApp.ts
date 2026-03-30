@@ -7,6 +7,7 @@ import multer from 'multer';
 import type { PrismaClient } from '@prisma/client';
 
 import { processMachineReport } from './controllers/report.controller';
+import { seedShifts } from './controllers/admin.controller';
 
 type UserRole = 'OPERARIO' | 'SUPERVISOR' | 'JEFE';
 
@@ -434,6 +435,9 @@ export function createApiApp(): Express {
   app.get('/api/health', (_req, res) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
   });
+
+  // ── Admin: Seed Operations ───────────────────────────────────────────────
+  app.post('/api/admin/seed-shifts', seedShifts);
 
   // ── Smart Reporting (Gemini + Drive + PDF) ────────────────────────────────
   app.post('/api/reports', requireAuthenticatedUser, upload.single('evidence'), processMachineReport);

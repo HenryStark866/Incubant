@@ -108,16 +108,42 @@ export const processMachineReport = async (req: AuthenticatedRequest, res: Respo
         });
       }
 
+      // Calcular si es alarma (por si el frontend no envió el flag o para validación doble)
+      const data = finalData as any;
+      const calcDiff = (r?: any, s?: any) => Math.abs(Number(r || 0) - Number(s || 0));
+      
+      const isAlarm = calcDiff(data.tempOvoscanReal || data.tempSynchroReal, data.tempOvoscanSP || data.tempSynchroSP) >= 1.5 ||
+                      calcDiff(data.tempAireReal || data.temperaturaReal, data.tempAireSP || data.temperaturaSP) >= 1.5 ||
+                      calcDiff(data.humidityReal, data.humiditySP) >= 1.5;
+
       // Crear el reporte
       savedReport = await prisma.report.create({
         data: {
           machine_id: machine.id,
           user_id: userId,
-          temperature: Number(finalData.temperature) || 0,
-          humidity: Number(finalData.humidity) || 0,
-          processStatus: String(finalData.processStatus),
+          
+          tempPrincipalReal: Number(data.tempOvoscanReal || data.tempSynchroReal) || 0,
+          tempPrincipalSP: Number(data.tempOvoscanSP || data.tempSynchroSP) || 0,
+          
+          tempAireReal: Number(data.tempAireReal || data.temperaturaReal) || 0,
+          tempAireSP: Number(data.tempAireSP || data.temperaturaSP) || 0,
+          
+          humidityReal: Number(data.humidityReal) || 0,
+          humiditySP: Number(data.humiditySP) || 0,
+          
+          co2Real: Number(data.co2Real) || 0,
+          co2SP: Number(data.co2SP) || 0,
+          
+          isAlarm: isAlarm,
+          observaciones: String(data.observaciones || ""),
+          processStatus: String(isAlarm ? "ALARMA" : "NORMAL"),
+          
           imageUrl,
           pdfUrl,
+          
+          // Legacy fields for backward compatibility
+          temperature: Number(data.tempOvoscanReal || data.tempSynchroReal) || 0,
+          humidity: Number(data.humidityReal) || 0,
         }
       });
 
@@ -132,9 +158,7 @@ export const processMachineReport = async (req: AuthenticatedRequest, res: Respo
       message: 'Reporte procesado y almacenado exitosamente.',
       report: {
         machineId,
-        temperature: `${finalData.temperature} °F`,
-        humidity: `${finalData.humidity} %`,
-        processStatus: finalData.processStatus,
+        isAlarm: savedReport?.isAlarm || false,
         imageUrl,
         pdfUrl,
         savedToDb: !!savedReport,

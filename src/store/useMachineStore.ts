@@ -19,15 +19,30 @@ export interface MachineData {
     minutos: string;
   };
   // Para Incubadoras
-  tempOvoscan?: string;
-  tempAire?: string;
+  tempOvoscanReal?: string;
+  tempOvoscanSP?: string;
+  tempAireReal?: string;
+  tempAireSP?: string;
+  
+  // Para Nacedoras
+  tempSynchroReal?: string;
+  tempSynchroSP?: string;
+  temperaturaReal?: string; // Aire en nacedoras
+  temperaturaSP?: string;
+
+  // Comunes
+  humedadReal?: string;
+  humedadSP?: string;
+  co2Real?: string;
+  co2SP?: string;
+  
   volteoNumero?: string;
   volteoPosicion?: 'V' | 'A' | '';
   alarma?: 'Si' | 'No';
-  // Para Nacedoras (o general)
-  temperatura?: string; 
-  humedadRelativa: string;
-  co2: string;
+  humedadRelativa?: string; // Legacy
+  temperatura?: string; // Legacy
+  co2?: string; // Legacy
+  
   observaciones: string;
   ventiladorPrincipal?: 'Si' | 'No';
 }

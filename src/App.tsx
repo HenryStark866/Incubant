@@ -178,6 +178,8 @@ export default function App() {
       <div className="w-full h-full relative overflow-hidden bg-white safe-top safe-bottom">
         {!currentUser ? (
           <LoginScreen />
+        ) : activeMachineId && capturedPhoto ? (
+          <FormScreen />
         ) : activeMachineId ? (
           <CameraScreen />
         ) : (

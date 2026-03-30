@@ -358,11 +358,11 @@ export default function FormScreen() {
     
     // Defer save to allow toast to render
     setTimeout(() => {
-      saveMachineData(machine!.id, formData, capturedPhoto!);
+      saveMachineData(machine!.id, formData, capturedPhoto || '');
     }, 1500);
   };
 
-  if (!machine || !capturedPhoto) return null;
+  if (!machine) return null;
 
   return (
     <div className="flex flex-col h-full bg-[#f9fafb] relative font-sans">

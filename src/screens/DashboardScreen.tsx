@@ -12,15 +12,16 @@ const ConfirmationModal = ({
   onClose, 
   onConfirm, 
   pendingCount,
-  pendingMachines 
+  pendingMachines = [] 
 }: { 
   isOpen: boolean, 
   onClose: () => void, 
   onConfirm: () => void,
   pendingCount: number,
-  pendingMachines: Machine[]
+  pendingMachines?: Machine[]
 }) => {
   if (!isOpen) return null;
+  const safeMachines = pendingMachines || [];
 
   return (
     <div className="fixed inset-0 z-[100] bg-brand-dark/60 backdrop-blur-md flex items-center justify-center p-6 animate-in fade-in duration-300">

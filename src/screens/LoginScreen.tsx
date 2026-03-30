@@ -13,9 +13,14 @@ export default function LoginScreen() {
   const login = useMachineStore(state => state.login);
 
   const completeLogin = async (user: User) => {
-    await requestNotificationPermission();
-    scheduleHourlyNotifications();
-    login(user);
+    try {
+      await requestNotificationPermission().catch(() => null);
+      scheduleHourlyNotifications();
+    } catch (e) {
+      console.warn('Error al iniciar notificaciones:', e);
+    } finally {
+      login(user);
+    }
   };
 
   const handleLogin = async (e: React.FormEvent) => {

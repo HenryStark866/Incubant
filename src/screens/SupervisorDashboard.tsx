@@ -719,139 +719,125 @@ export default function SupervisorDashboard() {
 
         {/* Evidences Modal removed since it now redirects directly to Google Drive */}
 
-        <header className="bg-white border-b border-gray-100 px-4 sm:px-6 lg:px-10 py-4 shrink-0 z-10">
-          <div className="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-4">
-            <div className="flex items-start sm:items-center justify-between gap-4">
-              <div className="flex items-start sm:items-center gap-3 sm:gap-8">
+        <header className="bg-white border-b border-gray-100 px-4 sm:px-6 lg:px-8 py-3 shrink-0 z-10">
+          <div className="flex flex-col gap-3">
+            {/* Row 1: Supervisor info + Quick actions (mobile) */}
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
                 <button
                   type="button"
                   onClick={() => setIsSidebarOpen(true)}
-                  className="lg:hidden p-3 rounded-2xl bg-gray-50 border border-gray-100 text-brand-dark"
+                  className="lg:hidden p-2 rounded-xl bg-gray-50 border border-gray-100 text-brand-dark"
                 >
-                  <Menu size={20} />
+                  <Menu size={18} />
                 </button>
-
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-2xl bg-brand-primary/10 flex items-center justify-center border border-brand-primary/20 shadow-inner">
-                    <Users size={24} className="text-brand-primary" />
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-brand-primary/10 flex items-center justify-center border border-brand-primary/20 shadow-inner">
+                    <Users size={20} className="text-brand-primary" />
                   </div>
                   <div>
-                    <p className="text-[10px] text-brand-gray font-black uppercase tracking-widest">Supervisor de Turno</p>
-                    <p className="text-base font-black text-brand-dark">{currentUser?.name || 'Sin responsable autenticado'}</p>
-                  </div>
-                </div>
-
-                <div className="hidden md:block w-56">
-                  <div className="flex justify-between text-[10px] mb-2 font-bold uppercase tracking-widest">
-                    <span className="text-brand-gray">Eficiencia de Planta</span>
-                    <span className="text-brand-primary">{efficiency}%</span>
-                  </div>
-                  <div className="h-2.5 bg-gray-100 rounded-full overflow-hidden shadow-inner">
-                    <div
-                      className="h-full bg-brand-primary rounded-full shadow-[0_0_10px_rgba(245,166,35,0.5)] transition-all"
-                      style={{ width: `${efficiency}%` }}
-                    ></div>
+                    <p className="text-[9px] text-brand-gray font-black uppercase tracking-widest">Supervisor</p>
+                    <p className="text-sm font-black text-brand-dark">{currentUser?.name || 'Sin responsable'}</p>
                   </div>
                 </div>
               </div>
 
-              <div className="flex gap-2">
+              {/* Mobile quick actions */}
+              <div className="flex gap-2 lg:hidden">
                 <button
                   onClick={handleOpenEvidences}
-                  className="lg:hidden bg-blue-600 hover:bg-blue-700 text-white px-4 py-3 rounded-2xl flex items-center gap-2 text-xs font-black transition-all shadow-xl shadow-blue-600/20 uppercase tracking-widest"
+                  className="bg-blue-600 hover:bg-blue-700 text-white p-2.5 rounded-xl flex items-center gap-1.5 text-[10px] font-black transition-all shadow-lg"
                 >
-                  <ImageIcon size={18} />
-                  Bóveda
+                  <ImageIcon size={14} />
+                  <span className="hidden sm:inline">Bóveda</span>
                 </button>
                 <button
                   onClick={handleDownloadReport}
-                  className="lg:hidden bg-brand-primary hover:bg-[#E6951F] text-white px-4 py-3 rounded-2xl flex items-center gap-2 text-xs font-black transition-all shadow-xl shadow-brand-primary/20 uppercase tracking-widest"
+                  className="bg-brand-primary hover:bg-[#E6951F] text-white p-2.5 rounded-xl flex items-center gap-1.5 text-[10px] font-black transition-all shadow-lg"
                 >
-                  <Download size={18} />
-                  PDF
+                  <Download size={14} />
+                  <span className="hidden sm:inline">PDF</span>
                 </button>
               </div>
             </div>
 
-            <div className="flex flex-wrap items-stretch gap-3 sm:gap-4">
+            {/* Row 2: Stats + Actions */}
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+              {/* Desktop action buttons */}
               <button
                 onClick={handleOpenEvidences}
-                className="hidden lg:flex bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-2xl items-center gap-3 text-sm font-black transition-all shadow-xl shadow-blue-600/20 active:scale-95 uppercase tracking-widest"
+                className="hidden lg:flex bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl items-center gap-2 text-xs font-black transition-all shadow-lg active:scale-95"
               >
-                <ImageIcon size={20} />
+                <ImageIcon size={16} />
                 Ver Evidencias
               </button>
 
               <button
                 onClick={handleDownloadReport}
-                className="hidden lg:flex bg-brand-primary hover:bg-[#E6951F] text-white px-6 py-3 rounded-2xl items-center gap-3 text-sm font-black transition-all shadow-xl shadow-brand-primary/20 active:scale-95 uppercase tracking-widest"
+                className="hidden lg:flex bg-brand-primary hover:bg-[#E6951F] text-white px-4 py-2 rounded-xl items-center gap-2 text-xs font-black transition-all shadow-lg active:scale-95"
               >
-                <Download size={20} />
+                <Download size={16} />
                 Reporte PDF
               </button>
 
-              <div className="bg-white border border-gray-100 shadow-sm rounded-2xl px-5 py-3 flex items-center gap-4 min-w-[138px]">
-                <div className="p-2 bg-green-50 rounded-xl">
-                  <CheckCircle2 className="text-green-500" size={20} />
+              {/* Report count */}
+              <div className="bg-white border border-gray-100 shadow-sm rounded-xl px-3 py-2 flex items-center gap-3">
+                <div className="p-1.5 bg-green-50 rounded-lg">
+                  <CheckCircle2 className="text-green-500" size={16} />
                 </div>
                 <div>
-                  <p className="text-[9px] text-brand-gray uppercase font-black tracking-widest">Reportes</p>
-                  <p className="text-xl font-black text-brand-dark leading-none">{reportCount}</p>
+                  <p className="text-[8px] text-brand-gray uppercase font-black tracking-widest">Reportes</p>
+                  <p className="text-lg font-black text-brand-dark leading-none">{reportCount}</p>
                 </div>
               </div>
 
-              <div className={`border shadow-sm rounded-2xl px-5 py-3 flex items-center gap-4 min-w-[138px] transition-colors ${activeAlarms > 0 ? 'bg-red-50 border-red-100' : 'bg-white border-gray-100'
+              {/* Alarms */}
+              <div className={`border shadow-sm rounded-xl px-3 py-2 flex items-center gap-3 transition-colors ${activeAlarms > 0 ? 'bg-red-50 border-red-100' : 'bg-white border-gray-100'
                 }`}>
-                <div className={`p-2 rounded-xl ${activeAlarms > 0 ? 'bg-red-100' : 'bg-gray-50'}`}>
-                  <AlertTriangle className={activeAlarms > 0 ? 'text-red-500' : 'text-brand-gray'} size={20} />
+                <div className={`p-1.5 rounded-lg ${activeAlarms > 0 ? 'bg-red-100' : 'bg-gray-50'}`}>
+                  <AlertTriangle className={activeAlarms > 0 ? 'text-red-500' : 'text-brand-gray'} size={16} />
                 </div>
                 <div>
-                  <p className="text-[9px] text-brand-gray uppercase font-black tracking-widest">Alarmas</p>
-                  <p className={`text-xl font-black leading-none ${activeAlarms > 0 ? 'text-red-600' : 'text-brand-dark'}`}>
+                  <p className="text-[8px] text-brand-gray uppercase font-black tracking-widest">Alarmas</p>
+                  <p className={`text-lg font-black leading-none ${activeAlarms > 0 ? 'text-red-600' : 'text-brand-dark'}`}>
                     {activeAlarms}
                   </p>
                 </div>
               </div>
 
-              {/* CARD ÚNICA: MONITOR DE TURNO INTEGRADO */}
-              <div className="bg-white border-2 border-brand-primary/20 shadow-lg shadow-brand-primary/5 rounded-3xl px-6 py-4 flex items-center gap-6 min-w-[320px] hover:border-brand-primary/40 transition-all group">
-                <div className="relative">
-                  <div className="p-3 bg-brand-primary/10 rounded-2xl text-brand-primary shadow-inner group-hover:bg-brand-primary group-hover:text-white transition-colors duration-500">
-                    <Clock size={24} className="animate-pulse" />
-                  </div>
-                  <div className="absolute -top-1 -right-1 w-3 h-3 bg-green-500 rounded-full border-2 border-white shadow-sm"></div>
+              {/* Efficiency bar (desktop) */}
+              <div className="hidden md:block flex-1 min-w-[120px] max-w-[200px]">
+                <div className="flex justify-between text-[8px] mb-1 font-bold uppercase tracking-widest">
+                  <span className="text-brand-gray">Eficiencia</span>
+                  <span className="text-brand-primary">{efficiency}%</span>
                 </div>
-
-                <div className="flex-1 space-y-1">
-                  <div className="flex items-center justify-between gap-4">
-                    <p className="text-[10px] text-brand-primary font-black uppercase tracking-[0.2em] leading-none">
-                      {currentShiftName} | {currentTime.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })}
-                    </p>
-                    <span className="flex items-center gap-1.5 px-2 py-0.5 bg-green-50 text-[10px] font-black text-green-600 rounded-full border border-green-100 uppercase tracking-tighter">
-                      En línea
-                    </span>
-                  </div>
-
-                  <div className="flex flex-col">
-                    <h3 className="text-base font-black text-brand-dark tracking-tight truncate max-w-[200px]">
-                      Operador: <span className="text-brand-primary">{activeOperatorsList}</span>
-                    </h3>
-                    <div className="flex items-center gap-3 mt-1.5 opacity-80">
-                      <div className="flex items-center gap-1">
-                        <CheckCircle2 size={12} className="text-green-500" />
-                        <p className="text-[9px] text-brand-gray font-black uppercase tracking-tight">
-                          Ult. Reporte: {summaryData.lastReportTime ? new Date(summaryData.lastReportTime).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' }) : 'N/A'}
-                        </p>
-                      </div>
-                      <span className="w-1 h-1 bg-gray-300 rounded-full"></span>
-                      <p className="text-[9px] text-brand-gray font-black uppercase tracking-tight">
-                        {currentTime.toLocaleDateString('es-CO', { weekday: 'short', day: 'numeric', month: 'short' })}
-                      </p>
-                    </div>
-                  </div>
+                <div className="h-2 bg-gray-100 rounded-full overflow-hidden shadow-inner">
+                  <div
+                    className="h-full bg-brand-primary rounded-full shadow-[0_0_8px_rgba(245,166,35,0.4)] transition-all"
+                    style={{ width: `${efficiency}%` }}
+                  ></div>
                 </div>
               </div>
 
+              {/* Shift monitor card */}
+              <div className="bg-white border-2 border-brand-primary/20 shadow-sm rounded-xl px-4 py-2 flex items-center gap-4 min-w-0 flex-1 max-w-[340px]">
+                <div className="p-2 bg-brand-primary/10 rounded-xl text-brand-primary">
+                  <Clock size={18} className="animate-pulse" />
+                </div>
+                <div className="flex-1 min-w-0 space-y-0.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-[9px] text-brand-primary font-black uppercase tracking-wider truncate">
+                      {currentShiftName} | {currentTime.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })}
+                    </p>
+                    <span className="flex-shrink-0 flex items-center gap-1 px-1.5 py-0.5 bg-green-50 text-[8px] font-black text-green-600 rounded-full border border-green-100 uppercase">
+                      En línea
+                    </span>
+                  </div>
+                  <p className="text-xs font-black text-brand-dark tracking-tight truncate">
+                    Operador: <span className="text-brand-primary">{activeOperatorsList}</span>
+                  </p>
+                </div>
+              </div>
             </div>
           </div>
         </header>

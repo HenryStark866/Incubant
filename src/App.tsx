@@ -1,8 +1,3 @@
-/**
- * @license
- * SPDX-License-Identifier: Apache-2.0
- */
-
 import { useEffect, useState } from 'react';
 import DashboardScreen from './screens/DashboardScreen';
 import CameraScreen from './screens/CameraScreen';
@@ -12,7 +7,7 @@ import SupervisorDashboard from './screens/SupervisorDashboard';
 import UpdatePrompt from './components/UpdatePrompt';
 import { useMachineStore } from './store/useMachineStore';
 import { canUseSupervisorPanel } from './lib/fallbackAuth';
-import { Smartphone, Monitor, Loader2, Wifi, WifiOff } from 'lucide-react';
+import { Smartphone, Monitor, Loader2, Wifi, WifiOff, Cpu, ShieldCheck } from 'lucide-react';
 import { getApiUrl, apiFetch } from './lib/api';
 
 export default function App() {
@@ -40,18 +35,17 @@ export default function App() {
           return true;
         }
       } catch (err) {
-        console.warn('Backend no responde aún, reintentando...');
+        console.warn('Backend offline, retrying...');
       }
       setIsApiHealthy(false);
       return false;
     };
 
     const validateSession = async () => {
-      // 1. Esperar a que el API responda (especialmente util para Render cold-starts)
       let healthy = await checkHealth();
       let attempts = 0;
       
-      while (!healthy && attempts < 12) { // Intentar por 1 minuto (12 * 5s)
+      while (!healthy && attempts < 12) {
         await new Promise(r => setTimeout(r, 5000));
         healthy = await checkHealth();
         attempts++;
@@ -59,84 +53,82 @@ export default function App() {
         if (!isMounted) return;
       }
 
-      if (!healthy) {
-        console.error('El servidor central no responde después de varios intentos.');
-        // Permitir continuar con fallback local si es necesario, 
-        // pero aquí marcamos sessionReady para mostrar el UI
-        setIsSessionReady(true);
-        return;
-      }
-
-      // 2. Si el API está saludable, validar sesión normal
-      try {
-        const response = await apiFetch(getApiUrl('/api/session'));
-
-        if (!isMounted) {
-          return;
-        }
-
-        if (response.ok) {
-          const data = await response.json();
-          login(data.user);
-        } else if (response.status === 401) {
-          logout();
-          setViewMode('mobile');
-        }
-      } catch (error) {
-        console.error('Error al validar sesión:', error);
-      } finally {
-        if (isMounted) {
-          setIsSessionReady(true);
+      if (healthy) {
+        try {
+          const response = await apiFetch(getApiUrl('/api/session'));
+          if (isMounted) {
+            if (response.ok) {
+              const data = await response.json();
+              login(data.user);
+            } else if (response.status === 401) {
+              logout();
+              setViewMode('mobile');
+            }
+          }
+        } catch (error) {
+          console.error('Session validation error:', error);
         }
       }
+      
+      if (isMounted) setIsSessionReady(true);
     };
 
     void validateSession();
-
-    return () => {
-      isMounted = false;
-    };
+    return () => { isMounted = false; };
   }, [login, logout]);
 
   useEffect(() => {
-    if (viewMode === 'supervisor' && !canAccessSupervisor) {
-      setViewMode('mobile');
-    }
-    // Auto-navegar al panel de administrador instantáneamente si el usuario es supervisor
-    if (canAccessSupervisor && viewMode === 'mobile') {
-      setViewMode('supervisor');
-    }
+    if (viewMode === 'supervisor' && !canAccessSupervisor) setViewMode('mobile');
+    if (canAccessSupervisor && viewMode === 'mobile') setViewMode('supervisor');
   }, [canAccessSupervisor]);
 
   if (!isSessionReady) {
     const isWaitingApi = isApiHealthy === false;
-    
     return (
-      <div className="min-h-screen bg-gray-900 flex items-center justify-center p-6">
-        <div className="max-w-xs w-full flex flex-col items-center text-center gap-8">
-          <div className="relative">
-            <Loader2 size={64} className="animate-spin text-brand-primary opacity-20" />
-            <div className="absolute inset-0 flex items-center justify-center">
-              {isWaitingApi ? <WifiOff size={32} className="text-orange-500 animate-pulse" /> : <Wifi size={32} className="text-brand-primary animate-pulse" />}
-            </div>
+      <div className="min-h-screen bg-[#060b18] flex items-center justify-center p-8 relative overflow-hidden font-mono">
+        <div className="absolute inset-0 circuit-bg opacity-20 pointer-events-none" />
+        <div className="absolute -top-40 -left-40 w-96 h-96 rounded-full bg-brand-primary blur-[160px] opacity-10 animate-float-slow" />
+        
+        <div className="max-w-xs w-full flex flex-col items-center text-center gap-10 relative z-10">
+          {/* Logo Animation */}
+          <div className="relative w-32 h-32 flex items-center justify-center">
+             <div className="absolute inset-0 rounded-full border-2 border-brand-primary/20 animate-spin-slow" />
+             <div className="absolute inset-[-8px] rounded-full border border-brand-secondary/10 animate-spin-reverse" style={{ borderStyle: 'dashed' }} />
+             <div className="absolute inset-0 animate-pulse-glow rounded-full" style={{ background: 'radial-gradient(circle, rgba(247,147,26,0.1) 0%, transparent 70%)' }} />
+             
+             <div className="relative z-10 w-20 h-20 bg-gradient-to-br from-brand-primary to-brand-secondary rounded-2xl flex items-center justify-center glow-primary animate-float shadow-[0_0_40px_rgba(247,147,26,0.4)]">
+                {isWaitingApi ? <WifiOff size={40} className="text-white animate-pulse" /> : <Wifi size={40} className="text-white animate-pulse" />}
+             </div>
           </div>
           
           <div className="space-y-4">
-            <h2 className="text-xl font-black text-white tracking-tight uppercase">
-              {isWaitingApi ? 'Sincronizando Sistemas' : 'Iniciando Monitor'}
-            </h2>
-            <p className="text-sm text-slate-400 font-medium leading-relaxed">
+             <div className="flex items-center justify-center gap-2 mb-2">
+                <Cpu size={12} className="text-brand-primary animate-blink" />
+                <span className="text-[9px] font-black uppercase tracking-[0.4em] text-brand-primary/60 font-mono-display">System Boot Sequence</span>
+             </div>
+             <h2 className="text-3xl font-black text-white tracking-widest uppercase font-mono-display holo-text">
+               {isWaitingApi ? 'SYNCING_COMMS' : 'INIT_KERNEL'}
+             </h2>
+             <div className="h-px w-20 bg-brand-primary/20 mx-auto" />
+             <p className="text-[10px] text-white/30 font-medium leading-relaxed uppercase tracking-widest max-w-[200px] mx-auto font-mono">
               {isWaitingApi 
-                ? `Estableciendo conexión con el servidor central en Render. Esto puede tomar unos segundos mientras los servicios despiertan (${retryCount}/12).` 
-                : 'Validando estado de la sesión y permisos de operario...'}
-            </p>
+                ? `Estableciendo enlace seguro con el núcleo central. Intento ${retryCount}/12` 
+                : 'Cargando protocolos de seguridad y validando sesión de operario...'}
+             </p>
           </div>
 
-          <div className="w-full bg-gray-800 h-1.5 rounded-full overflow-hidden">
-            <div 
-              className="h-full bg-brand-primary transition-all duration-500 ease-out" 
-              style={{ width: isWaitingApi ? `${(retryCount / 12) * 100}%` : '40%' }}
-            />
+          <div className="w-full space-y-2">
+            <div className="w-full bg-white/5 h-[3px] rounded-full overflow-hidden relative border border-white/5">
+              <div 
+                className="h-full bg-brand-primary transition-all duration-700 ease-out shadow-[0_0_15px_rgba(247,147,26,0.8)]"
+                style={{ width: isWaitingApi ? `${(retryCount / 12) * 100}%` : '45%' }}
+              />
+            </div>
+            <div className="flex justify-between text-[7px] font-black text-white/20 tracking-tighter font-mono uppercase">
+               <span>BITRATE: 104.22 KB/S</span>
+               <span>{isWaitingApi ? (retryCount*8.3).toFixed(1) : '45.0'}%</span>
+               <span>STATUS: {isWaitingApi ? 'PENDING' : 'READY'}</span>
+            </div>
           </div>
         </div>
       </div>
@@ -145,37 +137,39 @@ export default function App() {
 
   if (viewMode === 'supervisor' && canAccessSupervisor) {
     return (
-      <div className="relative h-screen w-full">
+      <div className="relative h-screen w-full font-sans">
         <SupervisorDashboard />
         <button 
           onClick={() => setViewMode('mobile')}
-          className="fixed bottom-6 right-6 bg-blue-600 hover:bg-blue-500 text-white p-4 rounded-full shadow-2xl flex items-center gap-2 font-bold z-50 transition-all"
+          className="fixed bottom-10 right-10 btn-brand px-6 py-4 flex items-center gap-3 z-50 text-xs shadow-[0_20px_50px_rgba(247,147,26,0.4)]"
         >
-          <Smartphone size={20} />
-          Ver App Operario
+          <Smartphone size={18} />
+          <span>VIEWPORT: OPERADOR</span>
         </button>
       </div>
     );
   }
 
   return (
-    <div className="h-full w-full bg-slate-50 relative flex flex-col items-center justify-center overscroll-none overflow-hidden">
+    <div className="h-full w-full bg-[#060b18] relative flex flex-col items-center justify-center overscroll-none overflow-hidden font-mono">
       <UpdatePrompt />
       
-      {/* Botón flotante para supervisores en modo móvil si es necesario */}
       {canAccessSupervisor && (
-        <div className="fixed top-6 right-6 z-[100]">
+        <div className="fixed top-12 right-6 z-[100] animate-fade-in">
           <button 
             onClick={() => setViewMode('supervisor')}
-            className="bg-brand-dark/80 backdrop-blur-md hover:bg-brand-dark text-white px-5 py-3 rounded-2xl shadow-xl flex items-center gap-2 font-black transition-all border border-white/10 active:scale-95"
+            className="glass-dark px-4 py-3 rounded-2xl border border-brand-primary/30 flex items-center gap-3 active:scale-95 transition-all shadow-2xl"
           >
-            <Monitor size={18} className="text-brand-primary" />
-            PANEL ADMIN
+            <div className="relative">
+               <Monitor size={16} className="text-brand-primary" />
+               <div className="absolute -top-1 -right-1 w-2 h-2 bg-brand-primary rounded-full animate-pulse-glow" />
+            </div>
+            <span className="text-[10px] font-black text-white/60 tracking-widest font-mono-display uppercase">SISTEMA_ADMIN</span>
           </button>
         </div>
       )}
 
-      <div className="w-full h-full relative overflow-hidden bg-white safe-top safe-bottom">
+      <div className="w-full h-full relative overflow-hidden bg-white safe-top safe-bottom shadow-[0_0_100px_rgba(0,0,0,0.5)]">
         {!currentUser ? (
           <LoginScreen />
         ) : activeMachineId && capturedPhoto ? (

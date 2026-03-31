@@ -16,7 +16,7 @@
     "rewrites": [
         {
             "source": "/api/(.*)",
-            "destination": "https://incubant.onrender.com/api/$1"
+            "destination": "https://incubant-backend.onrender.com/api/$1"
         },
         {
             "source": "/(.*)",

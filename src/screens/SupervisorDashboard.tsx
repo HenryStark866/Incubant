@@ -350,7 +350,7 @@ export default function SupervisorDashboard() {
       doc.text('DATOS TÉCNICOS: NACEDORAS', 14, lastY);
       autoTable(doc, {
         startY: lastY + 5,
-        head: [['Máquina', 'Estado', 'Temp °C', 'Hum %', 'CO2', 'Vent']],
+                        head: [['Máquina', 'Estado', 'Temp °F', 'Hum %', 'CO2', 'Vent']],
         body: tableDataNacedoras,
         theme: 'striped',
         headStyles: { fillColor: [100, 100, 100], textColor: 255, fontStyle: 'bold' },
@@ -891,7 +891,7 @@ export default function SupervisorDashboard() {
                               }`}
                           >
                             <span className="font-black text-xs">{machine.name.replace('Incubadora ', '')}</span>
-                            <span className={`text-[10px] font-bold ${machine.status === 'alarm' ? 'text-red-500' : 'text-brand-primary'}`}>{machine.temp}°C</span>
+                            <span className={`text-[10px] font-bold ${machine.status === 'alarm' ? 'text-red-500' : 'text-brand-primary'}`}>{machine.temp}°F</span>
                           </button>
                         ))}
                       </div>
@@ -913,7 +913,7 @@ export default function SupervisorDashboard() {
                               }`}
                           >
                             <span className="font-black text-xs">{machine.name.replace('Nacedora ', '')}</span>
-                            <span className={`text-[10px] font-bold ${machine.status === 'alarm' ? 'text-red-500' : 'text-brand-primary'}`}>{machine.temp}°C</span>
+                            <span className={`text-[10px] font-bold ${machine.status === 'alarm' ? 'text-red-500' : 'text-brand-primary'}`}>{machine.temp}°F</span>
                           </button>
                         ))}
                       </div>
@@ -965,15 +965,15 @@ export default function SupervisorDashboard() {
                       <Legend wrapperStyle={{ paddingTop: '20px', fontSize: '12px', fontWeight: '900' }} iconType="circle" />
                       
                       {(!chartFilter.includes('Nacedora') && !chartFilter.startsWith('NAC')) && (
-                        <Line yAxisId="left" type="monotone" dataKey="tempOvoscan" name="T. Ovoscan (°C)" stroke="#ec4899" strokeWidth={4} dot={{ r: 0 }} activeDot={{ r: 8, fill: '#ec4899', stroke: '#fff', strokeWidth: 3 }} />
+                        <Line yAxisId="left" type="monotone" dataKey="tempOvoscan" name="T. Ovoscan (°F)" stroke="#ec4899" strokeWidth={4} dot={{ r: 0 }} activeDot={{ r: 8, fill: '#ec4899', stroke: '#fff', strokeWidth: 3 }} />
                       )}
                       
                       {(!chartFilter.includes('Nacedora') && !chartFilter.startsWith('NAC')) && (
-                        <Line yAxisId="left" type="monotone" dataKey="tempAire" name="T. Aire (°C)" stroke="#ef4444" strokeWidth={4} dot={{ r: 0 }} activeDot={{ r: 8, fill: '#ef4444', stroke: '#fff', strokeWidth: 3 }} />
+                        <Line yAxisId="left" type="monotone" dataKey="tempAire" name="T. Aire (°F)" stroke="#ef4444" strokeWidth={4} dot={{ r: 0 }} activeDot={{ r: 8, fill: '#ef4444', stroke: '#fff', strokeWidth: 3 }} />
                       )}
 
                       {(chartFilter.includes('Nacedora') || chartFilter.startsWith('NAC')) && (
-                        <Line yAxisId="left" type="monotone" dataKey="temp" name="Temperatura (°C)" stroke="#ef4444" strokeWidth={4} dot={{ r: 0 }} activeDot={{ r: 8, fill: '#ef4444', stroke: '#fff', strokeWidth: 3 }} />
+                        <Line yAxisId="left" type="monotone" dataKey="temp" name="Temperatura (°F)" stroke="#ef4444" strokeWidth={4} dot={{ r: 0 }} activeDot={{ r: 8, fill: '#ef4444', stroke: '#fff', strokeWidth: 3 }} />
                       )}
 
                       <Line yAxisId="right" type="monotone" dataKey="humedad" name="Humedad (%)" stroke="#3b82f6" strokeWidth={4} dot={{ r: 0 }} activeDot={{ r: 8, fill: '#3b82f6', stroke: '#fff', strokeWidth: 3 }} />
@@ -1184,7 +1184,7 @@ export default function SupervisorDashboard() {
                     <div className="bg-gray-50/50 p-5 rounded-3xl border border-gray-100 shadow-inner">
                       <p className="text-[10px] font-bold text-brand-gray mb-1 uppercase tracking-widest">Temperatura</p>
                       <p className="text-2xl font-black text-brand-primary">
-                        {selectedMachine.data?.temperatura || selectedMachine.temp || '--'}°C
+                        {selectedMachine.data?.temperatura || selectedMachine.temp || '--'}°F
                       </p>
                     </div>
                     <div className="bg-gray-50/50 p-5 rounded-3xl border border-gray-100 shadow-inner">

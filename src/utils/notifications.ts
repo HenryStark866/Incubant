@@ -59,7 +59,7 @@ export function scheduleHourlyNotifications() {
   const timeToNextHour = nextHour.getTime() - now.getTime();
 
   const trigger = () => {
-    showAppNotification('AgriMonitor - Recorrido de Rutina', {
+    showAppNotification('Incubant - Recorrido de Rutina', {
       body: 'Es momento de registrar los parámetros de las incubadoras y nacedoras.',
     });
   };

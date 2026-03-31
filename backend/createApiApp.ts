@@ -648,8 +648,8 @@ export function createApiApp(): Express {
             photo_url: machine.photoUrl || null,
             temp_principal_actual: mainTemp,
             temp_principal_consigna: mainTemp,
-            co2_actual: humidity > 0 ? humidity : co2,  // Guardamos humedad en co2_actual si disponible
-            co2_consigna: humidity > 0 ? humidity : co2,
+            co2_actual: co2,
+            co2_consigna: co2,
             fan_speed: 0,
             temp_secundaria_actual: secondaryTemp,
             temp_secundaria_consigna: secondaryTemp,

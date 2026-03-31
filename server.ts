@@ -5,7 +5,7 @@ import { createApiApp } from './backend/createApiApp';
 
 async function startServer() {
   const app = createApiApp();
-  const port = parseInt(process.env.PORT || '3000', 10);
+  const port = Number(process.env.PORT) || 3000;
 
   if (process.env.NODE_ENV !== 'production') {
     const vite = await createViteServer({

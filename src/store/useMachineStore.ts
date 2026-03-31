@@ -120,7 +120,7 @@ export const useMachineStore = create<MachineState>()(
       }))
     }),
     {
-      name: 'agrimonitor-storage',
+      name: 'incubant-storage',
       storage: createJSONStorage(() => localStorage),
       // Omitir el estado temporal de la persistencia
       partialize: (state) => ({ machines: state.machines, currentUser: state.currentUser }),

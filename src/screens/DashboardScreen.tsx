@@ -508,12 +508,18 @@ export default function DashboardScreen() {
               <Egg size={17} className="text-white" />
             </div>
             <div>
-              <div className="text-[7px] font-black text-white/25 uppercase tracking-widest font-mono-display">Operario</div>
-              <div className="text-sm font-black text-white leading-tight">
+              <div className="text-[7px] font-black text-white/25 uppercase tracking-widest font-mono-display">Operario en Turno</div>
+              <div className="text-sm font-black text-white leading-tight flex items-baseline gap-2">
                 {currentUser?.name}
-                <span className="text-brand-primary text-[9px] font-bold ml-1.5 font-mono-display">
-                  {currentUser?.shift || 'T1'}
-                </span>
+                <div className="flex items-center gap-1 px-1.5 py-0.5 rounded-md border border-white/5 bg-white/5">
+                  <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: currentUser?.shiftColor || '#f7931a', boxShadow: `0 0 5px ${currentUser?.shiftColor || '#f7931a'}` }} />
+                  <span className="text-[8px] font-black font-mono-display text-white/90">
+                    {currentUser?.shift || 'T1'}
+                  </span>
+                  <span className="text-[7px] font-medium font-mono text-white/40">
+                    {currentUser?.shiftStart && currentUser?.shiftEnd ? `${currentUser.shiftStart}-${currentUser.shiftEnd}` : ''}
+                  </span>
+                </div>
               </div>
             </div>
           </div>

@@ -10,6 +10,9 @@ export interface User {
   name: string;
   role: UserRole;
   shift?: string;
+  shiftColor?: string;
+  shiftStart?: string;
+  shiftEnd?: string;
 }
 
 export interface MachineData {

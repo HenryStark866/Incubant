@@ -16,6 +16,9 @@ type SessionUser = {
   name: string;
   role: UserRole;
   shift?: string;
+  shiftColor?: string;
+  shiftStart?: string;
+  shiftEnd?: string;
 };
 
 type AuthenticatedRequest = Request & {
@@ -122,6 +125,40 @@ function sendEventToUser(userId: string, data: any) {
 // ==========================================================================
 // SESSION HELPERS (Database Backed)
 // ==========================================================================
+async function getCurrentShiftForUser(userId: string): Promise<string> {
+  try {
+    const prisma = await getPrismaClient();
+    const today = getTodayInBogota();
+
+    const assignment = await prisma.scheduleAssignment.findFirst({
+      where: {
+        user_id: userId,
+        fecha: today
+      },
+      include: { shift: true }
+    });
+
+    if (assignment?.shift) {
+      return `${assignment.shift.nombre} (${assignment.shift.hora_inicio} - ${assignment.shift.hora_fin})`;
+    }
+  } catch (error) {
+    console.warn('[Shift] Error querying assignment:', error);
+  }
+  
+  // Fallback to static user turno if no assignment or DB error
+  try {
+    const prisma = await getPrismaClient();
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    
+    // Obtener hora actual en Colombia para el fallback sintético
+    const nowBogota = new Date(Date.now() - 5 * 60 * 60 * 1000);
+    return user?.turno || getShiftName(nowBogota);
+  } catch {
+    const nowBogota = new Date(Date.now() - 5 * 60 * 60 * 1000);
+    return getShiftName(nowBogota);
+  }
+}
+
 async function getSession(token: string): Promise<SessionUser | null> {
   try {
     const prisma = await getPrismaClient();
@@ -135,11 +172,20 @@ async function getSession(token: string): Promise<SessionUser | null> {
       return null;
     }
 
+    const today = getTodayInBogota();
+    const assignment = await prisma.scheduleAssignment.findFirst({
+      where: { user_id: session.user.id, fecha: today },
+      include: { shift: true }
+    });
+
     return {
       id: session.user.id,
       name: session.user.nombre,
       role: session.user.rol as UserRole,
-      shift: session.user.turno,
+      shift: assignment?.shift ? assignment.shift.nombre : session.user.turno,
+      shiftColor: assignment?.shift?.color || '#34d399',
+      shiftStart: assignment?.shift?.hora_inicio || '06:00',
+      shiftEnd: assignment?.shift?.hora_fin || '14:00',
     };
   } catch (error) {
     console.warn('[Session] Error querying DB:', error);
@@ -237,12 +283,23 @@ async function sendAuthenticatedUser(res: Response, user: { id: string, nombre: 
   const maxAge = 12 * 60 * 60 * 1000;
   const token = await createSession(user.id, maxAge);
   res.setHeader('Set-Cookie', buildSessionCookie(token));
+  
+  const prisma = await getPrismaClient();
+  const today = getTodayInBogota();
+  const assignment = await prisma.scheduleAssignment.findFirst({
+    where: { user_id: user.id, fecha: today },
+    include: { shift: true }
+  });
+
   return res.status(200).json({ 
     user: {
       id: user.id,
       name: user.nombre,
       role: user.rol,
-      shift: user.turno
+      shift: assignment?.shift ? assignment.shift.nombre : user.turno,
+      shiftColor: assignment?.shift?.color || '#34d399',
+      shiftStart: assignment?.shift?.hora_inicio || '06:00',
+      shiftEnd: assignment?.shift?.hora_fin || '14:00',
     }
   });
 }
@@ -374,26 +431,32 @@ async function seedPredefinedUsers() {
   try {
     const prisma = await getPrismaClient();
     for (const u of predefinedUsers) {
-      await prisma.user.upsert({
-        where: { id: u.id },
-        update: {
-          nombre: u.nombre,
-          rol: u.rol,
-          turno: u.turno,
-        },
-        create: {
-          id: u.id,
-          nombre: u.nombre,
-          pin_acceso: u.pin_acceso,
-          rol: u.rol,
-          turno: u.turno,
-          estado: 'Activo',
-        },
-      });
+      try {
+        await prisma.user.upsert({
+          where: { id: u.id },
+          update: {
+            nombre: u.nombre,
+            rol: u.rol,
+            turno: u.turno,
+          },
+          create: {
+            id: u.id,
+            nombre: u.nombre,
+            pin_acceso: u.pin_acceso,
+            rol: u.rol,
+            turno: u.turno,
+            estado: 'Activo',
+          },
+        });
+      } catch (userError) {
+        // Si el ID no existe pero el PIN sí, el upsert fallará por la restricción única del PIN.
+        // En este caso, simplemente informamos y continuamos con el siguiente usuario.
+        console.warn(`[Seed] Saltando usuario '${u.nombre}' (ID o PIN duplicado).`);
+      }
     }
-    console.log(`[Seed] ${predefinedUsers.length} usuarios predefinidos sincronizados en BD.`);
+    console.log(`[Seed] Sincronización de usuarios predefinidos finalizada.`);
   } catch (error) {
-    console.warn('[Seed] No se pudo sembrar usuarios (BD no disponible). El fallback local estará activo.', error instanceof Error ? error.message : '');
+    console.warn('[Seed] No se pudo conectar a la base de datos para sembrar usuarios.', error instanceof Error ? error.message : '');
   }
 }
 
@@ -1196,7 +1259,7 @@ export function createApiApp(): Express {
       const prisma = await getPrismaClient();
       const dbUser = await resolveDatabaseUser(req.user!);
       const assignments = await prisma.scheduleAssignment.findMany({
-        where: { user_id: dbUser.id, fecha: { gte: new Date() } },
+        where: { user_id: dbUser.id, fecha: { gte: getTodayInBogota() } },
         include: { shift: true },
         orderBy: { fecha: 'asc' },
         take: 7
@@ -1295,4 +1358,18 @@ function getShiftName(date: Date) {
   if (hour >= 6 && hour < 14) return 'Turno 1';
   if (hour >= 14 && hour < 22) return 'Turno 2';
   return 'Turno 3';
+}
+
+/**
+ * Retorna la fecha de HOY en Colombia (America/Bogota, UTC-5)
+ * normalizada a la medianoche UTC para coincidir con el almacenamiento de la BD.
+ */
+function getTodayInBogota(): Date {
+  // Colombia es UTC-5 siempre (no tiene horario de verano)
+  const now = new Date();
+  const colombiaOffset = -5 * 60 * 60 * 1000;
+  const colombiaTime = new Date(now.getTime() + colombiaOffset);
+  
+  colombiaTime.setUTCHours(0, 0, 0, 0);
+  return colombiaTime;
 }

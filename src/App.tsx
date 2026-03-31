@@ -42,35 +42,33 @@ export default function App() {
     };
 
     const validateSession = async () => {
-      let healthy = await checkHealth();
-      let attempts = 0;
-      
-      while (!healthy && attempts < 12) {
-        await new Promise(r => setTimeout(r, 5000));
-        healthy = await checkHealth();
-        attempts++;
-        setRetryCount(attempts);
-        if (!isMounted) return;
-      }
-
-      if (healthy) {
-        try {
-          const response = await apiFetch(getApiUrl('/api/session'));
-          if (isMounted) {
-            if (response.ok) {
-              const data = await response.json();
-              login(data.user);
-            } else if (response.status === 401) {
-              logout();
-              setViewMode('mobile');
-            }
-          }
-        } catch (error) {
-          console.error('Session validation error:', error);
+      try {
+        let healthy = await checkHealth();
+        let attempts = 0;
+        
+        while (!healthy && attempts < 8) { // Reducido de 12 a 8 para ser más ágil
+          await new Promise(r => setTimeout(r, 4000));
+          healthy = await checkHealth();
+          attempts++;
+          setRetryCount(attempts);
+          if (!isMounted) return;
         }
+
+        if (healthy) {
+          const response = await apiFetch(getApiUrl('/api/session'));
+          if (isMounted && response.ok) {
+            const data = await response.json();
+            login(data.user);
+          } else if (isMounted && response.status === 401) {
+            logout();
+            setViewMode('mobile');
+          }
+        }
+      } catch (error) {
+        console.error('Session validation error:', error);
+      } finally {
+        if (isMounted) setIsSessionReady(true);
       }
-      
-      if (isMounted) setIsSessionReady(true);
     };
 
     void validateSession();

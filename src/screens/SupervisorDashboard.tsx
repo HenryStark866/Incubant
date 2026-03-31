@@ -201,113 +201,71 @@ export default function SupervisorDashboard() {
 
   useEffect(() => {
     const fetchData = async () => {
-      if (!canAccessSupervisor) {
-        setIsLoading(false);
+      if (!currentUser || !canAccessSupervisor) {
+        if (!canAccessSupervisor) setIsLoading(false);
         return;
       }
 
       try {
-        const [statusRes, trendsRes, operatorsRes, summaryRes] = await Promise.all([
+        setDbError(null);
+        
+        // Ejecutamos las llamadas con manejo de error individual (Settled)
+        const [statusRes, trendsRes, operatorsRes, summaryRes] = await Promise.allSettled([
           apiFetch(getApiUrl('/api/dashboard/status')),
-          apiFetch(getApiUrl('/api/dashboard/trends')),
+          apiFetch(getApiUrl(`/api/dashboard/trends?machine=${encodeURIComponent(chartFilter)}`)),
           apiFetch(getApiUrl('/api/dashboard/operators')),
           apiFetch(getApiUrl('/api/dashboard/summary'))
         ]);
 
-        // Manejo detallado de errores HTTP
-        if (!statusRes.ok || !trendsRes.ok || !operatorsRes.ok || !summaryRes.ok) {
-          const badRes = !statusRes.ok ? statusRes : !trendsRes.ok ? trendsRes : !operatorsRes.ok ? operatorsRes : summaryRes;
-          
-          if (badRes.status === 401 || badRes.status === 403) {
-            setDbError(`Error ${badRes.status}: Acceso denegado. Tu sesión puede haber expirado o no tienes permisos.`);
-          } else {
-            setDbError(`Error ${badRes.status}: El servidor respondió con error. Revisa el estado de la base de datos.`);
+        // 1. Status (Máquinas)
+        if (statusRes.status === 'fulfilled' && statusRes.value.ok) {
+          const json = await statusRes.value.json();
+          setMachinesData(Array.isArray(json) ? json : []);
+        }
+
+        // 2. Tendencias (Gráfico)
+        if (trendsRes.status === 'fulfilled' && trendsRes.value.ok) {
+          const json = await trendsRes.value.json();
+          setTrendsData(Array.isArray(json) ? json : []);
+        }
+
+        // 3. Operarios
+        if (operatorsRes.status === 'fulfilled' && operatorsRes.value.ok) {
+          const json = await operatorsRes.value.json();
+          setOperatorsData(Array.isArray(json) ? json : []);
+        }
+
+        // 4. Resumen
+        if (summaryRes.status === 'fulfilled' && summaryRes.value.ok) {
+          const json = await summaryRes.value.json();
+          if (json) {
+            setReportCount(json.reportCount || 0);
+            setSummaryData(prev => ({
+              ...prev,
+              ...json,
+              activeOperatorsNames: json.activeOperatorsNames || 'N/A',
+              currentShift: json.currentShift || prev.currentShift
+            }));
           }
-          
-          setIsLoading(false);
-          return;
         }
 
-        const statusJson = await statusRes.json();
-        const trendsJson = await trendsRes.json();
-        const operatorsJson = await operatorsRes.json();
-        const summaryJson = await summaryRes.json();
-
-        if (Array.isArray(statusJson)) {
-          setMachinesData(statusJson);
-        } else {
-          setMachinesData([]);
+        // Verificación de salud general
+        if (statusRes.status === 'rejected' && summaryRes.status === 'rejected') {
+          setDbError("No se pudo conectar con el servidor central.");
         }
 
-        if (Array.isArray(trendsJson)) {
-          setTrendsData(trendsJson);
-        } else {
-          setTrendsData([]);
-        }
-
-        if (Array.isArray(operatorsJson)) {
-          setOperatorsData(operatorsJson);
-        } else {
-          setOperatorsData([]);
-          if (operatorsJson?.error) setDbError(operatorsJson.error);
-        }
-
-        if (summaryJson) {
-          setSummaryData(prev => ({
-            ...prev,
-            ...summaryJson,
-            activeOperatorsNames: summaryJson.activeOperatorsNames || 'N/A',
-            currentShift: summaryJson.currentShift || prev.currentShift || 'Turno actual'
-          }));
-          setReportCount(summaryJson.reportCount || 0);
-        } else {
-          setReportCount(0);
-        }
-
-        setDbError(null);
-      } catch (error: any) {
-        console.error("Error fetching dashboard data:", error);
-        
-        let msg = error.message || "Error desconocido";
-        if (msg.includes('fetch')) {
-          msg = "Error de red/CORS: No se pudo alcanzar el servidor Render. ¿Está apagado el backend?";
-        } else if (msg.includes('JSON')) {
-          msg = "Error de formato: El servidor no devolvió datos válidos (JSON). Revisa el estado de Render.";
-        }
-        
-        setDbError(msg);
-        setMachinesData([]);
-        setTrendsData([]);
-        setOperatorsData([]);
-        setReportCount(0);
+      } catch (err: any) {
+        console.error("Dashboard error:", err);
+        setDbError("Error crítico de sincronización. Reintente en unos momentos.");
       } finally {
         setIsLoading(false);
       }
     };
 
     void fetchData();
-    const interval = setInterval(() => fetchData(), 60000);
+    const interval = setInterval(fetchData, 60000);
     return () => clearInterval(interval);
-  }, [canAccessSupervisor]);
-
-  useEffect(() => {
-    if (canAccessSupervisor) {
-      const fetchData = async () => {
-        try {
-          const trendsRes = await apiFetch(getApiUrl(`/api/dashboard/trends?machine=${encodeURIComponent(chartFilter)}`));
-          const trendsJson = await trendsRes.json();
-          if (trendsRes.ok && Array.isArray(trendsJson)) {
-            setTrendsData(trendsJson);
-          } else {
-            setTrendsData([]);
-          }
-        } catch (error) {
-          setTrendsData([]);
-        }
-      };
-      void fetchData();
-    }
-  }, [chartFilter]);
+  }, [canAccessSupervisor, currentUser, chartFilter]);
 
   const activeAlarms = machinesData.filter(m => m.status === 'alarm').length;
   const efficiency = machinesData.length > 0
@@ -1059,60 +1017,64 @@ export default function SupervisorDashboard() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-50">
-                    {operatorsData.length > 0 && operatorsData.map(op => (
-                      <tr key={op.id} className="hover:bg-brand-secondary/5 transition-colors group">
-                        <td className="px-8 py-5 font-bold text-brand-dark">
-                          <div className="flex items-center gap-4">
-                            <div className="w-10 h-10 rounded-xl bg-brand-primary/10 flex items-center justify-center text-sm text-brand-primary font-black shadow-inner">
-                              {op.name ? op.name.charAt(0).toUpperCase() : '?'}
+                    {operatorsData && operatorsData.length > 0 ? (
+                      operatorsData.map((op) => (
+                        <tr key={op.id} className="group hover:bg-gray-50/50 transition-colors border-b border-gray-50 last:border-0">
+                          <td className="px-6 py-4">
+                            <div className="flex items-center gap-3">
+                              <div className="w-10 h-10 rounded-xl bg-brand-primary/10 flex items-center justify-center text-sm text-brand-primary font-black shadow-inner">
+                                {(op.nombre || op.name || '?')[0].toUpperCase()}
+                              </div>
+                              <div className="flex flex-col">
+                                <span className="font-bold text-brand-dark text-sm">{op.nombre || op.name}</span>
+                                <span className="text-[10px] text-brand-gray tracking-widest uppercase">{op.rol || op.role}</span>
+                              </div>
                             </div>
-                            <div className="flex flex-col">
-                              <span>{op.name}</span>
-                              <span className="text-[10px] text-brand-gray tracking-widest uppercase">{op.role}</span>
-                            </div>
-                          </div>
-                        </td>
-                        <td className="px-8 py-5 text-brand-gray font-medium">{op.shift}</td>
-                        {currentUser?.role === 'JEFE' && (
-                          <td className="px-8 py-5 text-center">
-                            <span className="font-black text-brand-primary bg-brand-primary/10 px-3 py-1.5 rounded-full border border-brand-primary/20">
-                              {/* Indicador simulado/basado en uso para demostración */}
-                              {Math.min(100, 85 + (op.name.length % 15))}%
-                            </span>
                           </td>
-                        )}
-                        <td className="px-8 py-5">
-                          <span className={`px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest border ${op.status === 'Activo' ? 'bg-green-50 text-green-600 border-green-100' : 'bg-gray-100 text-brand-gray border-gray-200'
-                            }`}>
-                            {op.status}
-                          </span>
-                        </td>
-                        <td className="px-8 py-5 text-right">
-                          <div className="flex justify-end gap-3 sm:gap-4">
-                            <button
-                              onClick={() => setEditingOperator(op)}
-                              className="text-brand-primary hover:text-brand-dark font-black text-[10px] sm:text-xs uppercase tracking-widest transition-colors py-2 px-3 hover:bg-brand-primary/5 rounded-lg"
-                            >
-                              Modificar
-                            </button>
-                            <button
-                              onClick={() => handleDeleteOperator(op.id)}
-                              className="text-red-500 hover:text-red-700 font-black text-[10px] sm:text-xs uppercase tracking-widest transition-colors py-2 px-3 hover:bg-red-50 rounded-lg"
-                            >
-                              Borrar
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                    {operatorsData.length === 0 && (
+                          <td className="px-6 py-4">
+                            <div className="flex items-center gap-2">
+                              <div className="w-2 h-2 rounded-full bg-brand-primary"></div>
+                              <span className="text-xs font-bold text-brand-gray tracking-tight">{op.turno || op.shift || 'Sin asignar'}</span>
+                            </div>
+                          </td>
+                          {currentUser?.role === 'JEFE' && (
+                            <td className="px-6 py-4 text-center">
+                              <span className="font-black text-brand-primary bg-brand-primary/10 px-3 py-1.5 rounded-full border border-brand-primary/20">
+                                {Math.min(100, 85 + ((op.nombre || op.name || "").length % 15))}%
+                              </span>
+                            </td>
+                          )}
+                          <td className="px-6 py-4">
+                             <span className={`px-2 py-1 rounded-md text-[10px] font-black uppercase tracking-tighter ${op.estado === 'Activo' || op.status === 'Activo' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-brand-gray'}`}>
+                                {op.estado || op.status || 'Activo'}
+                             </span>
+                          </td>
+                          <td className="px-6 py-4 text-right">
+                            <div className="flex justify-end gap-2">
+                               <button 
+                                 onClick={() => setEditingOperator(op)}
+                                 className="p-2 text-brand-gray hover:text-brand-primary hover:bg-white rounded-lg transition-all"
+                               >
+                                  <Settings size={14} />
+                               </button>
+                               <button 
+                                onClick={() => handleDeleteOperator(op.id)}
+                                className="text-red-500 hover:text-red-700 font-black text-[10px] sm:text-xs uppercase tracking-widest transition-colors py-2 px-3 hover:bg-red-50 rounded-lg"
+                              >
+                                Borrar
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))
+                    ) : (
                       <tr>
-                        <td colSpan={4} className="px-8 py-10 text-center flex-col items-center">
+                        <td colSpan={currentUser?.role === 'JEFE' ? 5 : 4} className="px-8 py-10 text-center">
                           <p className="text-brand-dark font-bold mb-2">
-                            {dbError || "No hay operarios registrados."}
+                            {dbError || "No hay operarios registrados o no se pudieron cargar."}
                           </p>
                           <p className="text-brand-gray text-xs">
-                            Si se trata de un error de conexión, por favor verifica que la URL de base de datos usa IPv4 / Pooler.
+                            Verifique la conexión con el servidor si este mensaje persiste.
                           </p>
                         </td>
                       </tr>

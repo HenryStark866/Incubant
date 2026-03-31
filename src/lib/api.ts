@@ -25,18 +25,12 @@ export function getApiUrl(path: string): string {
  * This is REQUIRED for session cookies to work across the Vercel → Render proxy.
  */
 export const apiFetch = (url: string, options: RequestInit = {}): Promise<Response> => {
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 segundos de timeout
-
   return fetch(url, {
     ...options,
-    signal: controller.signal,
     credentials: 'include',
     headers: {
       'Content-Type': 'application/json',
       ...(options.headers || {}),
     },
-  }).finally(() => {
-    clearTimeout(timeoutId);
   });
 };

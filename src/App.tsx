@@ -42,33 +42,35 @@ export default function App() {
     };
 
     const validateSession = async () => {
-      try {
-        let healthy = await checkHealth();
-        let attempts = 0;
-        
-        while (!healthy && attempts < 8) { // Reducido de 12 a 8 para ser más ágil
-          await new Promise(r => setTimeout(r, 4000));
-          healthy = await checkHealth();
-          attempts++;
-          setRetryCount(attempts);
-          if (!isMounted) return;
-        }
-
-        if (healthy) {
-          const response = await apiFetch(getApiUrl('/api/session'));
-          if (isMounted && response.ok) {
-            const data = await response.json();
-            login(data.user);
-          } else if (isMounted && response.status === 401) {
-            logout();
-            setViewMode('mobile');
-          }
-        }
-      } catch (error) {
-        console.error('Session validation error:', error);
-      } finally {
-        if (isMounted) setIsSessionReady(true);
+      let healthy = await checkHealth();
+      let attempts = 0;
+      
+      while (!healthy && attempts < 12) {
+        await new Promise(r => setTimeout(r, 5000));
+        healthy = await checkHealth();
+        attempts++;
+        setRetryCount(attempts);
+        if (!isMounted) return;
       }
+
+      if (healthy) {
+        try {
+          const response = await apiFetch(getApiUrl('/api/session'));
+          if (isMounted) {
+            if (response.ok) {
+              const data = await response.json();
+              login(data.user);
+            } else if (response.status === 401) {
+              logout();
+              setViewMode('mobile');
+            }
+          }
+        } catch (error) {
+          console.error('Session validation error:', error);
+        }
+      }
+      
+      if (isMounted) setIsSessionReady(true);
     };
 
     void validateSession();
@@ -76,10 +78,17 @@ export default function App() {
   }, [login, logout]);
 
   useEffect(() => {
-    if (viewMode === 'supervisor' && !canAccessSupervisor) setViewMode('mobile');
-    if (canAccessSupervisor && viewMode === 'mobile') setViewMode('supervisor');
-  }, [canAccessSupervisor]);
+    if (!isSessionReady) return;
+    
+    // Auto-transition based on role access
+    if (canAccessSupervisor && viewMode === 'mobile') {
+      setViewMode('supervisor');
+    } else if (!canAccessSupervisor && viewMode === 'supervisor') {
+      setViewMode('mobile');
+    }
+  }, [canAccessSupervisor, isSessionReady, viewMode]);
 
+  // Pantalla de carga inicial (Holográfica/Futurista)
   if (!isSessionReady) {
     const isWaitingApi = isApiHealthy === false;
     return (
@@ -88,7 +97,6 @@ export default function App() {
         <div className="absolute -top-40 -left-40 w-96 h-96 rounded-full bg-brand-primary blur-[160px] opacity-10 animate-float-slow" />
         
         <div className="max-w-xs w-full flex flex-col items-center text-center gap-10 relative z-10">
-          {/* Logo Animation */}
           <div className="relative w-32 h-32 flex items-center justify-center">
              <div className="absolute inset-0 rounded-full border-2 border-brand-primary/20 animate-spin-slow" />
              <div className="absolute inset-[-8px] rounded-full border border-brand-secondary/10 animate-spin-reverse" style={{ borderStyle: 'dashed' }} />
@@ -109,9 +117,9 @@ export default function App() {
              </h2>
              <div className="h-px w-20 bg-brand-primary/20 mx-auto" />
              <p className="text-[10px] text-white/30 font-medium leading-relaxed uppercase tracking-widest max-w-[200px] mx-auto font-mono">
-              {isWaitingApi 
-                ? `Estableciendo enlace seguro con el núcleo central. Intento ${retryCount}/12` 
-                : 'Cargando protocolos de seguridad y validando sesión de operario...'}
+               {isWaitingApi 
+                 ? `Estableciendo enlace seguro con el núcleo central. Intento ${retryCount}/12` 
+                 : 'Cargando protocolos de seguridad y validando sesión de operario...'}
              </p>
           </div>
 
@@ -133,13 +141,18 @@ export default function App() {
     );
   }
 
+  // --- MODO SUPERVISOR / ADMINISTRADOR ---
   if (viewMode === 'supervisor' && canAccessSupervisor) {
     return (
-      <div className="relative h-screen w-full font-sans">
-        <SupervisorDashboard />
+      <div className="relative h-screen w-full font-sans bg-gray-50 flex flex-col">
+        {/* Aseguramos fondo sólido para evitar 'voids' de color azul oscuro */}
+        <div className="flex-1 overflow-hidden relative bg-gray-50">
+           <SupervisorDashboard />
+        </div>
+        
         <button 
           onClick={() => setViewMode('mobile')}
-          className="fixed bottom-10 right-10 btn-brand px-6 py-4 flex items-center gap-3 z-50 text-xs shadow-[0_20px_50px_rgba(247,147,26,0.4)]"
+          className="fixed bottom-10 right-10 btn-brand px-6 py-4 flex items-center gap-3 z-50 text-xs shadow-[0_20px_50px_rgba(247,147,26,0.4)] hover:scale-105 active:scale-95 transition-all"
         >
           <Smartphone size={18} />
           <span>VIEWPORT: OPERADOR</span>
@@ -148,6 +161,7 @@ export default function App() {
     );
   }
 
+  // --- MODO OPERARIO (MÓVIL) ---
   return (
     <div className="h-full w-full bg-[#060b18] relative flex flex-col items-center justify-center overscroll-none overflow-hidden font-mono">
       <UpdatePrompt />
@@ -156,7 +170,7 @@ export default function App() {
         <div className="fixed top-12 right-6 z-[100] animate-fade-in">
           <button 
             onClick={() => setViewMode('supervisor')}
-            className="glass-dark px-4 py-3 rounded-2xl border border-brand-primary/30 flex items-center gap-3 active:scale-95 transition-all shadow-2xl"
+            className="glass-dark px-4 py-3 rounded-2xl border border-brand-primary/30 flex items-center gap-3 active:scale-95 transition-all shadow-2xl hover:bg-white/5"
           >
             <div className="relative">
                <Monitor size={16} className="text-brand-primary" />
@@ -167,6 +181,7 @@ export default function App() {
         </div>
       )}
 
+      {/* El contenedor principal del flujo móvil */}
       <div className="w-full h-full relative overflow-hidden bg-white safe-top safe-bottom shadow-[0_0_100px_rgba(0,0,0,0.5)]">
         {!currentUser ? (
           <LoginScreen />
@@ -180,4 +195,6 @@ export default function App() {
       </div>
     </div>
   );
+}
+
 }

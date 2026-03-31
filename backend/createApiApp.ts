@@ -736,12 +736,21 @@ export function createApiApp(): Express {
         displayNames = assignedNames.join(', ') + ' (Asignado)';
       }
 
+      // Contar reportes de cierre de turno del turno actual
+      const shiftClosingCount = await prisma.report.count({
+        where: {
+          isClosingReport: true,
+          fecha_hora: { gte: fifteenMinsAgo }
+        }
+      });
+
       return res.json({ 
         reportCount, 
         lastReportTime: lastLog?.fecha_hora || null,
         activeOperatorsCount: onlineNames.length || assignedNames.length,
         activeOperatorsNames: displayNames,
-        currentShift
+        currentShift,
+        shiftClosingCount
       });
     } catch (error) {
       console.error('[Dashboard] Error al consultar resumen:', error);

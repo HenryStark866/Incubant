@@ -24,6 +24,7 @@ export default function SupervisorDashboard() {
   const [trendsData, setTrendsData] = useState<any[]>([]);
   const [operatorsData, setOperatorsData] = useState<any[]>([]);
   const [reportCount, setReportCount] = useState(0);
+  const [shiftClosingCount, setShiftClosingCount] = useState(0);
   const [summaryData, setSummaryData] = useState<{
     lastReportTime: string | null;
     activeOperatorsCount: number;
@@ -242,6 +243,7 @@ export default function SupervisorDashboard() {
           const json = await summaryRes.value.json();
           if (json) {
             setReportCount(json.reportCount || 0);
+            setShiftClosingCount(json.shiftClosingCount || 0);
             setSummaryData(prev => ({
               ...prev,
               ...json,
@@ -817,12 +819,15 @@ export default function SupervisorDashboard() {
                   </p>
                 </div>
 
-                {/* Fecha + Reportes */}
+                {/* Cierres de turno */}
                 <div>
-                  <p className="text-[7px] text-brand-gray uppercase font-black tracking-wider leading-none mb-0.5">Fecha</p>
-                  <p className="text-[10px] text-brand-dark font-medium truncate leading-none">
-                    {currentTime.toLocaleDateString('es-CO', { day: '2-digit', month: 'short' })}
-                  </p>
+                  <p className="text-[7px] text-brand-gray uppercase font-black tracking-wider leading-none mb-0.5">Cierres</p>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-lg font-black text-brand-primary leading-none">{shiftClosingCount}</span>
+                    <span className="text-[8px] text-brand-gray font-medium leading-none">
+                      {shiftClosingCount === 1 ? 'reporte' : 'reportes'}
+                    </span>
+                  </div>
                 </div>
               </div>
             </div>

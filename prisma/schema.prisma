@@ -87,6 +87,7 @@ model Report {
   
   // Status y Alarmas
   isAlarm           Boolean?  @default(false)
+  isClosingReport   Boolean?  @default(false)
   processStatus     String?   @default("NORMAL")
   observaciones     String?   @default("")
   

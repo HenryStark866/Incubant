@@ -819,23 +819,55 @@ export default function SupervisorDashboard() {
                 </div>
               </div>
 
-              {/* Shift monitor card */}
-              <div className="bg-white border-2 border-brand-primary/20 shadow-sm rounded-xl px-4 py-2 flex items-center gap-4 min-w-0 flex-1 max-w-[340px]">
-                <div className="p-2 bg-brand-primary/10 rounded-xl text-brand-primary">
-                  <Clock size={18} className="animate-pulse" />
+              {/* Shift monitor card - Redesigned */}
+              <div className="bg-gradient-to-r from-brand-primary/5 via-brand-primary/10 to-brand-secondary/5 border-2 border-brand-primary/20 shadow-lg shadow-brand-primary/5 rounded-2xl px-4 py-3 flex items-center gap-4 min-w-0 flex-1 max-w-[480px] hover:border-brand-primary/30 transition-all">
+                {/* Clock + Live indicator */}
+                <div className="flex flex-col items-center gap-1 flex-shrink-0">
+                  <div className="relative">
+                    <div className="p-2.5 bg-brand-primary rounded-xl text-white shadow-lg shadow-brand-primary/30">
+                      <Clock size={18} className="animate-pulse" />
+                    </div>
+                    <div className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-green-500 rounded-full border-2 border-white shadow-sm animate-pulse"></div>
+                  </div>
+                  <span className="text-[7px] font-black text-green-600 uppercase tracking-tight">En línea</span>
                 </div>
-                <div className="flex-1 min-w-0 space-y-0.5">
+
+                {/* Main info */}
+                <div className="flex-1 min-w-0 space-y-1.5">
+                  {/* Shift + Time row */}
                   <div className="flex items-center justify-between gap-2">
-                    <p className="text-[9px] text-brand-primary font-black uppercase tracking-wider truncate">
-                      {currentShiftName} | {currentTime.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })}
-                    </p>
-                    <span className="flex-shrink-0 flex items-center gap-1 px-1.5 py-0.5 bg-green-50 text-[8px] font-black text-green-600 rounded-full border border-green-100 uppercase">
-                      En línea
+                    <div className="flex items-center gap-2">
+                      <span className="px-2 py-0.5 bg-brand-primary text-white text-[8px] font-black uppercase tracking-wider rounded-md">
+                        {currentShiftName}
+                      </span>
+                      <span className="text-[9px] text-brand-gray font-medium">
+                        {currentTime.toLocaleDateString('es-CO', { weekday: 'short', day: 'numeric', month: 'short' })}
+                      </span>
+                    </div>
+                    <span className="text-sm font-black text-brand-dark font-mono-display tabular-nums">
+                      {currentTime.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
                     </span>
                   </div>
-                  <p className="text-xs font-black text-brand-dark tracking-tight truncate">
-                    Operador: <span className="text-brand-primary">{activeOperatorsList}</span>
-                  </p>
+
+                  {/* Operator + Reports row */}
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <div className="w-4 h-4 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0">
+                        <Users size={10} className="text-green-600" />
+                      </div>
+                      <p className="text-[10px] font-bold text-brand-dark truncate">
+                        {activeOperatorsList !== 'N/A' ? activeOperatorsList : 'Sin operador asignado'}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-1.5 flex-shrink-0">
+                      <div className="w-4 h-4 rounded-full bg-brand-primary/10 flex items-center justify-center">
+                        <FileText size={10} className="text-brand-primary" />
+                      </div>
+                      <p className="text-[10px] font-black text-brand-primary">
+                        {reportCount} reporte{reportCount !== 1 ? 's' : ''}
+                      </p>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>

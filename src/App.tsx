@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import DashboardScreen from './screens/DashboardScreen';
 import CameraScreen from './screens/CameraScreen';
 import FormScreen from './screens/FormScreen';
@@ -7,7 +7,7 @@ import SupervisorDashboard from './screens/SupervisorDashboard';
 import UpdatePrompt from './components/UpdatePrompt';
 import { useMachineStore } from './store/useMachineStore';
 import { canUseSupervisorPanel } from './lib/fallbackAuth';
-import { Smartphone, Monitor, Loader2, Wifi, WifiOff, Cpu, ShieldCheck } from 'lucide-react';
+import { Smartphone, Monitor, Loader2, Wifi, WifiOff, Cpu } from 'lucide-react';
 import { getApiUrl, apiFetch } from './lib/api';
 
 export default function App() {
@@ -79,7 +79,6 @@ export default function App() {
 
   const isSyncingRef = useRef(false);
 
-  // Sincronización en Tiempo Real: Comprobar estado de sesión/perfil cada 1 segundo
   useEffect(() => {
     if (!currentUser) return;
     
@@ -91,7 +90,6 @@ export default function App() {
         if (res.ok) {
           const { user } = await res.json();
           if (user && JSON.stringify(user) !== JSON.stringify(currentUser)) {
-            
             if (user.shift !== currentUser.shift) {
                try {
                   const { showAppNotification } = await import('./utils/notifications');
@@ -101,7 +99,6 @@ export default function App() {
                   });
                } catch (notifErr) { console.warn('Notificaciones no disponibles'); }
             }
-
             login(user);
           }
         } else if (res.status === 401) {
@@ -116,20 +113,28 @@ export default function App() {
 
     const interval = setInterval(syncProfile, 1000);
     return () => clearInterval(interval);
-  }, [currentUser, login, logout, isSyncingRef]);
+  }, [currentUser, login, logout]);
 
-  // Transición Automática de Vistas basada en permisos
+  // Solo auto-cambiar a supervisor en el login inicial, NO cuando el usuario cambia manualmente
+  const hasAutoSwitchedRef = useRef(false);
   useEffect(() => {
-    if (!isSessionReady) return;
-    
-    if (canAccessSupervisor && viewMode === 'mobile') {
+    if (!isSessionReady || !canAccessSupervisor) return;
+    if (!hasAutoSwitchedRef.current) {
+      hasAutoSwitchedRef.current = true;
       setViewMode('supervisor');
-    } else if (!canAccessSupervisor && viewMode === 'supervisor') {
-      setViewMode('mobile');
     }
-  }, [canAccessSupervisor, isSessionReady, viewMode]);
+  }, [canAccessSupervisor, isSessionReady]);
 
-  // Pantalla de carga inicial (Holográfica/Futurista)
+  const handleSwitchToMobile = useCallback(() => {
+    hasAutoSwitchedRef.current = false;
+    setViewMode('mobile');
+  }, []);
+
+  const handleSwitchToSupervisor = useCallback(() => {
+    hasAutoSwitchedRef.current = true;
+    setViewMode('supervisor');
+  }, []);
+
   if (!isSessionReady) {
     const isWaitingApi = isApiHealthy === false;
     return (
@@ -182,35 +187,33 @@ export default function App() {
     );
   }
 
-  // --- MODO SUPERVISOR / ADMINISTRADOR ---
   if (viewMode === 'supervisor' && canAccessSupervisor) {
     return (
       <div className="relative h-screen w-full font-sans bg-gray-50 flex flex-col">
-        {/* Aseguramos fondo sólido para evitar 'voids' de color azul oscuro */}
         <div className="flex-1 overflow-hidden relative bg-gray-50">
            <SupervisorDashboard />
         </div>
         
+        {/* Botón flotante para cambiar a vista de operario - integrado en el diseño */}
         <button 
-          onClick={() => setViewMode('mobile')}
-          className="fixed bottom-10 right-10 btn-brand px-6 py-4 flex items-center gap-3 z-50 text-xs shadow-[0_20px_50px_rgba(247,147,26,0.4)] hover:scale-105 active:scale-95 transition-all"
+          onClick={handleSwitchToMobile}
+          className="fixed bottom-6 right-6 z-50 flex items-center gap-2 bg-white border-2 border-brand-primary/20 text-brand-dark px-5 py-3 rounded-2xl font-bold text-xs shadow-xl hover:bg-brand-primary hover:text-white hover:border-brand-primary transition-all active:scale-95"
         >
-          <Smartphone size={18} />
-          <span>VIEWPORT: OPERADOR</span>
+          <Smartphone size={16} />
+          <span>Vista Operario</span>
         </button>
       </div>
     );
   }
 
-  // --- MODO OPERARIO (MÓVIL) ---
   return (
     <div className="h-full w-full bg-[#060b18] relative flex flex-col items-center justify-center overscroll-none overflow-hidden font-mono">
       <UpdatePrompt />
       
       {canAccessSupervisor && (
-        <div className="fixed top-12 right-6 z-[100] animate-fade-in">
+        <div className="fixed top-4 right-4 z-[100] animate-fade-in">
           <button 
-            onClick={() => setViewMode('supervisor')}
+            onClick={handleSwitchToSupervisor}
             className="glass-dark px-4 py-3 rounded-2xl border border-brand-primary/30 flex items-center gap-3 active:scale-95 transition-all shadow-2xl hover:bg-white/5"
           >
             <div className="relative">
@@ -222,7 +225,6 @@ export default function App() {
         </div>
       )}
 
-      {/* El contenedor principal del flujo móvil */}
       <div className="w-full h-full relative overflow-hidden bg-white safe-top safe-bottom shadow-[0_0_100px_rgba(0,0,0,0.5)]">
         {!currentUser ? (
           <LoginScreen />
@@ -237,4 +239,3 @@ export default function App() {
     </div>
   );
 }
-

@@ -90,14 +90,9 @@ export default function SupervisorDashboard() {
     setIsSidebarOpen(false);
   };
 
-  const handleLogout = async () => {
-    try {
-      await apiFetch(getApiUrl('/api/logout'), { method: 'POST' });
-    } catch (error) {
-      console.error('Error cerrando sesión:', error);
-    } finally {
-      logout();
-    }
+  const handleLogout = () => {
+    logout();
+    apiFetch(getApiUrl('/api/logout'), { method: 'POST' }).catch(() => {});
   };
 
   const handleOpenEvidences = () => {

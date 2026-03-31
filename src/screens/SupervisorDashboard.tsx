@@ -761,66 +761,48 @@ export default function SupervisorDashboard() {
               </div>
             </div>
 
-            {/* Row 2: Stats + Actions */}
-            <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+            {/* Row 2: Actions + Stats (compact) */}
+            <div className="flex flex-wrap items-center gap-2">
               {/* Desktop action buttons */}
               <button
                 onClick={handleOpenEvidences}
-                className="hidden lg:flex bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl items-center gap-2 text-xs font-black transition-all shadow-lg active:scale-95"
+                className="hidden lg:flex bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-xl items-center gap-2 text-xs font-black transition-all shadow-lg active:scale-95"
               >
-                <ImageIcon size={16} />
-                Ver Evidencias
+                <ImageIcon size={14} />
+                Evidencias
               </button>
 
               <button
                 onClick={handleDownloadReport}
-                className="hidden lg:flex bg-brand-primary hover:bg-[#E6951F] text-white px-4 py-2 rounded-xl items-center gap-2 text-xs font-black transition-all shadow-lg active:scale-95"
+                className="hidden lg:flex bg-brand-primary hover:bg-[#E6951F] text-white px-3 py-2 rounded-xl items-center gap-2 text-xs font-black transition-all shadow-lg active:scale-95"
               >
-                <Download size={16} />
+                <Download size={14} />
                 Reporte PDF
               </button>
 
-              {/* Report count */}
-              <div className="bg-white border border-gray-100 shadow-sm rounded-xl px-3 py-2 flex items-center gap-3">
-                <div className="p-1.5 bg-green-50 rounded-lg">
-                  <CheckCircle2 className="text-green-500" size={16} />
-                </div>
+              {/* Report count - compact */}
+              <div className="bg-white border border-gray-100 shadow-sm rounded-xl px-3 py-2 flex items-center gap-2">
+                <CheckCircle2 className="text-green-500" size={14} />
                 <div>
-                  <p className="text-[8px] text-brand-gray uppercase font-black tracking-widest">Reportes</p>
-                  <p className="text-lg font-black text-brand-dark leading-none">{reportCount}</p>
+                  <p className="text-[7px] text-brand-gray uppercase font-black tracking-widest leading-none">Reportes</p>
+                  <p className="text-sm font-black text-brand-dark leading-none">{reportCount}</p>
                 </div>
               </div>
 
-              {/* Alarms */}
-              <div className={`border shadow-sm rounded-xl px-3 py-2 flex items-center gap-3 transition-colors ${activeAlarms > 0 ? 'bg-red-50 border-red-100' : 'bg-white border-gray-100'
+              {/* Alarms - compact */}
+              <div className={`border shadow-sm rounded-xl px-3 py-2 flex items-center gap-2 transition-colors ${activeAlarms > 0 ? 'bg-red-50 border-red-100' : 'bg-white border-gray-100'
                 }`}>
-                <div className={`p-1.5 rounded-lg ${activeAlarms > 0 ? 'bg-red-100' : 'bg-gray-50'}`}>
-                  <AlertTriangle className={activeAlarms > 0 ? 'text-red-500' : 'text-brand-gray'} size={16} />
-                </div>
+                <AlertTriangle className={activeAlarms > 0 ? 'text-red-500' : 'text-brand-gray'} size={14} />
                 <div>
-                  <p className="text-[8px] text-brand-gray uppercase font-black tracking-widest">Alarmas</p>
-                  <p className={`text-lg font-black leading-none ${activeAlarms > 0 ? 'text-red-600' : 'text-brand-dark'}`}>
+                  <p className="text-[7px] text-brand-gray uppercase font-black tracking-widest leading-none">Alarmas</p>
+                  <p className={`text-sm font-black leading-none ${activeAlarms > 0 ? 'text-red-600' : 'text-brand-dark'}`}>
                     {activeAlarms}
                   </p>
                 </div>
               </div>
 
-              {/* Efficiency bar (desktop) */}
-              <div className="hidden md:block flex-1 min-w-[120px] max-w-[200px]">
-                <div className="flex justify-between text-[8px] mb-1 font-bold uppercase tracking-widest">
-                  <span className="text-brand-gray">Eficiencia</span>
-                  <span className="text-brand-primary">{efficiency}%</span>
-                </div>
-                <div className="h-2 bg-gray-100 rounded-full overflow-hidden shadow-inner">
-                  <div
-                    className="h-full bg-brand-primary rounded-full shadow-[0_0_8px_rgba(245,166,35,0.4)] transition-all"
-                    style={{ width: `${efficiency}%` }}
-                  ></div>
-                </div>
-              </div>
-
-              {/* Shift monitor card - Redesigned */}
-              <div className="bg-gradient-to-r from-brand-primary/5 via-brand-primary/10 to-brand-secondary/5 border-2 border-brand-primary/20 shadow-lg shadow-brand-primary/5 rounded-2xl px-4 py-3 flex items-center gap-4 min-w-0 flex-1 max-w-[480px] hover:border-brand-primary/30 transition-all">
+              {/* Shift monitor card - Full remaining space */}
+              <div className="bg-gradient-to-r from-brand-primary/5 via-brand-primary/10 to-brand-secondary/5 border-2 border-brand-primary/20 shadow-lg shadow-brand-primary/5 rounded-2xl px-4 py-3 flex items-center gap-4 min-w-0 flex-1 hover:border-brand-primary/30 transition-all">
                 {/* Clock + Live indicator */}
                 <div className="flex flex-col items-center gap-1 flex-shrink-0">
                   <div className="relative">

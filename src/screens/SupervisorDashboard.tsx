@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Activity, AlertTriangle, Clock, Users, LayoutDashboard,
   Settings, ChevronDown, X, Image as ImageIcon, CheckCircle2,
@@ -199,13 +199,15 @@ export default function SupervisorDashboard() {
     }
   };
 
+  const isFetchingRef = useRef(false);
   useEffect(() => {
     const fetchData = async () => {
-      if (!currentUser || !canAccessSupervisor) {
+      if (!currentUser || !canAccessSupervisor || isFetchingRef.current) {
         if (!canAccessSupervisor) setIsLoading(false);
         return;
       }
 
+      isFetchingRef.current = true;
       try {
         setDbError(null);
         
@@ -251,19 +253,21 @@ export default function SupervisorDashboard() {
 
         // Verificación de salud general
         if (statusRes.status === 'rejected' && summaryRes.status === 'rejected') {
-          setDbError("No se pudo conectar con el servidor central.");
+          // Solo mostrar error si fallan llamadas críticas
+          console.warn("Conexión intermitente con el servidor.");
         }
 
       } catch (err: any) {
         console.error("Dashboard error:", err);
-        setDbError("Error crítico de sincronización. Reintente en unos momentos.");
       } finally {
         setIsLoading(false);
+        isFetchingRef.current = false;
       }
     };
 
+    // Ejecución inicial y polling de alta frecuencia (1 segundo)
     void fetchData();
-    const interval = setInterval(fetchData, 60000);
+    const interval = setInterval(fetchData, 1000);
     return () => clearInterval(interval);
   }, [canAccessSupervisor, currentUser, chartFilter]);
 

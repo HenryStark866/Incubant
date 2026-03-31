@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Calendar, User, Clock, Trash2, Plus, Users, Save, CheckCircle2, AlertTriangle, ArrowRight, UserPlus, FileSpreadsheet, PlusCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { getApiUrl, apiFetch } from '../../lib/api';
@@ -41,7 +41,7 @@ export default function ShiftManager() {
   const [showShiftForm, setShowShiftForm] = useState(false);
   const [newShift, setNewShift] = useState({ nombre: '', hora_inicio: '06:00', hora_fin: '14:00', color: '#FF7A00' });
 
-  const fetchData = async () => {
+  const fetchData = async (isInitial: boolean = false) => {
     try {
       const [sRes, uRes, aRes] = await Promise.all([
         apiFetch(getApiUrl('/api/admin/shifts')),
@@ -57,19 +57,39 @@ export default function ShiftManager() {
       setUsers(Array.isArray(usersJson) ? usersJson : []);
       setAssignments(Array.isArray(assignmentsJson) ? assignmentsJson : []);
       
-      // Auto-select first shift if none selected
-      if (Array.isArray(shiftsJson) && shiftsJson.length > 0 && !selectedShift) {
+      // Auto-seleccionar primer turno SOLO en la carga inicial si no hay ninguno
+      if (isInitial && Array.isArray(shiftsJson) && shiftsJson.length > 0 && !selectedShift) {
         setSelectedShift(shiftsJson[0].id);
       }
     } catch (err) {
       console.error('Error fetching data:', err);
-      setFeedback({ type: 'error', text: 'Error al conectar con el servidor' });
+      // Solo mostramos feedback de error si no es una sincronización secundaria
+      if (isInitial) setFeedback({ type: 'error', text: 'Error al conectar con el servidor' });
     }
   };
 
+  const isSyncingRef = useRef(false);
   useEffect(() => {
-    fetchData();
-  }, []);
+    let mounts = true;
+    const syncInternal = async (isInitial: boolean) => {
+      if (isSyncingRef.current) return;
+      isSyncingRef.current = true;
+      try {
+        if (mounts) await fetchData(isInitial);
+      } finally {
+        isSyncingRef.current = false;
+      }
+    };
+    
+    syncInternal(true);
+    const interval = setInterval(() => syncInternal(false), 3000); // Polling más relajado para gestión
+    return () => {
+      mounts = false;
+      clearInterval(interval);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // El effect inicial solo corre una vez. fetchData se definió fuera pero como se recrea, 
+          // usaremos una versión local o movemos fetchData adentro para evitar warnings.
 
   const handleCreateAssignment = async () => {
     if (!selectedUser || !selectedShift || !selectedDate) return;
@@ -85,7 +105,7 @@ export default function ShiftManager() {
       });
       if (res.ok) {
         setFeedback({ type: 'success', text: 'Turno asignado correctamente' });
-        fetchData();
+        fetchData(false);
       } else {
         setFeedback({ type: 'error', text: 'Error al asignar turno' });
       }
@@ -105,7 +125,7 @@ export default function ShiftManager() {
       });
       if (res.ok) {
         setShowShiftForm(false);
-        fetchData();
+        fetchData(false);
       }
     } catch (err) {
       console.error('Error creating shift:', err);
@@ -116,7 +136,7 @@ export default function ShiftManager() {
     if (!confirm('¿Seguro que deseas eliminar esta asignación?')) return;
     try {
       await apiFetch(getApiUrl(`/api/admin/assignments/${id}`), { method: 'DELETE' });
-      fetchData();
+      fetchData(false);
     } catch (err) {
       console.error('Error deleting assignment:', err);
     }
@@ -129,7 +149,7 @@ export default function ShiftManager() {
       if (res.ok) {
         setFeedback({ type: 'success', text: 'Turno eliminado' });
         if (selectedShift === id) setSelectedShift('');
-        fetchData();
+        fetchData(false);
       } else {
         const errJson = await res.json().catch(() => ({}));
         setFeedback({ type: 'error', text: errJson.error || 'Error al eliminar turno' });

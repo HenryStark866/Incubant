@@ -148,12 +148,13 @@ const MachineCard = ({
 
         {/* Botón de acción */}
         {isPending ? (
-          <div
+          <button
+            type="button"
             onClick={onCameraClick}
             className="p-2 rounded-xl transition-all active:scale-90 glow-primary"
             style={{ background: 'linear-gradient(135deg, #f7931a, #ffb800)' }}>
             <Camera size={13} className="text-white" />
-          </div>
+          </button>
         ) : (
           <div className={`p-1.5 rounded-xl border ${
             isAlarm ? 'bg-red-500/20 border-red-500/40' : 'bg-green-500/15 border-green-500/30'
@@ -225,28 +226,8 @@ export default function DashboardScreen() {
     return () => clearInterval(interval);
   }, []);
 
-  // Poll de estado en tiempo real
-  useEffect(() => {
-    if (!currentUser) return;
-    const notifyChange = async (user: any) => {
-      const { showAppNotification } = await import('../utils/notifications');
-      await showAppNotification('¡Cambio de Turno!', {
-        body: `Has sido reasignado al ${user.shift}.`,
-        icon: '/pwa-192x192.png'
-      });
-    };
-    const check = async () => {
-      try {
-        const res = await apiFetch(getApiUrl('/api/session'));
-        if (res.ok) {
-          const { user } = await res.json();
-          if (user && user.shift !== currentUser.shift) { void notifyChange(user); login(user); }
-        }
-      } catch { /* silencioso */ }
-    };
-    const interval = setInterval(check, 15000);
-    return () => clearInterval(interval);
-  }, [currentUser, login]);
+  // Nota: El polling de sesión (/api/session) ya lo gestiona App.tsx cada segundo.
+  // No duplicamos el intervalo aquí para evitar doble carga y re-renders innecesarios.
 
   const filteredMachines = machines.filter(m => m.type === activeTab);
   const pendingMachines = machines.filter(m => m.status === 'pending');

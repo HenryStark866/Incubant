@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import DashboardScreen from './screens/DashboardScreen';
 import CameraScreen from './screens/CameraScreen';
 import FormScreen from './screens/FormScreen';
@@ -77,10 +77,51 @@ export default function App() {
     return () => { isMounted = false; };
   }, [login, logout]);
 
+  const isSyncingRef = useRef(false);
+
+  // Sincronización en Tiempo Real: Comprobar estado de sesión/perfil cada 1 segundo
+  useEffect(() => {
+    if (!currentUser) return;
+    
+    const syncProfile = async () => {
+      if (isSyncingRef.current) return;
+      isSyncingRef.current = true;
+      try {
+        const res = await apiFetch(getApiUrl('/api/session'));
+        if (res.ok) {
+          const { user } = await res.json();
+          if (user && JSON.stringify(user) !== JSON.stringify(currentUser)) {
+            
+            if (user.shift !== currentUser.shift) {
+               try {
+                  const { showAppNotification } = await import('./utils/notifications');
+                  void showAppNotification('¡Cambio de Turno!', {
+                    body: `Has sido reasignado al ${user.shift}.`,
+                    icon: '/pwa-192x192.png'
+                  });
+               } catch (notifErr) { console.warn('Notificaciones no disponibles'); }
+            }
+
+            login(user);
+          }
+        } else if (res.status === 401) {
+          logout();
+        }
+      } catch (err) {
+        /* Silencioso */
+      } finally {
+        isSyncingRef.current = false;
+      }
+    };
+
+    const interval = setInterval(syncProfile, 1000);
+    return () => clearInterval(interval);
+  }, [currentUser, login, logout, isSyncingRef]);
+
+  // Transición Automática de Vistas basada en permisos
   useEffect(() => {
     if (!isSessionReady) return;
     
-    // Auto-transition based on role access
     if (canAccessSupervisor && viewMode === 'mobile') {
       setViewMode('supervisor');
     } else if (!canAccessSupervisor && viewMode === 'supervisor') {
@@ -197,4 +238,3 @@ export default function App() {
   );
 }
 
-}

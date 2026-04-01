@@ -497,12 +497,6 @@ async function seedMachines() {
     console.warn('[Seed] No se pudo sembrar máquinas:', error instanceof Error ? error.message : '');
   }
 }
-    }
-    console.log(`[Seed] Sincronización de usuarios predefinidos finalizada.`);
-  } catch (error) {
-    console.warn('[Seed] No se pudo conectar a la base de datos para sembrar usuarios.', error instanceof Error ? error.message : '');
-  }
-}
 
 // ==========================================================================
 // EXPRESS APP
@@ -1338,6 +1332,55 @@ export function createApiApp(): Express {
         status: 'Activo',
       }));
       return res.json(fallback);
+    }
+  });
+
+  // ── Dashboard: Machine Logs (Bitácora) ───────────────────────────────────
+  app.get('/api/dashboard/machine-logs', requireRoles(SUPERVISOR_ROLES), async (req, res) => {
+    try {
+      const { machineId, hours = '48' } = req.query;
+      if (!machineId) return res.status(400).json({ error: 'machineId es requerido' });
+
+      const prisma = await getPrismaClient();
+      const hoursNum = parseInt(hours as string) || 48;
+      const timeAgo = new Date(Date.now() - hoursNum * 60 * 60 * 1000);
+
+      const logs = await prisma.hourlyLog.findMany({
+        where: {
+          machine_id: String(machineId),
+          fecha_hora: { gte: timeAgo },
+        },
+        orderBy: { fecha_hora: 'desc' },
+        take: 50,
+        include: {
+          user: {
+            select: { nombre: true },
+          },
+        },
+      });
+
+      const formatted = logs.map((log) => {
+        const d = new Date(log.fecha_hora);
+        const timeStr = `${d.toLocaleDateString('es-ES', { day: '2-digit', month: 'short' })} ${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
+        return {
+          time: timeStr,
+          tempPrincipal: log.temp_principal_actual?.toFixed(1) || '--',
+          tempPrincipalSP: log.temp_principal_consigna?.toFixed(1) || '--',
+          tempSecundaria: log.temp_secundaria_actual?.toFixed(1) || '--',
+          tempSecundariaSP: log.temp_secundaria_consigna?.toFixed(1) || '--',
+          co2: log.co2_actual?.toFixed(1) || '--',
+          co2SP: log.co2_consigna?.toFixed(1) || '--',
+          tempSuperior: log.temp_superior_actual?.toFixed(1) || '--',
+          observaciones: log.observaciones || '',
+          operator: log.user?.nombre || 'Desconocido',
+          timestamp: log.fecha_hora.toISOString(),
+        };
+      });
+
+      return res.json(formatted);
+    } catch (error) {
+      console.error('[Dashboard] Error al consultar logs:', error);
+      return res.json([]);
     }
   });
 

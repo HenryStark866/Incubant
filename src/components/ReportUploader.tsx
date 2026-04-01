@@ -15,6 +15,7 @@ interface ReportResult {
 interface ReportUploaderProps {
   machineId: string;
   machineName: string;
+  reportData?: Record<string, any>;
   onSuccess?: (result: ReportResult) => void;
   onClose?: () => void;
 }
@@ -30,7 +31,7 @@ const STATE_MESSAGES: Record<UploadState, string> = {
   error: 'Ocurrió un error al procesar el reporte.',
 };
 
-export default function ReportUploader({ machineId, machineName, onSuccess, onClose }: ReportUploaderProps) {
+export default function ReportUploader({ machineId, machineName, reportData, onSuccess, onClose }: ReportUploaderProps) {
   const [uploadState, setUploadState] = useState<UploadState>('idle');
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -66,6 +67,9 @@ export default function ReportUploader({ machineId, machineName, onSuccess, onCl
       const formData = new FormData();
       formData.append('evidence', selectedFile);
       formData.append('machineId', machineId);
+      if (reportData) {
+        formData.append('reportData', JSON.stringify(reportData));
+      }
 
       setUploadState('uploading');
 

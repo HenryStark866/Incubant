@@ -1,6 +1,7 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { useMachineStore, MachineData } from '../store/useMachineStore';
 import { useThemeStore } from '../store/useThemeStore';
+import { getApiUrl, apiFetch } from '../lib/api';
 import {
   ChevronLeft, Save, AlertCircle, Thermometer, Droplets,
   Calendar, RotateCw, Wind, Bell, MessageSquare, Activity,
@@ -132,6 +133,7 @@ export default function FormScreen() {
 
   const [errors, setErrors] = useState<Partial<Record<keyof MachineData, boolean>>>({});
   const [showToast, setShowToast] = useState(false);
+  const [uploadWarnings, setUploadWarnings] = useState<string[]>([]);
 
   const handleInputChange = useCallback((field: keyof MachineData, value: any) => {
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -143,7 +145,7 @@ export default function FormScreen() {
     if (errors.tiempoIncubacion) setErrors(prev => ({ ...prev, tiempoIncubacion: false }));
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     const newErrors: any = {};
     let hasErrors = false;
 
@@ -176,8 +178,59 @@ export default function FormScreen() {
     }
 
     setShowToast(true);
+    setUploadWarnings([]);
     navigator.vibrate?.(100);
-    setTimeout(() => { saveMachineData(machine!.id, formData, capturedPhoto || ''); }, 2000);
+
+    let photoUrl = capturedPhoto || '';
+
+    if (capturedPhoto) {
+      try {
+        const response = await fetch(capturedPhoto);
+        const blob = await response.blob();
+        const file = new File([blob], 'evidence.jpg', { type: 'image/jpeg' });
+
+        const uploadFormData = new FormData();
+        uploadFormData.append('evidence', file);
+        uploadFormData.append('machineId', machine!.id);
+        uploadFormData.append('reportData', JSON.stringify({
+          ...formData,
+          tempOvoscanReal: formData.tempOvoscanReal,
+          tempOvoscanSP: formData.tempOvoscanSP,
+          tempAireReal: formData.tempAireReal,
+          tempAireSP: formData.tempAireSP,
+          tempSynchroReal: formData.tempSynchroReal,
+          tempSynchroSP: formData.tempSynchroSP,
+          temperaturaReal: formData.temperaturaReal,
+          temperaturaSP: formData.temperaturaSP,
+          humedadReal: formData.humedadReal,
+          humedadSP: formData.humedadSP,
+          co2Real: formData.co2Real,
+          co2SP: formData.co2SP,
+          observaciones: formData.observaciones,
+        }));
+
+        const uploadResponse = await apiFetch(getApiUrl('/api/reports'), {
+          method: 'POST',
+          body: uploadFormData,
+          headers: {},
+        });
+
+        const uploadResult = await uploadResponse.json();
+
+        if (uploadResponse.ok) {
+          photoUrl = uploadResult.report.imageUrl || capturedPhoto;
+          if (uploadResult.report.warnings && uploadResult.report.warnings.length > 0) {
+            setUploadWarnings(uploadResult.report.warnings);
+          }
+        } else {
+          console.error('[FormScreen] Error subiendo foto:', uploadResult.error);
+        }
+      } catch (uploadError) {
+        console.error('[FormScreen] Error de red al subir foto:', uploadError);
+      }
+    }
+
+    setTimeout(() => { saveMachineData(machine!.id, formData, photoUrl); }, 500);
   };
 
   if (!machine) return null;
@@ -229,9 +282,14 @@ export default function FormScreen() {
               <div className="w-12 h-12 rounded-2xl bg-green-500/20 flex items-center justify-center animate-bounce">
                 <CheckCircle2 size={24} className="text-green-400" />
               </div>
-              <div>
+              <div className="flex-1">
                 <p className="text-sm font-black text-white uppercase font-mono-display">TRANSMISIÓN EXITOSA</p>
-                <p className="text-[10px] text-green-400/60 font-mono tracking-widest">Sincronizando con base de datos...</p>
+                <p className="text-[10px] text-green-400/60 font-mono tracking-widest">Foto y datos sincronizados</p>
+                {uploadWarnings.length > 0 && (
+                  <div className="mt-2 p-2 rounded-lg bg-yellow-500/10 border border-yellow-500/20">
+                    <p className="text-[9px] text-yellow-400 font-bold">⚠ {uploadWarnings.join(', ')}</p>
+                  </div>
+                )}
               </div>
             </div>
           </div>

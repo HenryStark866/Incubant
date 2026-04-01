@@ -13,6 +13,7 @@ export interface User {
   shiftColor?: string;
   shiftStart?: string;
   shiftEnd?: string;
+  lastSync?: number;
 }
 
 export interface MachineData {

@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { analyzeIncubatorImage } from '../services/vision.service';
 import { uploadToDrive, uploadWithDateStructure, cleanUserName } from '../services/drive.service';
+import { savePhotoLocally, savePdfLocally } from '../services/local-storage.service';
 import { generateReportPDF } from '../services/pdf.service';
 import type { PrismaClient } from '@prisma/client';
 
@@ -96,8 +97,18 @@ export const processMachineReport = async (req: AuthenticatedRequest, res: Respo
       } catch { /* ignorar si el JSON está malformado */ }
     }
 
-    // 2. Subir foto → Carpeta Fotos con estructura de fecha
+    // 2. Guardar foto localmente (siempre)
+    let localPhotoPath = '';
+    try {
+      const localResult = savePhotoLocally(file.buffer, userName, machineId, file.mimetype);
+      localPhotoPath = localResult.relativePath;
+    } catch (localError) {
+      console.error('[Local Storage] ERROR guardando foto local:', localError);
+    }
+
+    // 3. Subir foto → Carpeta Fotos con estructura de fecha (Drive)
     let imageUrl = '';
+    let drivePhotoError = '';
     try {
       const folderIdPhotos = process.env.DRIVE_FOLDER_PHOTOS_ID;
       if (!folderIdPhotos) throw new Error('DRIVE_FOLDER_PHOTOS_ID no configurada');
@@ -108,27 +119,41 @@ export const processMachineReport = async (req: AuthenticatedRequest, res: Respo
       imageUrl = photoResult.publicUrl;
       console.log(`[Drive] Foto subida OK: ${photoResult.fileName}`);
     } catch (driveError) {
+      drivePhotoError = `Drive: ${driveError instanceof Error ? driveError.message : 'Error desconocido'}`;
       console.error('[Drive] ERROR subiendo foto:', driveError);
     }
 
-    // 3. Generar PDF → Carpeta Reportes por Hora con estructura de fecha
+    // 4. Generar PDF → Carpeta Reportes por Hora con estructura de fecha
     let pdfUrl = '';
+    let localPdfPath = '';
+    let drivePdfError = '';
     try {
-      const folderIdReports = process.env.DRIVE_FOLDER_REPORTS_ID;
-      if (!folderIdReports) throw new Error('DRIVE_FOLDER_REPORTS_ID no configurada');
-
       const pdfBuffer = await generateReportPDF(
         { id: machineId, name: `Máquina ${machineId}` },
         { name: userName, shift: userShift },
         finalData,
         file.buffer
       );
+
+      // Guardar PDF localmente
+      try {
+        const localPdfResult = savePdfLocally(pdfBuffer, userName, machineId);
+        localPdfPath = localPdfResult.relativePath;
+      } catch (localPdfError) {
+        console.error('[Local Storage] ERROR guardando PDF:', localPdfError);
+      }
+
+      // Subir PDF a Drive
+      const folderIdReports = process.env.DRIVE_FOLDER_REPORTS_ID;
+      if (!folderIdReports) throw new Error('DRIVE_FOLDER_REPORTS_ID no configurada');
+
       const pdfResult = await uploadWithDateStructure(
         pdfBuffer, userName, machineId, 'application/pdf', folderIdReports, 'pdf'
       );
       pdfUrl = pdfResult.publicUrl;
       console.log(`[Drive] PDF reporte por hora subido OK: ${pdfResult.fileName}`);
     } catch (pdfError) {
+      drivePdfError = `Drive PDF: ${pdfError instanceof Error ? pdfError.message : 'Error desconocido'}`;
       console.error('[Drive] ERROR generando/subiendo PDF:', pdfError);
     }
 
@@ -200,8 +225,11 @@ export const processMachineReport = async (req: AuthenticatedRequest, res: Respo
         isAlarm: savedReport?.isAlarm || false,
         isClosingReport: false,
         imageUrl,
+        localPhotoPath,
         pdfUrl,
+        localPdfPath,
         savedToDb: !!savedReport,
+        warnings: [drivePhotoError, drivePdfError].filter(Boolean),
       }
     });
 

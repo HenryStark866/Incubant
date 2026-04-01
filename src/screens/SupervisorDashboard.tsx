@@ -16,6 +16,34 @@ import { getApiUrl, apiFetch } from '../lib/api';
 
 import ShiftManager from '../components/Admin/ShiftManager';
 
+// Helper: status badge for parameter comparison
+function statusBadge(real: any, sp: any) {
+  if (!real || real === '--') return <span className="text-[10px] font-bold text-gray-400">--</span>;
+  const tolerance = 2;
+  const diff = Math.abs(Number(real) - Number(sp));
+  if (diff <= tolerance) return <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black bg-green-500/10 text-green-500">OK</span>;
+  return <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black bg-red-500/10 text-red-500">ALERTA</span>;
+}
+
+// Helper: checklist item
+function CheckItem({ label, value, icon, alarm }: { label: string; value: string; icon?: string; alarm?: boolean }) {
+  const isDark = useThemeStore(state => state.theme) === 'dark';
+  return (
+    <div className={`flex items-center justify-between px-4 py-3 ${alarm ? (isDark ? 'bg-red-500/5' : 'bg-red-50') : ''}`}>
+      <div className="flex items-center gap-3">
+        <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-black ${
+          alarm ? 'bg-red-500/10 text-red-500' :
+          icon === '✓' ? 'bg-green-500/10 text-green-500' :
+          icon === '✗' ? 'bg-red-500/10 text-red-500' :
+          isDark ? 'bg-white/10 text-white/50' : 'bg-gray-100 text-gray-400'
+        }`}>{icon || '•'}</span>
+        <span className={`text-xs font-bold ${isDark ? 'text-white/70' : 'text-brand-dark'}`}>{label}</span>
+      </div>
+      <span className={`text-xs font-black ${alarm ? 'text-red-500' : isDark ? 'text-white' : 'text-brand-dark'}`}>{value}</span>
+    </div>
+  );
+}
+
 export default function SupervisorDashboard() {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'personal' | 'horarios' | 'settings'>('dashboard');
   const [machineViewTab, setMachineViewTab] = useState<'incubadora' | 'nacedora'>('incubadora');
@@ -38,6 +66,8 @@ export default function SupervisorDashboard() {
   const [machinesData, setMachinesData] = useState<any[]>([]);
   const [trendsData, setTrendsData] = useState<any[]>([]);
   const [operatorsData, setOperatorsData] = useState<any[]>([]);
+  const [machineLogs, setMachineLogs] = useState<any[]>([]);
+  const [isLoadingLogs, setIsLoadingLogs] = useState(false);
   const [reportCount, setReportCount] = useState(0);
   const [shiftClosingCount, setShiftClosingCount] = useState(0);
   const [responsibleOperator, setResponsibleOperator] = useState('');
@@ -371,6 +401,31 @@ export default function SupervisorDashboard() {
       clearTimeout(reconnectTimer);
     };
   }, [currentUser, canAccessSupervisor, fetchData]);
+
+  // Fetch machine logs when a machine is selected
+  useEffect(() => {
+    if (!selectedMachine?.id) {
+      setMachineLogs([]);
+      return;
+    }
+
+    const fetchMachineLogs = async () => {
+      setIsLoadingLogs(true);
+      try {
+        const response = await apiFetch(getApiUrl(`/api/dashboard/machine-logs?machineId=${encodeURIComponent(selectedMachine.id)}&hours=48`));
+        if (response.ok) {
+          const json = await response.json();
+          setMachineLogs(Array.isArray(json) ? json : []);
+        }
+      } catch (error) {
+        console.error('[MachineLogs] Error fetching logs:', error);
+      } finally {
+        setIsLoadingLogs(false);
+      }
+    };
+
+    void fetchMachineLogs();
+  }, [selectedMachine?.id]);
 
   const activeAlarms = machinesData.filter(m => m.status === 'alarm').length;
   const efficiency = machinesData.length > 0
@@ -1453,108 +1508,320 @@ export default function SupervisorDashboard() {
       {/* Machine Detail Modal */}
       {selectedMachine && (
         <div
-          className="fixed inset-0 z-50 bg-brand-dark/40 backdrop-blur-md flex items-center justify-center p-3 sm:p-6"
+          className="fixed inset-0 z-50 bg-black/60 backdrop-blur-md flex items-center justify-center p-3 sm:p-6"
           onClick={() => setSelectedMachine(null)}
         >
           <div
-            className="bg-white border-2 border-brand-primary/10 rounded-[2.5rem] w-full max-w-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-in fade-in zoom-in duration-300"
+            className={`${isDark ? 'bg-[#0a0f20] border-white/10' : 'bg-white border-gray-100'} border rounded-3xl w-full max-w-4xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh] animate-in fade-in zoom-in duration-300`}
             onClick={(e) => e.stopPropagation()}
           >
-
-            <div className="p-5 sm:p-8 border-b border-gray-50 flex items-center justify-between gap-4 bg-brand-secondary/5">
-              <div>
-                <h2 className="text-2xl sm:text-3xl font-black text-brand-dark flex flex-wrap items-center gap-3 sm:gap-4">
-                  {selectedMachine.name}
-                  <span className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-[0.2em] border ${selectedMachine.status === 'alarm' ? 'bg-red-50 text-red-600 border-red-100' :
-                      selectedMachine.status === 'maintenance' ? 'bg-gray-100 text-brand-gray border-gray-200' :
-                        'bg-green-50 text-green-600 border-green-100'
-                    }`}>
-                    {selectedMachine.status === 'alarm' ? 'Alarma Detectada' : selectedMachine.status === 'maintenance' ? 'Mantenimiento' : 'Estado Óptimo'}
-                  </span>
-                </h2>
-                <p className="text-sm text-brand-gray font-bold mt-2 uppercase tracking-widest opacity-60">Sincronizado: {selectedMachine.lastUpdate}</p>
+            {/* Header */}
+            <div className={`p-5 sm:p-6 flex items-center justify-between gap-4 ${isDark ? 'border-white/5' : 'border-gray-100'} border-b`}>
+              <div className="flex items-center gap-4">
+                <div className={`w-14 h-14 rounded-2xl flex items-center justify-center font-black text-xl ${selectedMachine.type === 'incubadora' ? 'bg-brand-primary/10 text-brand-primary' : 'bg-blue-500/10 text-blue-500'}`}>
+                  {selectedMachine.name.replace(/(INC|NAC)-/, '')}
+                </div>
+                <div>
+                  <h2 className={`text-xl font-black flex items-center gap-3 ${isDark ? 'text-white' : 'text-brand-dark'}`}>
+                    {selectedMachine.type === 'incubadora' ? 'Incubadora' : 'Nacedora'} {selectedMachine.name.replace(/(INC|NAC)-/, '')}
+                    <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-wider border ${selectedMachine.status === 'alarm' ? 'bg-red-500/10 text-red-500 border-red-500/20' :
+                        selectedMachine.status === 'maintenance' ? `${isDark ? 'bg-white/5 text-white/30 border-white/10' : 'bg-gray-100 text-gray-400 border-gray-200'}` :
+                          'bg-green-500/10 text-green-500 border-green-500/20'
+                      }`}>
+                      {selectedMachine.status === 'alarm' ? 'Alarma' : selectedMachine.status === 'maintenance' ? 'Apagada' : 'Operativa'}
+                    </span>
+                  </h2>
+                  <p className={`text-xs font-bold mt-1 ${isDark ? 'text-white/40' : 'text-brand-gray'}`}>
+                    {selectedMachine.data?.updatedBy ? `Responsable: ${selectedMachine.data.updatedBy}` : 'Sin reporte reciente'} · {selectedMachine.lastUpdate}
+                  </p>
+                </div>
               </div>
               <button
                 onClick={() => setSelectedMachine(null)}
-                className="p-3 bg-white hover:bg-gray-50 rounded-2xl text-brand-gray transition-all shadow-sm border border-gray-100"
+                className={`p-2.5 rounded-xl transition-all ${isDark ? 'hover:bg-white/10 text-white/40' : 'hover:bg-gray-100 text-gray-400'}`}
               >
-                <X size={24} />
+                <X size={20} />
               </button>
             </div>
 
-            <div className="p-5 sm:p-8 overflow-y-auto flex-1 grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-10">
-
-              {/* Data Section */}
-              <div className="space-y-8">
-                <div>
-                  <h3 className="text-[10px] font-black text-brand-gray uppercase tracking-[0.3em] mb-4 opacity-50">Parámetros Críticos</h3>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="bg-gray-50/50 p-5 rounded-3xl border border-gray-100 shadow-inner">
-                      <p className="text-[10px] font-bold text-brand-gray mb-1 uppercase tracking-widest">Temperatura</p>
-                      <p className="text-2xl font-black text-brand-primary">
-                        {selectedMachine.data?.temperatura || selectedMachine.temp || '--'}°F
-                      </p>
-                    </div>
-                    <div className="bg-gray-50/50 p-5 rounded-3xl border border-gray-100 shadow-inner">
-                      <p className="text-[10px] font-bold text-brand-gray mb-1 uppercase tracking-widest">Humedad</p>
-                      <p className="text-2xl font-black text-brand-primary">
-                        {selectedMachine.data?.humedadRelativa || selectedMachine.humidity || '--'}%
-                      </p>
-                    </div>
-                    <div className="bg-gray-50/50 p-5 rounded-3xl border border-gray-100 shadow-inner">
-                      <p className="text-[10px] font-bold text-brand-gray mb-1 uppercase tracking-widest">Día</p>
-                      <p className="text-2xl font-black text-brand-primary">
-                        {selectedMachine.data?.diaIncubacion || '--'}
-                      </p>
-                    </div>
-                    {selectedMachine.type === 'incubadora' && (
-                      <div className="bg-gray-50/50 p-5 rounded-3xl border border-gray-100 shadow-inner">
-                        <p className="text-[10px] font-bold text-brand-gray mb-1 uppercase tracking-widest">Volteos</p>
-                        <p className="text-2xl font-black text-brand-primary">
-                          {selectedMachine.data?.volteoNumero || '--'}
+            <div className="overflow-y-auto flex-1 p-5 sm:p-6">
+              <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+                {/* Photo - 2 columns */}
+                <div className="lg:col-span-2">
+                  <h3 className={`text-[9px] font-black uppercase tracking-[0.2em] mb-3 ${isDark ? 'text-white/40' : 'text-brand-gray'}`}>Evidencia Visual</h3>
+                  <div className={`rounded-2xl overflow-hidden relative aspect-[3/4] ${isDark ? 'bg-white/5' : 'bg-gray-100'}`}>
+                    {selectedMachine.photoUrl ? (
+                      <img
+                        key={selectedMachine.photoUrl}
+                        src={selectedMachine.photoUrl}
+                        alt={`Evidencia ${selectedMachine.name}`}
+                        className="w-full h-full object-cover"
+                        loading="eager"
+                        crossOrigin="anonymous"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).style.display = 'none';
+                          const parent = (e.target as HTMLImageElement).parentElement;
+                          if (parent) {
+                            const fallback = document.createElement('div');
+                            fallback.className = 'absolute inset-0 flex flex-col items-center justify-center gap-2';
+                            fallback.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="${isDark ? '#64748b' : '#94a3b8'}" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg><p class="text-xs font-bold ${isDark ? 'text-white/30' : 'text-gray-400'}">Foto no disponible</p>`;
+                            parent.appendChild(fallback);
+                          }
+                        }}
+                      />
+                    ) : (
+                      <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
+                        <ImageIcon size={40} className={isDark ? 'text-white/20' : 'text-gray-300'} />
+                        <p className={`text-xs font-bold ${isDark ? 'text-white/30' : 'text-gray-400'}`}>Sin foto registrada</p>
+                      </div>
+                    )}
+                    {selectedMachine.data?.updatedBy && (
+                      <div className="absolute bottom-0 inset-x-0 p-3 bg-gradient-to-t from-black/80 to-transparent">
+                        <p className="text-[10px] text-white font-black uppercase tracking-wider">
+                          {selectedMachine.data.updatedBy} · {selectedMachine.data.lastUpdate || selectedMachine.lastUpdate}
                         </p>
                       </div>
                     )}
                   </div>
+
+                  {/* Sync Info */}
+                  <div className={`mt-4 rounded-2xl p-4 ${isDark ? 'bg-white/5 border border-white/5' : 'bg-gray-50 border border-gray-100'}`}>
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className={`text-[9px] font-black uppercase tracking-[0.2em] ${isDark ? 'text-white/40' : 'text-brand-gray'}`}>Hora de Sincronizado</p>
+                        <p className={`text-sm font-black mt-1 ${isDark ? 'text-white' : 'text-brand-dark'}`}>
+                          {selectedMachine.data?.timestamp ? new Date(selectedMachine.data.timestamp).toLocaleString('es-ES', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : selectedMachine.lastUpdate}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className={`text-[9px] font-black uppercase tracking-[0.2em] ${isDark ? 'text-white/40' : 'text-brand-gray'}`}>Responsable</p>
+                        <p className={`text-sm font-black mt-1 ${isDark ? 'text-brand-primary' : 'text-brand-primary'}`}>
+                          {selectedMachine.data?.updatedBy || 'Sin asignar'}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Alertas Críticas */}
+                  {(() => {
+                    const criticalParams: { name: string; real: string; sp: string; deviation: string }[] = [];
+                    const tolerance = 2;
+                    const checks = [
+                      { name: 'T. Ovoscan/Synchro', real: selectedMachine.data?.tempOvoscanReal || selectedMachine.data?.tempSynchroReal, sp: selectedMachine.data?.tempOvoscanSP || selectedMachine.data?.tempSynchroSP },
+                      { name: 'T. Aire/General', real: selectedMachine.data?.tempAireReal || selectedMachine.data?.temperaturaReal, sp: selectedMachine.data?.tempAireSP || selectedMachine.data?.temperaturaSP },
+                      { name: 'Humedad', real: selectedMachine.data?.humedadReal, sp: selectedMachine.data?.humedadSP },
+                      { name: 'CO2', real: selectedMachine.data?.co2Real, sp: selectedMachine.data?.co2SP },
+                    ];
+                    checks.forEach(c => {
+                      if (c.real && c.sp && Math.abs(Number(c.real) - Number(c.sp)) > tolerance) {
+                        criticalParams.push({ name: c.name, real: `${c.real}`, sp: `${c.sp}`, deviation: `${(Number(c.real) - Number(c.sp)).toFixed(1)}` });
+                      }
+                    });
+                    if (criticalParams.length === 0) return null;
+                    return (
+                      <div className="mt-4">
+                        <button
+                          onClick={() => setSelectedMachine({ ...selectedMachine, _showCriticalDetail: true })}
+                          className="w-full flex items-center gap-3 p-4 rounded-2xl bg-red-500/10 border border-red-500/20 hover:bg-red-500/15 transition-all group"
+                        >
+                          <AlertTriangle size={20} className="text-red-500 flex-shrink-0" />
+                          <div className="text-left flex-1">
+                            <p className="text-xs font-black text-red-500">{criticalParams.length} {criticalParams.length === 1 ? 'Parámetro Crítico' : 'Parámetros Críticos'}</p>
+                            <p className="text-[10px] font-bold text-red-500/60 mt-0.5">Ver reporte completo →</p>
+                          </div>
+                          <span className="text-red-500 group-hover:translate-x-1 transition-transform">→</span>
+                        </button>
+                      </div>
+                    );
+                  })()}
                 </div>
 
-                <div>
-                  <h3 className="text-[10px] font-black text-brand-gray uppercase tracking-[0.3em] mb-4 opacity-50">Bitácora de Operario</h3>
-                  <div className="bg-brand-secondary/5 p-6 rounded-3xl border border-brand-secondary/20 text-sm text-brand-dark font-medium leading-relaxed italic">
-                    "{selectedMachine.observaciones || 'Sin observaciones registradas.'}"
+                {/* Bitácora + Checklist - 3 columns */}
+                <div className="lg:col-span-3 space-y-5">
+                  {/* Bitácora - PRIORIDAD PRINCIPAL */}
+                  <div>
+                    <h3 className={`text-[9px] font-black uppercase tracking-[0.2em] mb-3 ${isDark ? 'text-white/40' : 'text-brand-gray'}`}>
+                      Bitácora de Operario {isLoadingLogs && <Loader2 size={12} className="inline animate-spin ml-2" />}
+                    </h3>
+                    <div className={`rounded-2xl overflow-hidden ${isDark ? 'border-white/5' : 'border-gray-100'} border divide-y ${isDark ? 'divide-white/5' : 'divide-gray-50'} max-h-[500px] overflow-y-auto`}>
+                      {machineLogs.length > 0 ? machineLogs.map((log, i) => (
+                        <div key={i} className={`flex items-center justify-between px-4 py-3.5 ${isDark ? 'hover:bg-white/5' : 'hover:bg-gray-50'} transition-colors`}>
+                          <div className="flex items-center gap-3">
+                            <span className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-black ${
+                              i === 0 ? (isDark ? 'bg-brand-primary/20 text-brand-primary' : 'bg-brand-primary/10 text-brand-primary') : (isDark ? 'bg-white/5 text-white/30' : 'bg-gray-100 text-gray-400')
+                            }`}>
+                              {machineLogs.length - i}
+                            </span>
+                            <div>
+                              <p className={`text-xs font-bold ${isDark ? 'text-white/80' : 'text-brand-dark'}`}>{log.time}</p>
+                              <p className={`text-[10px] font-medium ${isDark ? 'text-white/40' : 'text-brand-gray'}`}>{log.operator}</p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-3 text-right">
+                            <div className="text-right">
+                              <p className={`text-[10px] font-black ${isDark ? 'text-white/60' : 'text-brand-gray'}`}>T: {log.tempPrincipal}°F</p>
+                              <p className={`text-[10px] font-black ${isDark ? 'text-white/60' : 'text-brand-gray'}`}>H: {log.tempSuperior}%</p>
+                            </div>
+                            {statusBadge(log.tempPrincipal, log.tempPrincipalSP)}
+                          </div>
+                        </div>
+                      )) : (
+                        <div className={`px-4 py-12 text-center ${isDark ? 'text-white/30' : 'text-gray-400'}`}>
+                          <FileText size={32} className="mx-auto mb-3 opacity-40" />
+                          <p className="text-xs font-bold">Sin registros recientes</p>
+                          <p className={`text-[10px] mt-1 ${isDark ? 'text-white/20' : 'text-gray-300'}`}>Los reportes aparecerán aquí</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Checklist */}
+                  <div>
+                    <h3 className={`text-[9px] font-black uppercase tracking-[0.2em] mb-3 ${isDark ? 'text-white/40' : 'text-brand-gray'}`}>Lista de Chequeo</h3>
+                    <div className={`rounded-2xl overflow-hidden ${isDark ? 'border-white/5' : 'border-gray-100'} border divide-y ${isDark ? 'divide-white/5' : 'divide-gray-50'}`}>
+                      <CheckItem label="Tiempo de incubación" value={selectedMachine.data?.tiempoIncubacion || '--'} />
+                      <CheckItem label="Volteo # / Posición" value={`${selectedMachine.data?.volteoNumero || '--'} / ${selectedMachine.data?.volteoPosicion || '--'}`} />
+                      <CheckItem label="Ventilador principal" value={selectedMachine.data?.ventiladorPrincipal || '--'} icon={selectedMachine.data?.ventiladorPrincipal === 'Si' ? '✓' : '✗'} />
+                      <CheckItem label="Alarma activa" value={selectedMachine.data?.alarma || 'No'} icon={selectedMachine.data?.alarma === 'Si' ? '⚠' : '✓'} alarm={selectedMachine.data?.alarma === 'Si'} />
+                    </div>
+                  </div>
+
+                  {/* Observaciones */}
+                  <div>
+                    <h3 className={`text-[9px] font-black uppercase tracking-[0.2em] mb-3 ${isDark ? 'text-white/40' : 'text-brand-gray'}`}>Observaciones</h3>
+                    <div className={`rounded-2xl p-4 text-sm font-medium leading-relaxed ${isDark ? 'bg-white/5 text-white/70 border border-white/5' : 'bg-gray-50 text-brand-dark border border-gray-100'}`}>
+                      {selectedMachine.data?.observaciones || selectedMachine.observaciones || 'Sin observaciones registradas.'}
+                    </div>
                   </div>
                 </div>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
 
-              {/* Evidence Section */}
-              <div>
-                <h3 className="text-[10px] font-black text-brand-gray uppercase tracking-[0.3em] mb-4 opacity-50 flex items-center gap-2">
-                  <ImageIcon size={14} className="text-brand-primary" />
-                  Registro Visual
-                </h3>
-                <div className="bg-gray-100 border-2 border-dashed border-gray-200 rounded-[2rem] aspect-[3/4] flex flex-col items-center justify-center text-slate-600 relative overflow-hidden shadow-inner">
-                  {selectedMachine.photoUrl ? (
-                    <img
-                      src={selectedMachine.photoUrl}
-                      alt="Evidencia"
-                      className="absolute inset-0 w-full h-full object-cover"
-                      referrerPolicy="no-referrer"
-                    />
-                  ) : (
-                    <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 px-6 text-center">
-                      <ImageIcon size={42} className="text-gray-300" />
-                      <p className="text-sm font-bold text-brand-gray">Sin evidencia visual registrada</p>
-                    </div>
-                  )}
-                  <div className="absolute inset-0 bg-gradient-to-t from-brand-dark/60 via-transparent to-transparent"></div>
-                  <div className="absolute bottom-6 left-6 right-6">
-                    <p className="text-[10px] text-white font-black uppercase tracking-widest bg-brand-primary/80 py-2 px-3 rounded-lg backdrop-blur-md inline-block">
-                      {(selectedMachine.updatedBy || 'Sin responsable registrado') + ' | ' + selectedMachine.lastUpdate}
+      {/* Critical Parameters Detail Modal */}
+      {selectedMachine?._showCriticalDetail && (
+        <div
+          className="fixed inset-0 z-[60] bg-black/70 backdrop-blur-md flex items-center justify-center p-3 sm:p-6"
+          onClick={() => setSelectedMachine({ ...selectedMachine, _showCriticalDetail: false })}
+        >
+          <div
+            className={`${isDark ? 'bg-[#0a0f20] border-red-500/20' : 'bg-white border-red-200'} border rounded-3xl w-full max-w-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-in fade-in zoom-in duration-300`}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className={`p-5 sm:p-6 flex items-center justify-between gap-4 ${isDark ? 'border-red-500/10' : 'border-red-100'} border-b bg-red-500/5`}>
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-2xl bg-red-500/10 flex items-center justify-center">
+                  <AlertTriangle size={24} className="text-red-500" />
+                </div>
+                <div>
+                  <h2 className={`text-lg font-black ${isDark ? 'text-white' : 'text-brand-dark'}`}>
+                    Reporte de Parámetros Críticos
+                  </h2>
+                  <p className={`text-xs font-bold ${isDark ? 'text-white/40' : 'text-brand-gray'}`}>
+                    {selectedMachine.name} · {selectedMachine.data?.updatedBy || 'Sin responsable'}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setSelectedMachine({ ...selectedMachine, _showCriticalDetail: false })}
+                className={`p-2.5 rounded-xl transition-all ${isDark ? 'hover:bg-white/10 text-white/40' : 'hover:bg-gray-100 text-gray-400'}`}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="overflow-y-auto flex-1 p-5 sm:p-6 space-y-5">
+              {/* Resumen */}
+              <div className={`rounded-2xl p-4 ${isDark ? 'bg-red-500/5 border border-red-500/10' : 'bg-red-50 border border-red-100'}`}>
+                <div className="flex items-center gap-2 mb-2">
+                  <AlertTriangle size={16} className="text-red-500" />
+                  <p className={`text-xs font-black ${isDark ? 'text-red-400' : 'text-red-600'}`}>DESVIACIONES DETECTADAS</p>
+                </div>
+                <p className={`text-[10px] font-medium ${isDark ? 'text-white/40' : 'text-brand-gray'}`}>
+                  Los siguientes parámetros exceden la tolerancia de ±2° respecto al setpoint
+                </p>
+              </div>
+
+              {/* Tabla de parámetros críticos */}
+              <div className={`rounded-2xl overflow-hidden ${isDark ? 'border-white/5' : 'border-gray-100'} border`}>
+                <table className="w-full text-sm">
+                  <thead className={`${isDark ? 'bg-red-500/10' : 'bg-red-50'}`}>
+                    <tr>
+                      <th className={`text-left px-4 py-3 text-[9px] font-black uppercase tracking-wider ${isDark ? 'text-red-400' : 'text-red-600'}`}>Parámetro</th>
+                      <th className={`text-center px-4 py-3 text-[9px] font-black uppercase tracking-wider ${isDark ? 'text-red-400' : 'text-red-600'}`}>Real</th>
+                      <th className={`text-center px-4 py-3 text-[9px] font-black uppercase tracking-wider ${isDark ? 'text-red-400' : 'text-red-600'}`}>SP</th>
+                      <th className={`text-center px-4 py-3 text-[9px] font-black uppercase tracking-wider ${isDark ? 'text-red-400' : 'text-red-600'}`}>Desviación</th>
+                      <th className={`text-center px-4 py-3 text-[9px] font-black uppercase tracking-wider ${isDark ? 'text-red-400' : 'text-red-600'}`}>Estado</th>
+                    </tr>
+                  </thead>
+                  <tbody className={`divide-y ${isDark ? 'divide-white/5' : 'divide-gray-50'}`}>
+                    {[
+                      { name: 'T. Ovoscan/Synchro', real: selectedMachine.data?.tempOvoscanReal || selectedMachine.data?.tempSynchroReal, sp: selectedMachine.data?.tempOvoscanSP || selectedMachine.data?.tempSynchroSP },
+                      { name: 'T. Aire/General', real: selectedMachine.data?.tempAireReal || selectedMachine.data?.temperaturaReal, sp: selectedMachine.data?.tempAireSP || selectedMachine.data?.temperaturaSP },
+                      { name: 'Humedad', real: selectedMachine.data?.humedadReal, sp: selectedMachine.data?.humedadSP },
+                      { name: 'CO2', real: selectedMachine.data?.co2Real, sp: selectedMachine.data?.co2SP },
+                    ].filter(c => c.real && c.sp && Math.abs(Number(c.real) - Number(c.sp)) > 2).map((c, i) => {
+                      const dev = (Number(c.real) - Number(c.sp)).toFixed(1);
+                      const isHigh = Number(dev) > 0;
+                      return (
+                        <tr key={i} className={isDark ? 'bg-red-500/5' : 'bg-red-50/50'}>
+                          <td className={`px-4 py-3 font-bold ${isDark ? 'text-white/70' : 'text-brand-dark'}`}>{c.name}</td>
+                          <td className={`px-4 py-3 text-center font-black ${isDark ? 'text-red-400' : 'text-red-600'}`}>{c.real}</td>
+                          <td className={`px-4 py-3 text-center font-bold ${isDark ? 'text-white/50' : 'text-brand-gray'}`}>{c.sp}</td>
+                          <td className={`px-4 py-3 text-center font-black ${isHigh ? 'text-orange-500' : 'text-blue-500'}`}>
+                            {isHigh ? '+' : ''}{dev}
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black bg-red-500/10 text-red-500">CRÍTICO</span>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Info del reporte */}
+              <div className={`rounded-2xl p-4 ${isDark ? 'bg-white/5 border border-white/5' : 'bg-gray-50 border border-gray-100'}`}>
+                <h4 className={`text-[9px] font-black uppercase tracking-[0.2em] mb-3 ${isDark ? 'text-white/40' : 'text-brand-gray'}`}>Detalles del Reporte</h4>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <p className={`text-[10px] font-bold ${isDark ? 'text-white/40' : 'text-brand-gray'}`}>Fecha y Hora</p>
+                    <p className={`text-xs font-black mt-1 ${isDark ? 'text-white' : 'text-brand-dark'}`}>
+                      {selectedMachine.data?.timestamp ? new Date(selectedMachine.data.timestamp).toLocaleString('es-ES') : '--'}
+                    </p>
+                  </div>
+                  <div>
+                    <p className={`text-[10px] font-bold ${isDark ? 'text-white/40' : 'text-brand-gray'}`}>Operador Responsable</p>
+                    <p className={`text-xs font-black mt-1 ${isDark ? 'text-brand-primary' : 'text-brand-primary'}`}>
+                      {selectedMachine.data?.updatedBy || '--'}
+                    </p>
+                  </div>
+                  <div>
+                    <p className={`text-[10px] font-bold ${isDark ? 'text-white/40' : 'text-brand-gray'}`}>Tiempo Incubación</p>
+                    <p className={`text-xs font-black mt-1 ${isDark ? 'text-white' : 'text-brand-dark'}`}>
+                      {selectedMachine.data?.tiempoIncubacion || '--'}
+                    </p>
+                  </div>
+                  <div>
+                    <p className={`text-[10px] font-bold ${isDark ? 'text-white/40' : 'text-brand-gray'}`}>Volteo</p>
+                    <p className={`text-xs font-black mt-1 ${isDark ? 'text-white' : 'text-brand-dark'}`}>
+                      #{selectedMachine.data?.volteoNumero || '--'} / {selectedMachine.data?.volteoPosicion || '--'}
                     </p>
                   </div>
                 </div>
               </div>
 
+              {/* Observaciones */}
+              <div>
+                <h4 className={`text-[9px] font-black uppercase tracking-[0.2em] mb-3 ${isDark ? 'text-white/40' : 'text-brand-gray'}`}>Observaciones del Operador</h4>
+                <div className={`rounded-2xl p-4 text-sm font-medium leading-relaxed ${isDark ? 'bg-white/5 text-white/70 border border-white/5' : 'bg-gray-50 text-brand-dark border border-gray-100'}`}>
+                  {selectedMachine.data?.observaciones || selectedMachine.observaciones || 'Sin observaciones registradas.'}
+                </div>
+              </div>
             </div>
           </div>
         </div>

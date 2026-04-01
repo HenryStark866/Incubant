@@ -1165,11 +1165,14 @@ export function createApiApp(): Express {
     try {
       const prisma = await getPrismaClient();
       const { id } = req.params;
-      const { turno, estado } = req.body;
+      const { turno, estado, pin, rol, nombre } = req.body;
 
       const dataToUpdate: Record<string, string> = {};
       if (turno) dataToUpdate.turno = turno;
       if (estado) dataToUpdate.estado = estado;
+      if (pin) dataToUpdate.pin_acceso = pin;
+      if (rol) dataToUpdate.rol = rol;
+      if (nombre) dataToUpdate.nombre = nombre;
 
       if (Object.keys(dataToUpdate).length === 0) {
         return res.status(400).json({ error: 'No hay datos para actualizar' });
@@ -1396,6 +1399,25 @@ export function createApiApp(): Express {
       return res.status(204).end();
     } catch (error) {
       return res.status(500).json({ error: 'Error al eliminar asignación' });
+    }
+  });
+
+  // ── Clear Database (Admin Only) ──────────────────────────────────────────
+  app.post('/api/admin/clear-db', requireRoles(['JEFE']), async (_req, res) => {
+    try {
+      const prisma = await getPrismaClient();
+      await prisma.$transaction([
+        prisma.report.deleteMany(),
+        prisma.incident.deleteMany(),
+        prisma.hourlyLog.deleteMany(),
+        prisma.scheduleAssignment.deleteMany(),
+        prisma.session.deleteMany(),
+        prisma.break.deleteMany(),
+      ]);
+      return res.json({ success: true, message: 'Base de datos limpiada exitosamente' });
+    } catch (error) {
+      console.error('[Admin] Error clearing DB:', error);
+      return res.status(500).json({ error: 'Error limpiando la base de datos' });
     }
   });
 

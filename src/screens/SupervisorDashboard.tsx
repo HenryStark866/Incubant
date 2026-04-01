@@ -48,6 +48,7 @@ export default function SupervisorDashboard() {
 
   const [editingOperator, setEditingOperator] = useState<any | null>(null);
   const [isUpdatingOperator, setIsUpdatingOperator] = useState(false);
+  const [editPin, setEditPin] = useState('');
 
   const [showEvidencesModal, setShowEvidencesModal] = useState(false);
   // evidencesList and isLoadingEvidences removed — Drive link is opened directly
@@ -151,21 +152,38 @@ export default function SupervisorDashboard() {
     e.preventDefault();
     if (!editingOperator) return;
 
+    if (editPin && editPin.length !== 4) {
+      alert('El PIN debe tener exactamente 4 dígitos');
+      return;
+    }
+
     setIsUpdatingOperator(true);
     try {
+      const body: any = {
+        turno: editingOperator.shift,
+        estado: editingOperator.status,
+      };
+      if (editPin && editPin.length === 4 && /^\d+$/.test(editPin)) {
+        body.pin = editPin;
+      }
+      if (editingOperator.role) {
+        body.rol = editingOperator.role;
+      }
+      if (editingOperator.name) {
+        body.nombre = editingOperator.name;
+      }
+
       const response = await apiFetch(getApiUrl(`/api/operators/${editingOperator.id}`), {
         method: 'PUT',
-        body: JSON.stringify({
-          turno: editingOperator.shift,
-          estado: editingOperator.status,
-        }),
+        body: JSON.stringify(body),
       });
 
       if (response.ok) {
         const updated = await response.json();
         setOperatorsData(prev => prev.map(op => op.id === updated.id ? updated : op));
         setEditingOperator(null);
-        alert('Operario actualizado exitosamente');
+        setEditPin('');
+        alert('Operario actualizado exitosamente en la base de datos');
       } else {
         const errorData = await response.json();
         alert(`Error: ${errorData.error || 'Error desconocido'}`);
@@ -194,6 +212,30 @@ export default function SupervisorDashboard() {
       }
     } catch (error) {
       alert('Error de conexión a la Base de Datos.');
+    }
+  };
+
+  const [isClearingDb, setIsClearingDb] = useState(false);
+
+  const handleClearDb = async () => {
+    if (!window.confirm('¿Estás seguro de limpiar TODOS los datos de la base de datos? Esta acción no se puede deshacer.')) return;
+    setIsClearingDb(true);
+    try {
+      const response = await apiFetch(getApiUrl('/api/admin/clear-db'), { method: 'POST' });
+      if (response.ok) {
+        setReportCount(0);
+        setShiftClosingCount(0);
+        setMachinesData([]);
+        setTrendsData([]);
+        alert('Base de datos limpiada exitosamente');
+      } else {
+        const err = await response.json();
+        alert(err.error || 'Error limpiando la base de datos');
+      }
+    } catch (error) {
+      alert('Error de conexión');
+    } finally {
+      setIsClearingDb(false);
     }
   };
 
@@ -643,7 +685,7 @@ export default function SupervisorDashboard() {
         {editingOperator && (
           <div
             className="fixed inset-0 z-[60] bg-brand-dark/40 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-300"
-            onClick={() => setEditingOperator(null)}
+            onClick={() => { setEditingOperator(null); setEditPin(''); }}
           >
             <div
               className="bg-white border-2 border-brand-primary/10 rounded-[2.5rem] w-full max-w-md shadow-2xl overflow-hidden animate-in zoom-in duration-300"
@@ -652,65 +694,96 @@ export default function SupervisorDashboard() {
               <div className="p-6 sm:p-8 border-b border-gray-50 flex items-center justify-between bg-brand-secondary/5">
                 <h2 className="text-xl font-black text-brand-dark">Modificar Operario</h2>
                 <button
-                  onClick={() => setEditingOperator(null)}
+                  onClick={() => { setEditingOperator(null); setEditPin(''); }}
                   className="p-2 bg-white hover:bg-gray-50 rounded-xl text-brand-gray transition-all shadow-sm border border-gray-100"
                 >
                   <X size={20} />
                 </button>
               </div>
 
-              <form onSubmit={handleUpdateOperatorSubmit} className="p-6 sm:p-8 space-y-6">
-                <div className="bg-gray-50/50 p-4 rounded-3xl border border-gray-100 italic text-sm text-brand-gray">
-                  Editando perfil de: <span className="font-black text-brand-dark not-italic ml-1">{editingOperator.name}</span>
-                </div>
-
+              <form onSubmit={handleUpdateOperatorSubmit} className="p-6 sm:p-8 space-y-5">
+                {/* Nombre */}
                 <div>
-                  <label className="block text-[10px] font-black text-brand-gray uppercase tracking-[0.2em] mb-3 ml-2">Asignar Turno / Horario</label>
-                  <div className="relative">
-                    <select
-                      value={editingOperator.shift}
-                      onChange={(e) => setEditingOperator({ ...editingOperator, shift: e.target.value })}
-                      className="appearance-none w-full px-6 py-4 bg-white border-2 border-gray-100 rounded-2xl focus:outline-none focus:border-brand-primary focus:ring-4 focus:ring-brand-primary/5 text-brand-dark font-bold text-sm transition-all shadow-sm"
-                    >
-                      <option value="Turno 1">Turno 1 (Mañana)</option>
-                      <option value="Turno 2">Turno 2 (Tarde)</option>
-                      <option value="Turno 3">Turno 3 (Noche)</option>
-                      <option value="Gestión">Gestión Administrativa</option>
-                    </select>
-                    <ChevronDown size={18} className="absolute right-4 top-1/2 -translate-y-1/2 text-brand-primary pointer-events-none" />
-                  </div>
+                  <label className="block text-[10px] font-black text-brand-gray uppercase tracking-[0.2em] mb-2 ml-1">Nombre</label>
+                  <input
+                    type="text"
+                    value={editingOperator.name || ''}
+                    onChange={(e) => setEditingOperator({ ...editingOperator, name: e.target.value })}
+                    className="w-full px-4 py-3 bg-white border-2 border-gray-100 rounded-xl focus:outline-none focus:border-brand-primary text-brand-dark font-bold text-sm"
+                  />
                 </div>
 
+                {/* PIN */}
                 <div>
-                  <label className="block text-[10px] font-black text-brand-gray uppercase tracking-[0.2em] mb-3 ml-2">Estado del Operario</label>
-                  <div className="relative">
-                    <select
-                      value={editingOperator.status}
-                      onChange={(e) => setEditingOperator({ ...editingOperator, status: e.target.value })}
-                      className="appearance-none w-full px-6 py-4 bg-white border-2 border-gray-100 rounded-2xl focus:outline-none focus:border-brand-primary focus:ring-4 focus:ring-brand-primary/5 text-brand-dark font-bold text-sm transition-all shadow-sm"
-                    >
-                      <option value="Activo">Activo</option>
-                      <option value="Inactivo">Inactivo / Suspendido</option>
-                    </select>
-                    <ChevronDown size={18} className="absolute right-4 top-1/2 -translate-y-1/2 text-brand-primary pointer-events-none" />
-                  </div>
+                  <label className="block text-[10px] font-black text-brand-gray uppercase tracking-[0.2em] mb-2 ml-1">Nuevo PIN (4 dígitos, opcional)</label>
+                  <input
+                    type="password"
+                    value={editPin}
+                    onChange={(e) => setEditPin(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                    maxLength={4}
+                    placeholder="Dejar vacío para no cambiar"
+                    className="w-full px-4 py-3 bg-white border-2 border-gray-100 rounded-xl focus:outline-none focus:border-brand-primary text-brand-dark font-bold text-sm"
+                  />
                 </div>
 
-                <div className="flex gap-3 pt-4">
+                {/* Rol */}
+                <div>
+                  <label className="block text-[10px] font-black text-brand-gray uppercase tracking-[0.2em] mb-2 ml-1">Rol</label>
+                  <select
+                    value={editingOperator.role || 'OPERARIO'}
+                    onChange={(e) => setEditingOperator({ ...editingOperator, role: e.target.value })}
+                    className="w-full px-4 py-3 bg-white border-2 border-gray-100 rounded-xl focus:outline-none focus:border-brand-primary text-brand-dark font-bold text-sm"
+                  >
+                    <option value="OPERARIO">Operario</option>
+                    <option value="SUPERVISOR">Supervisor</option>
+                    <option value="JEFE">Jefe / Administrador</option>
+                  </select>
+                </div>
+
+                {/* Turno */}
+                <div>
+                  <label className="block text-[10px] font-black text-brand-gray uppercase tracking-[0.2em] mb-2 ml-1">Turno</label>
+                  <select
+                    value={editingOperator.shift || ''}
+                    onChange={(e) => setEditingOperator({ ...editingOperator, shift: e.target.value })}
+                    className="w-full px-4 py-3 bg-white border-2 border-gray-100 rounded-xl focus:outline-none focus:border-brand-primary text-brand-dark font-bold text-sm"
+                  >
+                    <option value="">Sin asignar</option>
+                    <option value="Turno 1">Turno 1 (Mañana)</option>
+                    <option value="Turno 2">Turno 2 (Tarde)</option>
+                    <option value="Turno 3">Turno 3 (Noche)</option>
+                    <option value="Gestión">Gestión Administrativa</option>
+                  </select>
+                </div>
+
+                {/* Estado */}
+                <div>
+                  <label className="block text-[10px] font-black text-brand-gray uppercase tracking-[0.2em] mb-2 ml-1">Estado</label>
+                  <select
+                    value={editingOperator.status || 'Activo'}
+                    onChange={(e) => setEditingOperator({ ...editingOperator, status: e.target.value })}
+                    className="w-full px-4 py-3 bg-white border-2 border-gray-100 rounded-xl focus:outline-none focus:border-brand-primary text-brand-dark font-bold text-sm"
+                  >
+                    <option value="Activo">Activo</option>
+                    <option value="Inactivo">Inactivo / Suspendido</option>
+                  </select>
+                </div>
+
+                <div className="flex gap-3 pt-2">
                   <button
                     type="button"
-                    onClick={() => setEditingOperator(null)}
-                    className="flex-1 px-5 py-4 border-2 border-gray-100 rounded-2xl text-brand-gray font-black hover:bg-gray-50 transition-all text-sm uppercase tracking-widest"
+                    onClick={() => { setEditingOperator(null); setEditPin(''); }}
+                    className="flex-1 px-5 py-3 border-2 border-gray-100 rounded-xl text-brand-gray font-black hover:bg-gray-50 transition-all text-sm"
                   >
                     Cancelar
                   </button>
                   <button
                     type="submit"
                     disabled={isUpdatingOperator}
-                    className="flex-1 px-5 py-4 bg-brand-primary text-white rounded-2xl font-black hover:bg-[#E6951F] shadow-lg shadow-brand-primary/20 disabled:opacity-50 transition-all text-sm uppercase tracking-widest flex items-center justify-center gap-2"
+                    className="flex-1 px-5 py-3 bg-brand-primary text-white rounded-xl font-black hover:bg-[#E6951F] shadow-lg shadow-brand-primary/20 disabled:opacity-50 transition-all text-sm flex items-center justify-center gap-2"
                   >
                     {isUpdatingOperator && <Loader2 size={16} className="animate-spin" />}
-                    {isUpdatingOperator ? 'Guardando' : 'Guardar'}
+                    {isUpdatingOperator ? 'Guardando...' : 'Guardar'}
                   </button>
                 </div>
               </form>
@@ -818,9 +891,9 @@ export default function SupervisorDashboard() {
                   </p>
                 </div>
 
-                {/* Cierres de turno */}
+                  {/* Cierres de turno */}
                 <div>
-                  <p className="text-[7px] text-brand-gray uppercase font-black tracking-wider leading-none mb-0.5">Cierres</p>
+                  <p className="text-[7px] text-brand-gray uppercase font-black tracking-wider leading-none mb-0.5">Reportes turno</p>
                   <div className="flex items-center gap-1.5">
                     <span className="text-lg font-black text-brand-primary leading-none">{shiftClosingCount}</span>
                     <span className="text-[8px] text-brand-gray font-medium leading-none">
@@ -1034,7 +1107,11 @@ export default function SupervisorDashboard() {
                           <td className="px-6 py-4">
                             <div className="flex items-center gap-2">
                               <div className="w-2 h-2 rounded-full bg-brand-primary"></div>
-                              <span className="text-xs font-bold text-brand-gray tracking-tight">{op.turno || op.shift || 'Sin asignar'}</span>
+                              <span className="text-xs font-bold text-brand-gray tracking-tight">
+                                {(op.rol === 'JEFE' || op.role === 'JEFE' || op.rol === 'SUPERVISOR' || op.role === 'SUPERVISOR')
+                                  ? '—'
+                                  : (op.turno || op.shift || 'Disponible')}
+                              </span>
                             </div>
                           </td>
                           {currentUser?.role === 'JEFE' && (
@@ -1097,9 +1174,9 @@ export default function SupervisorDashboard() {
                     <p className="text-sm font-medium text-brand-gray mt-1">Rol actual: {currentUser?.role || 'N/A'}</p>
                   </div>
                   <div className="rounded-3xl border border-gray-100 bg-gray-50/70 p-5">
-                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-gray mb-3">Reportes reales en DB</p>
+                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-gray mb-3">Reportes en DB</p>
                     <p className="text-3xl font-black text-brand-dark">{reportCount}</p>
-                    <p className="text-sm font-medium text-brand-gray mt-1">El contador ya no usa valores demo.</p>
+                    <p className="text-sm font-medium text-brand-gray mt-1">Datos en tiempo real desde Supabase</p>
                   </div>
                   <button
                     type="button"
@@ -1111,10 +1188,11 @@ export default function SupervisorDashboard() {
                   </button>
                   <button
                     type="button"
-                    onClick={handleResetLocalData}
-                    className="rounded-3xl border border-gray-200 bg-white p-5 text-brand-dark font-black hover:bg-gray-50 transition-all"
+                    onClick={handleClearDb}
+                    disabled={isClearingDb}
+                    className="rounded-3xl border border-red-200 bg-red-50 p-5 text-red-600 font-black hover:bg-red-600 hover:text-white transition-all disabled:opacity-50"
                   >
-                    Reiniciar revisiones locales
+                    {isClearingDb ? 'Limpiando...' : 'Limpiar DB'}
                   </button>
                 </div>
               </div>

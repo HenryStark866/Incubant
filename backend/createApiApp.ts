@@ -6,7 +6,7 @@ import cors from 'cors';
 import multer from 'multer';
 import type { PrismaClient } from '@prisma/client';
 
-import { processMachineReport } from './controllers/report.controller';
+import { processMachineReport, processClosingReport } from './controllers/report.controller';
 import { seedShifts } from './controllers/admin.controller';
 
 type UserRole = 'OPERARIO' | 'SUPERVISOR' | 'JEFE';
@@ -504,6 +504,7 @@ export function createApiApp(): Express {
 
   // ── Smart Reporting (Gemini + Drive + PDF) ────────────────────────────────
   app.post('/api/reports', requireAuthenticatedUser, upload.single('evidence'), processMachineReport);
+  app.post('/api/reports/closing', requireAuthenticatedUser, upload.single('evidence'), processClosingReport);
 
   // ── Session ──────────────────────────────────────────────────────────────
   app.get('/api/session', (req: AuthenticatedRequest, res) => {

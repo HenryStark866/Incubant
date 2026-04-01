@@ -269,8 +269,19 @@ export default function DashboardScreen() {
           });
           const pdfBlob = doc.output('blob');
           doc.save(`Cierre_Turno_${currentUser?.name?.replace(/\s+/g, '_')}.pdf`);
-          const { uploadEvidencePDF } = await import('../lib/supabase');
-          await uploadEvidencePDF(pdfBlob, `${currentUser?.name}_CIERRE_TURNO_${Date.now()}`);
+
+          // Upload to backend → Drive folder "Cierres de Turno"
+          const formData = new FormData();
+          formData.append('evidence', pdfBlob, 'closing_report.pdf');
+          const closingRes = await apiFetch(getApiUrl('/api/reports/closing'), {
+            method: 'POST',
+            body: formData,
+          });
+          if (closingRes.ok) {
+            console.log('[Cierre] PDF subido a Drive exitosamente');
+          } else {
+            console.warn('[Cierre] Error subiendo PDF, pero se descargó localmente');
+          }
         } else {
           alert('Sin registros en el turno. Se cerrará directamente.');
         }

@@ -30,19 +30,19 @@ const ConfirmationModal = ({
             style={{ background: 'rgba(247,147,26,0.12)', border: '1px solid rgba(247,147,26,0.3)' }}>
             <AlertTriangle size={28} className="text-brand-primary animate-pulse-glow" />
           </div>
-          <h2 className="text-xl font-black text-white text-center mb-2 font-mono-display tracking-wider">
+          <h2 className="text-xl font-black text-gray-900 text-center mb-2 font-mono-display tracking-wider">
             ¿Enviar Incompleto?
           </h2>
-          <p className="text-white/40 text-center text-xs font-medium mb-5 leading-relaxed">
+          <p className="text-gray-500 text-center text-xs font-medium mb-5 leading-relaxed">
             Faltan <span className="text-brand-primary font-black">{pendingCount} máquinas</span> por registrar.
-            Se marcarán como <span className="text-red-400 font-black">APAGADA</span> automáticamente.
+            Se marcarán como <span className="text-red-500 font-black">APAGADA</span> automáticamente.
           </p>
           {pendingMachines.length > 0 && (
-            <div className="glass rounded-2xl p-3 mb-5 border border-white/6">
-              <p className="text-[8px] font-black text-white/25 uppercase tracking-widest mb-2">Pendientes:</p>
+            <div className="bg-gray-50 rounded-2xl p-3 mb-5 border border-gray-200">
+              <p className="text-[8px] font-black text-gray-400 uppercase tracking-widest mb-2">Pendientes:</p>
               <div className="flex flex-wrap gap-1.5">
                 {pendingMachines.map(m => (
-                  <span key={m.id} className="px-2.5 py-1 glass rounded-lg text-[10px] font-black text-brand-primary/70 border border-brand-primary/20 font-mono-display">
+                  <span key={m.id} className="px-2.5 py-1 bg-gray-100 rounded-lg text-[10px] font-black text-brand-primary/70 border border-brand-primary/20 font-mono-display">
                     #{String(m.number).padStart(2, '0')}
                   </span>
                 ))}
@@ -55,7 +55,7 @@ const ConfirmationModal = ({
               Sí, Enviar Reporte
             </button>
             <button onClick={onClose}
-              className="w-full py-4 glass rounded-2xl font-black text-xs uppercase tracking-widest text-white/40 active:scale-95 transition-all border border-white/8">
+              className="w-full py-4 bg-gray-100 rounded-2xl font-black text-xs uppercase tracking-widest text-gray-500 active:scale-95 transition-all border border-gray-200">
               Cancelar
             </button>
           </div>
@@ -649,11 +649,11 @@ export default function DashboardScreen({ canAccessSupervisor = false, onSwitchT
       />
 
       {/* ── Header ── */}
-      <div className="relative z-10 px-4 pt-12 pb-3 shrink-0">
+      <div className={`relative z-10 px-4 pt-12 pb-3 shrink-0 ${isDark ? '' : 'bg-gray-50'}`}>
 
         {/* HUD top bar */}
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-2.5">
+        <div className="flex items-center justify-between mb-4 gap-2">
+          <div className="flex items-center gap-2.5 min-w-0 flex-1">
             {/* Logo */}
             <div
               className="w-9 h-9 rounded-xl flex items-center justify-center glow-primary shrink-0"
@@ -661,40 +661,40 @@ export default function DashboardScreen({ canAccessSupervisor = false, onSwitchT
             >
               <Egg size={17} className="text-white" />
             </div>
-            <div>
-              <div className="text-[7px] font-black text-white/25 uppercase tracking-widest font-mono-display">Operario en Turno</div>
-              <div className="text-sm font-black text-white leading-tight flex items-baseline gap-2">
-                {currentUser?.name}
-                <div className="flex items-center gap-1 px-1.5 py-0.5 rounded-md border border-white/5 bg-white/5">
+            <div className="min-w-0">
+              <div className={`text-[7px] font-black uppercase tracking-widest font-mono-display ${isDark ? 'text-white/25' : 'text-gray-400'}`}>Operario en Turno</div>
+              <div className={`text-sm font-black leading-tight flex items-baseline gap-2 truncate ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                <span className="truncate">{currentUser?.name}</span>
+                <div className={`flex items-center gap-1 px-1.5 py-0.5 rounded-md border shrink-0 ${isDark ? 'border-white/5 bg-white/5' : 'border-gray-200 bg-gray-100'}`}>
                   <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: currentUser?.shiftColor || '#f7931a', boxShadow: `0 0 5px ${currentUser?.shiftColor || '#f7931a'}` }} />
-                  <span className="text-[8px] font-black font-mono-display text-white/90">
+                  <span className={`text-[8px] font-black font-mono-display ${isDark ? 'text-white/90' : 'text-gray-700'}`}>
                     {currentUser?.shift || 'T1'}
                   </span>
-                  <span className="text-[7px] font-medium font-mono text-white/40">
+                  <span className={`text-[7px] font-medium font-mono ${isDark ? 'text-white/40' : 'text-gray-400'}`}>
                     {currentUser?.shiftStart && currentUser?.shiftEnd ? `${currentUser.shiftStart}-${currentUser.shiftEnd}` : ''}
                   </span>
                 </div>
               </div>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 shrink-0">
             {/* Panel de Control (solo para admin/supervisor) */}
             {canAccessSupervisor && onSwitchToSupervisor && (
               <button 
                 onClick={onSwitchToSupervisor}
-                className={`p-2 rounded-xl border flex items-center gap-1 active:scale-95 transition-all ${isDark ? 'glass border-brand-primary/30 text-brand-primary' : 'bg-white border-brand-primary/30 text-brand-primary'}`}
+                className={`p-2 rounded-xl border flex items-center gap-1 active:scale-95 transition-all ${isDark ? 'glass border-brand-primary/30 text-brand-primary' : 'bg-white border-brand-primary/30 text-brand-primary shadow-sm'}`}
               >
                 <Monitor size={14} />
-                <span className={`text-[7px] font-black tracking-wider font-mono-display uppercase ${isDark ? 'text-white/60' : 'text-gray-600'}`}>Panel Control</span>
+                <span className={`text-[7px] font-black tracking-wider font-mono-display uppercase hidden sm:inline ${isDark ? 'text-white/60' : 'text-gray-600'}`}>Panel Control</span>
               </button>
             )}
             {/* Reloj */}
-            <div className={`rounded-xl px-2.5 py-1.5 border flex items-center gap-1.5 ${isDark ? 'glass border-white/6' : 'bg-white border-gray-200'}`}>
+            <div className={`rounded-xl px-2 py-1.5 border flex items-center gap-1.5 shrink-0 ${isDark ? 'glass border-white/6' : 'bg-white border-gray-200 shadow-sm'}`}>
               <Clock size={9} className="text-brand-primary" />
               <span className={`text-[9px] font-black font-mono-display ${isDark ? 'text-white/50' : 'text-gray-600'}`}>{systemTime}</span>
             </div>
             {/* Online/Offline */}
-            <div className={`rounded-xl px-2 py-1.5 border flex items-center gap-1 ${isDark ? 'glass border-white/6' : 'bg-white border-gray-200'}`}>
+            <div className={`rounded-xl px-2 py-1.5 border flex items-center gap-1 shrink-0 ${isDark ? 'glass border-white/6' : 'bg-white border-gray-200 shadow-sm'}`}>
               {isOnline ? <Wifi size={9} className="text-green-400" /> : <WifiOff size={9} className="text-red-400" />}
               <span className={`text-[7px] font-mono uppercase tracking-wider ${isOnline ? 'text-green-400/60' : 'text-red-400/60'}`}>
                 {isOnline ? 'ONLINE' : 'OFFLINE'}
@@ -702,22 +702,22 @@ export default function DashboardScreen({ canAccessSupervisor = false, onSwitchT
             </div>
             {/* Theme toggle */}
             <button onClick={toggleTheme}
-              className={`p-2 rounded-xl border transition-colors active:scale-95 ${isDark ? 'glass border-white/6 text-white/30 hover:text-brand-primary' : 'bg-white border-gray-200 text-gray-400 hover:text-brand-primary'}`}>
+              className={`p-2 rounded-xl border transition-colors active:scale-95 shrink-0 ${isDark ? 'glass border-white/6 text-white/30 hover:text-brand-primary' : 'bg-white border-gray-200 text-gray-400 hover:text-brand-primary shadow-sm'}`}>
               {isDark ? <Sun size={16} /> : <Moon size={16} />}
             </button>
             <button onClick={handleLogout}
-              className={`p-2.5 rounded-xl border transition-colors active:scale-95 ${isDark ? 'glass border-white/6 text-white/30 hover:text-red-400' : 'bg-white border-gray-200 text-gray-400 hover:text-red-400'}`}>
+              className={`p-2 rounded-xl border transition-colors active:scale-95 shrink-0 ${isDark ? 'glass border-white/6 text-white/30 hover:text-red-400' : 'bg-white border-gray-200 text-gray-400 hover:text-red-400 shadow-sm'}`}>
               <LogOut size={16} />
             </button>
           </div>
         </div>
 
         {/* ── Panel de progreso futurista ── */}
-        <div className="glass-card rounded-2xl p-4 border border-white/8">
+        <div className={`rounded-2xl p-4 border ${isDark ? 'glass-card border-white/8' : 'bg-white border-gray-200 shadow-sm'}`}>
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
               <Activity size={12} className="text-brand-primary" />
-              <span className="text-[9px] font-black text-white/40 uppercase tracking-widest font-mono-display">Progreso de Turno</span>
+              <span className={`text-[9px] font-black uppercase tracking-widest font-mono-display ${isDark ? 'text-white/40' : 'text-gray-500'}`}>Progreso de Turno</span>
             </div>
             <div className="flex items-center gap-2">
               <span className="text-lg font-black text-brand-primary font-mono-display">{progress}%</span>
@@ -729,14 +729,14 @@ export default function DashboardScreen({ canAccessSupervisor = false, onSwitchT
           </div>
           <div className="flex justify-between">
             <div className="flex items-center gap-1.5">
-              <div className="w-1.5 h-1.5 rounded-full bg-white/20" />
-              <span className="text-[8px] font-black text-white/25 uppercase tracking-wider font-mono-display">
+              <div className={`w-1.5 h-1.5 rounded-full ${isDark ? 'bg-white/20' : 'bg-gray-300'}`} />
+              <span className={`text-[8px] font-black uppercase tracking-wider font-mono-display ${isDark ? 'text-white/25' : 'text-gray-400'}`}>
                 {pendingCount} Pendientes
               </span>
             </div>
             <div className="flex items-center gap-1.5">
               <div className="w-1.5 h-1.5 rounded-full bg-green-500" style={{ boxShadow: '0 0 6px rgba(34,197,94,0.8)' }} />
-              <span className="text-[8px] font-black text-white/25 uppercase tracking-wider font-mono-display">
+              <span className={`text-[8px] font-black uppercase tracking-wider font-mono-display ${isDark ? 'text-white/25' : 'text-gray-400'}`}>
                 {completedCount} Completadas
               </span>
             </div>
@@ -746,18 +746,22 @@ export default function DashboardScreen({ canAccessSupervisor = false, onSwitchT
 
       {/* ── Tabs ── */}
       <div className="px-4 mb-3 shrink-0 relative z-10">
-        <div className="glass flex rounded-xl p-0.5 border border-white/6 gap-0.5">
+        <div className={`flex rounded-xl p-0.5 border gap-0.5 ${isDark ? 'glass border-white/6' : 'bg-gray-100 border-gray-200'}`}>
           {(['incubadora', 'nacedora'] as MachineType[]).map(tab => (
             <button key={tab}
               onClick={() => setActiveTab(tab)}
               className={`flex-1 py-2.5 text-[9px] font-black rounded-[10px] transition-all uppercase tracking-widest font-mono-display ${
-                activeTab === tab ? 'text-white' : 'text-white/25 hover:text-white/50'
+                activeTab === tab 
+                  ? (isDark ? 'text-white' : 'text-brand-primary') 
+                  : (isDark ? 'text-white/25 hover:text-white/50' : 'text-gray-400 hover:text-gray-600')
               }`}
               style={activeTab === tab ? {
-                background: 'linear-gradient(135deg, rgba(247,147,26,0.2), rgba(255,184,0,0.12))',
-                boxShadow: '0 0 10px rgba(247,147,26,0.15)',
+                background: isDark 
+                  ? 'linear-gradient(135deg, rgba(247,147,26,0.2), rgba(255,184,0,0.12))'
+                  : 'linear-gradient(135deg, rgba(247,147,26,0.1), rgba(255,184,0,0.05))',
+                boxShadow: isDark ? '0 0 10px rgba(247,147,26,0.15)' : '0 1px 3px rgba(247,147,26,0.1)',
                 border: '1px solid rgba(247,147,26,0.25)',
-              } : {}}
+              } : { border: '1px solid transparent' }}
             >
               {tab === 'incubadora' ? '⬡ Incubadoras' : '⬡ Nacedoras'}
             </button>
@@ -789,8 +793,8 @@ export default function DashboardScreen({ canAccessSupervisor = false, onSwitchT
       </div>
 
       {/* ── Botón Sincronizar ── */}
-      <div className="absolute bottom-0 inset-x-0 z-20 px-4 pb-6 pt-8"
-        style={{ background: 'linear-gradient(to top, #060b18 50%, transparent)' }}>
+      <div className={`absolute bottom-0 inset-x-0 z-20 px-4 pb-6 pt-8 ${isDark ? '' : 'bg-gradient-to-t from-gray-50 via-gray-50 to-transparent'}`}
+        style={isDark ? { background: 'linear-gradient(to top, #060b18 50%, transparent)' } : {}}>
         <button
           onClick={handleSyncAttempt}
           disabled={isSyncing}
@@ -799,7 +803,7 @@ export default function DashboardScreen({ canAccessSupervisor = false, onSwitchT
                      disabled:opacity-40 disabled:cursor-not-allowed font-mono-display"
           style={{
             background: isSyncing
-              ? 'rgba(255,255,255,0.06)'
+              ? (isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)')
               : 'linear-gradient(135deg, #f7931a 0%, #ffb800 100%)',
             boxShadow: isSyncing
               ? 'none'
@@ -807,10 +811,10 @@ export default function DashboardScreen({ canAccessSupervisor = false, onSwitchT
           }}
         >
           {isSyncing
-            ? <Loader2 size={18} className="animate-spin text-white/40" />
+            ? <Loader2 size={18} className={`animate-spin ${isDark ? 'text-white/40' : 'text-gray-400'}`} />
             : <Zap size={18} className="text-white" />
           }
-          <span className={isSyncing ? 'text-white/30' : 'text-white'}>
+          <span className={isSyncing ? (isDark ? 'text-white/30' : 'text-gray-400') : 'text-white'}>
             {isSyncing ? 'Sincronizando...' : 'Sincronizar Operación'}
           </span>
           {!isSyncing && allCompleted && (

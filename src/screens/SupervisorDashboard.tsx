@@ -1012,13 +1012,29 @@ export default function SupervisorDashboard() {
                 </div>
 
                 {/* Usuarios en línea */}
-                <div>
-                  <p className={`text-[7px] uppercase font-black tracking-wider leading-none mb-0.5 ${isDark ? 'text-white/30' : 'text-brand-gray'}`}>Usuarios en Línea</p>
-                  <p className={`text-[10px] font-black truncate leading-none ${isDark ? 'text-brand-primary' : 'text-brand-primary'}`}>
-                    {onlineOperators.length > 0
-                      ? onlineOperators.map((op: any) => op.name.split(' ')[0]).join(', ')
-                      : 'Sin personal activo'}
-                  </p>
+                <div className="min-w-0">
+                  <p className={`text-[7px] uppercase font-black tracking-wider leading-none mb-1 ${isDark ? 'text-white/30' : 'text-brand-gray'}`}>Usuarios en Línea</p>
+                  <div className="flex flex-wrap gap-1">
+                    {onlineOperators.length > 0 ? onlineOperators.map((op: any, i: number) => {
+                      const isResponsible = op.name === responsibleOperator || op.id === responsibleOperator;
+                      return (
+                        <span
+                          key={i}
+                          className={`px-1.5 py-0.5 rounded text-[8px] font-black truncate max-w-[80px] ${
+                            isResponsible
+                              ? 'bg-brand-primary text-white shadow-sm'
+                              : (isDark ? 'bg-white/10 text-white/60' : 'bg-gray-100 text-gray-600')
+                          }`}
+                          title={op.name}
+                        >
+                          {op.name.split(' ')[0]}
+                          {isResponsible && ' ★'}
+                        </span>
+                      );
+                    }) : (
+                      <span className={`text-[9px] font-bold ${isDark ? 'text-white/30' : 'text-gray-400'}`}>Sin personal activo</span>
+                    )}
+                  </div>
                 </div>
 
                   {/* Cierres de turno */}

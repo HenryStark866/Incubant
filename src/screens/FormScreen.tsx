@@ -226,12 +226,12 @@ export default function FormScreen() {
         {/* Toast State Overlay */}
         {showToast && (
           <div className="fixed top-24 inset-x-5 z-50 animate-slide-down">
-            <div className="glass-light rounded-3xl p-5 border border-green-500/50 glow-green flex items-center gap-4">
+            <div className={`rounded-3xl p-5 border flex items-center gap-4 ${isDark ? 'glass-light border-green-500/50 glow-green' : 'bg-white border-green-300 shadow-lg'}`}>
               <div className="w-12 h-12 rounded-2xl bg-green-500/20 flex items-center justify-center animate-bounce">
                 <CheckCircle2 size={24} className="text-green-400" />
               </div>
               <div className="flex-1">
-                <p className="text-sm font-black text-white uppercase font-mono-display">TRANSMISIÓN EXITOSA</p>
+                <p className={`text-sm font-black uppercase font-mono-display ${isDark ? 'text-white' : 'text-gray-900'}`}>TRANSMISIÓN EXITOSA</p>
                 <p className="text-[10px] text-green-400/60 font-mono tracking-widest">Datos guardados localmente</p>
               </div>
             </div>
@@ -240,9 +240,9 @@ export default function FormScreen() {
 
         {/* Global Alert Notification */}
         {hasErrors && !showToast && (
-          <div className="glass rounded-2xl p-4 border border-red-500/30 glow-red animate-pulse flex items-center gap-3">
+          <div className={`rounded-2xl p-4 border animate-pulse flex items-center gap-3 ${isDark ? 'glass border-red-500/30 glow-red' : 'bg-red-50 border-red-200'}`}>
             <AlertCircle size={20} className="text-red-400 shrink-0" />
-            <p className="text-[10px] font-black text-red-400 uppercase tracking-widest font-mono-display">Detección de errores: Verifique todos los sensores requeridos</p>
+            <p className={`text-[10px] font-black uppercase tracking-widest font-mono-display ${isDark ? 'text-red-400' : 'text-red-600'}`}>Detección de errores: Verifique todos los sensores requeridos</p>
           </div>
         )}
 
@@ -273,14 +273,14 @@ export default function FormScreen() {
               { label: 'MIN', field: 'minutos' },
             ].map((item, idx) => (
               <div key={item.label} className="relative group text-center">
-                <div className="text-[7px] font-black text-white/15 mb-2 font-mono">{item.label}</div>
+                <div className={`text-[7px] font-black mb-2 font-mono ${isDark ? 'text-white/15' : 'text-gray-400'}`}>{item.label}</div>
                 <input
                   type="number" value={(formData.tiempoIncubacion as any)[item.field]}
                   onChange={e => handleTimeChange(item.field, e.target.value)}
                   placeholder="00"
-                  className="w-full glass rounded-2xl py-3.5 text-center text-2xl font-black text-white focus:outline-none focus:ring-1 focus:ring-brand-primary/40 border border-white/5 font-mono-display"
+                  className={`w-full rounded-2xl py-3.5 text-center text-2xl font-black focus:outline-none focus:ring-1 focus:ring-brand-primary/40 border font-mono-display ${isDark ? 'glass text-white border-white/5 placeholder:text-white/10' : 'bg-white text-gray-900 border-gray-200 placeholder:text-gray-300 shadow-sm'}`}
                 />
-                {idx < 2 && <div className="absolute top-1/2 -right-[1px] translate-y-1 w-[1px] h-4 bg-white/5" />}
+                {idx < 2 && <div className={`absolute top-1/2 -right-[1px] translate-y-1 w-[1px] h-4 ${isDark ? 'bg-white/5' : 'bg-gray-200'}`} />}
               </div>
             ))}
           </div>
@@ -306,11 +306,11 @@ export default function FormScreen() {
                 placeholder="0" unit="CNT" icon={RotateCw} error={errors.volteoNumero} />
               
               <HudInput label="POSICIÓN" icon={RotateCw}>
-                <div className="flex gap-2 p-1 rounded-xl glass border border-white/5">
+                <div className={`flex gap-2 p-1 rounded-xl border ${isDark ? 'glass border-white/5' : 'bg-gray-100 border-gray-200'}`}>
                   {['V', 'A'].map(opt => (
                     <button key={opt} onClick={() => handleInputChange('volteoPosicion', opt)}
                       className={`flex-1 py-3 text-xs font-black rounded-lg transition-all tracking-widest font-mono-display ${
-                        formData.volteoPosicion === opt ? 'text-white shadow-lg' : 'text-white/20'
+                        formData.volteoPosicion === opt ? 'text-white shadow-lg' : (isDark ? 'text-white/20' : 'text-gray-400')
                       }`}
                       style={formData.volteoPosicion === opt ? { background: 'linear-gradient(135deg, #f7931a, #ffb800)' } : {}}>
                       {opt}
@@ -340,11 +340,11 @@ export default function FormScreen() {
         {/* ── Status Toggles ── */}
         <div className="grid grid-cols-2 gap-3">
           <HudInput label="ECO_DRIVE_OK" icon={Wind} error={errors.ventiladorPrincipal}>
-            <div className="flex gap-2 p-1 rounded-xl glass border border-white/5">
+            <div className={`flex gap-2 p-1 rounded-xl border ${isDark ? 'glass border-white/5' : 'bg-gray-100 border-gray-200'}`}>
               {[ 'Si', 'No' ].map(opt => (
                 <button key={opt} onClick={() => handleInputChange('ventiladorPrincipal', opt)}
                   className={`flex-1 py-2.5 text-[9px] font-black rounded-lg transition-all tracking-widest font-mono-display ${
-                    formData.ventiladorPrincipal === opt ? 'text-white' : 'text-white/20'
+                    formData.ventiladorPrincipal === opt ? 'text-white' : (isDark ? 'text-white/20' : 'text-gray-400')
                   }`}
                   style={formData.ventiladorPrincipal === opt ? { background: 'linear-gradient(135deg, #f7931a, #ffb800)' } : {}}>
                   {opt === 'Si' ? 'PROC_OK' : 'FAIL'}
@@ -353,11 +353,11 @@ export default function FormScreen() {
             </div>
           </HudInput>
           <HudInput label="SISTEMA_ALARM" icon={Bell}>
-            <div className="flex gap-2 p-1 rounded-xl glass border border-white/5">
+            <div className={`flex gap-2 p-1 rounded-xl border ${isDark ? 'glass border-white/5' : 'bg-gray-100 border-gray-200'}`}>
               {[ 'Si', 'No' ].map(opt => (
                 <button key={opt} onClick={() => handleInputChange('alarma', opt)}
                   className={`flex-1 py-2.5 text-[9px] font-black rounded-lg transition-all tracking-widest font-mono-display ${
-                    formData.alarma === opt ? (opt === 'Si' ? 'bg-red-500 text-white glow-red' : 'bg-green-500 text-white shadow-lg') : 'text-white/20'
+                    formData.alarma === opt ? (opt === 'Si' ? 'bg-red-500 text-white glow-red' : 'bg-green-500 text-white shadow-lg') : (isDark ? 'text-white/20' : 'text-gray-400')
                   }`}>
                   {opt === 'Si' ? 'ACTIVE' : 'IDLE'}
                 </button>
@@ -372,21 +372,19 @@ export default function FormScreen() {
             value={formData.observaciones}
             onChange={e => handleInputChange('observaciones', e.target.value)}
             placeholder="Ingrese reporte técnico de anomalías detectadas..."
-            className="w-full glass rounded-2xl px-5 py-4 text-sm text-white font-medium placeholder:text-white/10
-                       focus:outline-none focus:ring-1 focus:ring-brand-primary/30 transition-all
-                       min-h-[120px] resize-none border border-white/5 font-mono"
+            className={`w-full rounded-2xl px-5 py-4 text-sm font-medium focus:outline-none focus:ring-1 focus:ring-brand-primary/30 transition-all min-h-[120px] resize-none border font-mono ${isDark ? 'glass text-white placeholder:text-white/10 border-white/5' : 'bg-white text-gray-900 placeholder:text-gray-300 border-gray-200 shadow-sm'}`}
             style={{ appearance: 'none' }}
           />
-          <div className="flex items-center gap-3 mt-3 opacity-30">
-            <Info size={12} className="text-white" />
-            <span className="text-[8px] font-black text-white/50 uppercase tracking-[0.2em]">Obligatorio en niveles críticos ±1.5°F</span>
+          <div className={`flex items-center gap-3 mt-3 ${isDark ? 'opacity-30' : 'opacity-50'}`}>
+            <Info size={12} className={isDark ? 'text-white' : 'text-gray-500'} />
+            <span className={`text-[8px] font-black uppercase tracking-[0.2em] ${isDark ? 'text-white/50' : 'text-gray-400'}`}>Obligatorio en niveles críticos ±1.5°F</span>
           </div>
         </HudInput>
       </div>
 
       {/* ── Transmission Logic Fixed Footer ── */}
-      <div className="absolute bottom-0 inset-x-0 z-40 p-5 pt-10"
-        style={{ background: 'linear-gradient(to top, #060b18 60%, transparent)' }}>
+      <div className={`absolute bottom-0 inset-x-0 z-40 p-5 pt-10 ${isDark ? '' : 'bg-gradient-to-t from-gray-50 via-gray-50 to-transparent'}`}
+        style={isDark ? { background: 'linear-gradient(to top, #060b18 60%, transparent)' } : {}}>
         <button
           onClick={handleSave}
           disabled={showToast}

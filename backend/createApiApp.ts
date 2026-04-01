@@ -1058,17 +1058,14 @@ export function createApiApp(): Express {
 
       const currentShift = currentShiftObj?.nombre || getShiftName(currentTime);
 
-      // Operarios ONLINE (activos en los últimos 15 min)
+      // TODOS los usuarios ONLINE (activos en los últimos 15 min) - sin filtrar por rol
       const fifteenMinsAgo = new Date(currentTime.getTime() - 15 * 60 * 1000);
       const onlineUsers = await prisma.user.findMany({
         where: {
           ultimo_acceso: { gte: fifteenMinsAgo },
-          rol: 'OPERARIO'
         },
-        select: { id: true, nombre: true, turno: true }
+        select: { id: true, nombre: true, turno: true, rol: true }
       });
-
-      const onlineNames = onlineUsers.map(u => u.nombre.split(' ')[0]);
 
       // Operarios asignados al turno actual por cronograma
       const today = new Date();
@@ -1082,35 +1079,27 @@ export function createApiApp(): Express {
         include: { user: true, shift: true }
       });
 
-      const assignedNames = assignments.map(a => a.user.nombre.split(' ')[0]);
-
-      // Construir lista de operarios: Responsable primero, luego otros online
-      let displayNames = 'N/A';
+      // Responsable del turno (primer asignado)
       let responsibleOperator = '';
-
+      const assignedUserIds = new Set<string>();
       if (assignments.length > 0) {
-        // El primer asignado es el responsable del turno
         responsibleOperator = assignments[0].user.nombre;
-        const otherAssigned = assignments.slice(1).map(a => a.user.nombre.split(' ')[0]);
-        
-        // Operarios online que NO están asignados (extra)
-        const extraOnline = onlineNames.filter(name => 
-          !assignedNames.includes(name) && name !== responsibleOperator.split(' ')[0]
-        );
-
-        let parts = [responsibleOperator + ' (Responsable)'];
-        if (otherAssigned.length > 0) {
-          parts.push(otherAssigned.join(', ') + ' (Asignado)');
-        }
-        if (extraOnline.length > 0) {
-          parts.push(extraOnline.join(', ') + ' (Online)');
-        }
-        displayNames = parts.join(' | ');
-      } else if (onlineNames.length > 0) {
-        displayNames = onlineNames.join(', ') + ' (Online)';
-      } else if (assignedNames.length > 0) {
-        displayNames = assignedNames.join(', ') + ' (Asignado)';
+        assignments.forEach(a => assignedUserIds.add(a.user.id));
       }
+
+      // Construir lista de onlineOperators con indicador de responsable
+      const onlineOperators = onlineUsers.map(u => ({
+        id: u.id,
+        name: u.nombre,
+        shift: u.turno || '',
+        role: u.rol || '',
+        isResponsible: u.nombre === responsibleOperator,
+        isAssigned: assignedUserIds.has(u.id),
+      }));
+
+      // Nombres para display (todos los online)
+      const onlineNames = onlineUsers.map(u => u.nombre.split(' ')[0]);
+      const displayNames = onlineNames.length > 0 ? onlineNames.join(', ') : 'N/A';
 
       // Contar reportes de cierre de turno
       let shiftClosingCount = 0;
@@ -1128,12 +1117,12 @@ export function createApiApp(): Express {
       return res.json({ 
         reportCount, 
         lastReportTime: lastLog?.fecha_hora || null,
-        activeOperatorsCount: onlineNames.length || assignedNames.length,
+        activeOperatorsCount: onlineNames.length,
         activeOperatorsNames: displayNames,
         responsibleOperator,
         currentShift,
         shiftClosingCount,
-        onlineOperators: onlineUsers.map(u => ({ name: u.nombre, turno: u.turno })),
+        onlineOperators,
       });
     } catch (error) {
       console.error('[Dashboard] Error al consultar resumen:', error);

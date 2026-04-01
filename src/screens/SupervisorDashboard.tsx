@@ -1558,38 +1558,43 @@ export default function SupervisorDashboard() {
                       (() => {
                         const isBase64 = selectedMachine.photoUrl.startsWith('data:');
                         return (
-                          <img
-                            key={isBase64 ? 'base64' : selectedMachine.photoUrl}
-                            src={selectedMachine.photoUrl}
-                            alt={`Evidencia ${selectedMachine.name}`}
-                            className="w-full h-full object-cover"
-                            loading="eager"
-                            crossOrigin={isBase64 ? undefined : 'anonymous'}
-                            onError={(e) => {
-                              (e.target as HTMLImageElement).style.display = 'none';
-                              const parent = (e.target as HTMLImageElement).parentElement;
-                              if (parent) {
-                                const fallback = document.createElement('div');
-                                fallback.className = 'absolute inset-0 flex flex-col items-center justify-center gap-2';
-                                fallback.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="${isDark ? '#64748b' : '#94a3b8'}" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg><p class="text-xs font-bold ${isDark ? 'text-white/30' : 'text-gray-400'}">Foto no disponible</p>`;
-                                parent.appendChild(fallback);
-                              }
-                            }}
-                          />
+                          <>
+                            <img
+                              key={isBase64 ? 'base64' : selectedMachine.photoUrl}
+                              src={selectedMachine.photoUrl}
+                              alt={`Evidencia ${selectedMachine.name}`}
+                              className="w-full h-full object-cover"
+                              loading="eager"
+                              crossOrigin={isBase64 ? undefined : 'anonymous'}
+                              onError={(e) => {
+                                (e.target as HTMLImageElement).style.display = 'none';
+                                const parent = (e.target as HTMLImageElement).parentElement;
+                                if (parent) {
+                                  const fallback = document.createElement('div');
+                                  fallback.className = 'absolute inset-0 flex flex-col items-center justify-center gap-2';
+                                  fallback.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="${isDark ? '#64748b' : '#94a3b8'}" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg><p class="text-xs font-bold ${isDark ? 'text-white/30' : 'text-gray-400'}">Foto no disponible</p>`;
+                                  parent.appendChild(fallback);
+                                }
+                              }}
+                            />
+                            {/* Photo footer */}
+                            {selectedMachine.data?.updatedBy && (
+                              <div className="absolute bottom-0 inset-x-0 p-3 bg-gradient-to-t from-black/90 via-black/60 to-transparent">
+                                <p className="text-xs text-white font-black">
+                                  {selectedMachine.data.updatedBy}
+                                </p>
+                                <p className="text-[11px] text-white/80 font-bold mt-0.5">
+                                  {selectedMachine.data.lastUpdate || selectedMachine.lastUpdate}
+                                </p>
+                              </div>
+                            )}
+                          </>
                         );
                       })()
                     ) : (
                       <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
                         <ImageIcon size={40} className={isDark ? 'text-white/20' : 'text-gray-300'} />
                         <p className={`text-xs font-bold ${isDark ? 'text-white/30' : 'text-gray-400'}`}>Sin foto registrada</p>
-                      </div>
-                    )}
-                    {/* Photo footer */}
-                    {selectedMachine.data?.updatedBy && (
-                      <div className="absolute bottom-0 inset-x-0 p-3 bg-gradient-to-t from-black/80 to-transparent">
-                        <p className="text-[10px] text-white font-black uppercase tracking-wider">
-                          {selectedMachine.data.updatedBy} · {selectedMachine.data.lastUpdate || selectedMachine.lastUpdate}
-                        </p>
                       </div>
                     )}
                   </div>
@@ -1625,7 +1630,6 @@ export default function SupervisorDashboard() {
                               <th className={`text-left px-4 py-2.5 text-[9px] font-black uppercase tracking-wider ${isDark ? 'text-white/40' : 'text-brand-gray'}`}>Parámetro</th>
                               <th className={`text-center px-4 py-2.5 text-[9px] font-black uppercase tracking-wider ${isDark ? 'text-white/40' : 'text-brand-gray'}`}>Real</th>
                               <th className={`text-center px-4 py-2.5 text-[9px] font-black uppercase tracking-wider ${isDark ? 'text-white/40' : 'text-brand-gray'}`}>SP</th>
-                              <th className={`text-center px-4 py-2.5 text-[9px] font-black uppercase tracking-wider ${isDark ? 'text-white/40' : 'text-brand-gray'}`}>Estado</th>
                             </tr>
                           </thead>
                           <tbody className={`divide-y ${isDark ? 'divide-white/5' : 'divide-gray-50'}`}>
@@ -1647,15 +1651,6 @@ export default function SupervisorDashboard() {
                                     <td className={`px-4 py-3 font-bold text-xs ${isDark ? 'text-white/70' : 'text-brand-dark'}`}>{row.name}</td>
                                     <td className={`px-4 py-3 text-center font-black text-xs ${isAlarm ? 'text-red-500' : isDark ? 'text-white' : 'text-brand-dark'}`}>{row.real}</td>
                                     <td className={`px-4 py-3 text-center font-bold text-xs ${isDark ? 'text-white/40' : 'text-brand-gray'}`}>{row.sp}</td>
-                                    <td className="px-4 py-3 text-center">
-                                      {isAlarm ? (
-                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-black bg-red-500/10 text-red-500">ALERTA</span>
-                                      ) : row.real !== '--' ? (
-                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-black bg-green-500/10 text-green-500">OK</span>
-                                      ) : (
-                                        <span className="text-[9px] text-gray-400">--</span>
-                                      )}
-                                    </td>
                                   </tr>
                                 );
                               });
@@ -1701,14 +1696,12 @@ export default function SupervisorDashboard() {
                       </div>
 
                       {/* Observaciones */}
-                      {selectedMachine.data.observaciones && (
-                        <div>
-                          <h4 className={`text-[9px] font-black uppercase tracking-[0.2em] mb-2 ${isDark ? 'text-white/40' : 'text-brand-gray'}`}>Observaciones</h4>
-                          <div className={`rounded-2xl p-4 text-sm font-medium leading-relaxed ${isDark ? 'bg-white/5 text-white/70 border border-white/5' : 'bg-gray-50 text-brand-dark border border-gray-100'}`}>
-                            {selectedMachine.data.observaciones}
-                          </div>
+                      <div>
+                        <h4 className={`text-[9px] font-black uppercase tracking-[0.2em] mb-2 ${isDark ? 'text-white/40' : 'text-brand-gray'}`}>Observaciones</h4>
+                        <div className={`rounded-2xl p-4 text-sm font-medium leading-relaxed ${isDark ? 'bg-white/5 text-white/70 border border-white/5' : 'bg-gray-50 text-brand-dark border border-gray-100'}`}>
+                          {selectedMachine.data.observaciones || 'Sin novedad'}
                         </div>
-                      )}
+                      </div>
                     </>
                   ) : (
                     <div className={`flex flex-col items-center justify-center py-16 text-center ${isDark ? 'text-white/30' : 'text-gray-400'}`}>

@@ -148,24 +148,24 @@ export default function App() {
              <div className="absolute inset-[-8px] rounded-full border border-brand-secondary/10 animate-spin-reverse" style={{ borderStyle: 'dashed' }} />
              <div className="absolute inset-0 animate-pulse-glow rounded-full" style={{ background: 'radial-gradient(circle, rgba(247,147,26,0.1) 0%, transparent 70%)' }} />
              
-             <div className="relative z-10 w-20 h-20 bg-gradient-to-br from-brand-primary to-brand-secondary rounded-2xl flex items-center justify-center glow-primary animate-float shadow-[0_0_40px_rgba(247,147,26,0.4)]">
-                {isWaitingApi ? <WifiOff size={40} className="text-white animate-pulse" /> : <Wifi size={40} className="text-white animate-pulse" />}
+             <div className="relative z-10 w-24 h-24 flex items-center justify-center animate-float">
+                <img src="/LOGO.png" alt="Incubant" className="w-full h-full object-contain drop-shadow-[0_0_20px_rgba(247,147,26,0.5)]" />
              </div>
           </div>
           
           <div className="space-y-4">
              <div className="flex items-center justify-center gap-2 mb-2">
                 <Cpu size={12} className="text-brand-primary animate-blink" />
-                <span className="text-[9px] font-black uppercase tracking-[0.4em] text-brand-primary/60 font-mono-display">System Boot Sequence</span>
+                <span className="text-[9px] font-black uppercase tracking-[0.4em] text-brand-primary/60 font-mono-display">Corporacion CDH Maler</span>
              </div>
-             <h2 className="text-3xl font-black text-white tracking-widest uppercase font-mono-display holo-text">
-               {isWaitingApi ? 'SYNCING_COMMS' : 'INIT_KERNEL'}
+             <h2 className="text-2xl font-black text-white tracking-widest uppercase font-mono-display holo-text">
+               INICIANDO APP INCUBANT
              </h2>
              <div className="h-px w-20 bg-brand-primary/20 mx-auto" />
              <p className="text-[10px] text-white/30 font-medium leading-relaxed uppercase tracking-widest max-w-[200px] mx-auto font-mono">
                {isWaitingApi 
-                 ? `Estableciendo enlace seguro con el núcleo central. Intento ${retryCount}/12` 
-                 : 'Cargando protocolos de seguridad y validando sesión de operario...'}
+                 ? `Estableciendo enlace seguro con el nucleo central. Intento ${retryCount}/12` 
+                 : 'Cargando protocolos de seguridad y validando sesion de operario...'}
              </p>
           </div>
 

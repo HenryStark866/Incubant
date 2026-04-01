@@ -40,12 +40,41 @@ function cleanUserName(name: string): string {
 }
 
 /**
+ * Guarda una foto desde base64 data URL
+ */
+export function savePhotoFromBase64(
+  base64DataUrl: string,
+  userName: string,
+  machineId: string
+): { relativePath: string; fileName: string } {
+  const dateFolder = ensureDateFolder();
+
+  const now = new Date();
+  const utc = now.getTime() + now.getTimezoneOffset() * 60000;
+  const bogotaDate = new Date(utc - 5 * 60 * 60 * 1000);
+
+  const h = bogotaDate.getHours().toString().padStart(2, '0');
+  const min = bogotaDate.getMinutes().toString().padStart(2, '0');
+  const s = bogotaDate.getSeconds().toString().padStart(2, '0');
+
+  const cleanName = cleanUserName(userName);
+  const ext = base64DataUrl.includes('png') ? 'png' : base64DataUrl.includes('webp') ? 'webp' : 'jpg';
+  const fileName = `${h}${min}${s}_${machineId.replace(/[^a-zA-Z0-9-]/g, '')}_${cleanName}.${ext}`;
+  const localPath = path.join(dateFolder, fileName);
+
+  const base64Data = base64DataUrl.replace(/^data:image\/\w+;base64,/, '');
+  const buffer = Buffer.from(base64Data, 'base64');
+  fs.writeFileSync(localPath, buffer);
+
+  const dateFolderName = path.basename(dateFolder);
+  const relativePath = `evidencias/${dateFolderName}/${fileName}`;
+  console.log(`[Local Storage] Foto guardada: ${relativePath} (${buffer.length} bytes)`);
+
+  return { relativePath, fileName };
+}
+
+/**
  * Guarda una foto localmente en la carpeta evidencias
- * @param buffer - Buffer de la imagen
- * @param userName - Nombre del operario
- * @param machineId - ID de la máquina (ej: 'inc-1')
- * @param mimeType - Tipo MIME de la imagen
- * @returns Ruta local del archivo guardado
  */
 export function savePhotoLocally(
   buffer: Buffer,
@@ -66,7 +95,6 @@ export function savePhotoLocally(
   const cleanName = cleanUserName(userName);
   const ext = mimeType.includes('png') ? 'png' : mimeType.includes('webp') ? 'webp' : 'jpg';
 
-  // Formato: HHMMSS_machineId_cleanName.ext
   const fileName = `${h}${min}${s}_${machineId.replace(/[^a-zA-Z0-9-]/g, '')}_${cleanName}.${ext}`;
   const localPath = path.join(dateFolder, fileName);
 

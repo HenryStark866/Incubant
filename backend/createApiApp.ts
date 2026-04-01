@@ -1,5 +1,7 @@
 // Manual Redeploy for CORS sync by HenryStark866
 import crypto from 'crypto';
+import path from 'path';
+import fs from 'fs';
 import cron from 'node-cron';
 import express, { type Express, type NextFunction, type Request, type Response } from 'express';
 import cors from 'cors';
@@ -9,6 +11,7 @@ import type { PrismaClient } from '@prisma/client';
 import { processMachineReport, processClosingReport } from './controllers/report.controller';
 import { seedShifts } from './controllers/admin.controller';
 import { uploadWithDateStructure, cleanUserName } from './services/drive.service';
+import { savePhotoFromBase64 } from './services/local-storage.service';
 
 type UserRole = 'OPERARIO' | 'SUPERVISOR' | 'JEFE';
 
@@ -506,7 +509,13 @@ export function createApiApp(): Express {
 
   const upload = multer({ storage: multer.memoryStorage() });
 
-  app.use(express.json({ limit: '10mb' }));
+  app.use(express.json({ limit: '50mb' }));
+  
+  // Serve local evidence photos
+  const evidenciasPath = path.join(process.cwd(), 'evidencias');
+  if (fs.existsSync(evidenciasPath)) {
+    app.use('/api/evidencias', express.static(evidenciasPath));
+  }
   
   // CORS Configuration
   const allowedOrigins = [
@@ -760,25 +769,46 @@ export function createApiApp(): Express {
       const folderIdPhotos = process.env.DRIVE_FOLDER_PHOTOS_ID;
       const folderIdReports = process.env.DRIVE_FOLDER_REPORTS_ID;
 
-      const driveResults: { machineId: string; photoUrl?: string; pdfUrl?: string }[] = [];
+      const driveResults: { machineId: string; photoUrl?: string; pdfUrl?: string; photoError?: string }[] = [];
 
-      // Subir cada foto y PDF a Drive
+      // Subir cada foto a Drive (con fallback local)
       for (const machine of completedMachines) {
-        const result: { machineId: string; photoUrl?: string; pdfUrl?: string } = { machineId: machine.id };
+        const result: { machineId: string; photoUrl?: string; pdfUrl?: string; photoError?: string } = { machineId: machine.id };
 
-        // Subir foto a Drive
-        if (machine.photoUrl?.startsWith('data:image')) {
+        const photoStr = machine.photoUrl;
+        if (photoStr && photoStr.length > 100 && photoStr.startsWith('data:image')) {
+          // Primero guardar localmente (siempre)
           try {
-            const base64Data = machine.photoUrl.replace(/^data:image\/\w+;base64,/, '');
+            const localResult = savePhotoFromBase64(photoStr, userName, machine.id);
+            console.log(`[Sync] ✅ Local: ${localResult.relativePath}`);
+          } catch (localErr) {
+            console.error(`[Sync] ❌ Error local ${machine.id}:`, localErr);
+          }
+
+          // Luego intentar Drive
+          try {
+            const base64Data = photoStr.replace(/^data:image\/\w+;base64,/, '');
             const buffer = Buffer.from(base64Data, 'base64');
+            console.log(`[Drive Sync] Subiendo foto para ${machine.id}, buffer size: ${buffer.length} bytes`);
+
             const uploadResult = await uploadWithDateStructure(
               buffer, userName, machine.id, 'image/jpeg', folderIdPhotos || '', 'photo'
             );
             result.photoUrl = uploadResult.publicUrl;
-            console.log(`[Drive Sync] Foto subida: ${uploadResult.fileName}`);
+            console.log(`[Drive Sync] ✅ Foto subida OK: ${uploadResult.fileName} -> ${uploadResult.publicUrl}`);
           } catch (err) {
-            console.error(`[Drive Sync] Error subiendo foto ${machine.id}:`, err);
+            result.photoError = err instanceof Error ? err.message : 'Error desconocido';
+            // Fallback: guardar la foto como URL local para que el dashboard pueda servirla
+            const localResult = savePhotoFromBase64(photoStr, userName, machine.id);
+            result.photoUrl = `/api/evidencias/${encodeURIComponent(localResult.relativePath)}`;
+            console.log(`[Drive Sync] ⚠ Fallback local para ${machine.id}: ${result.photoUrl}`);
           }
+        } else if (photoStr && photoStr.length > 100 && !photoStr.startsWith('data:')) {
+          // Already a URL
+          result.photoUrl = photoStr;
+          console.log(`[Drive Sync] Foto ya es URL para ${machine.id}`);
+        } else {
+          console.log(`[Drive Sync] ⚠ Sin foto válida para ${machine.id} (length: ${photoStr?.length || 0})`);
         }
 
         driveResults.push(result);

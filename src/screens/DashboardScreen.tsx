@@ -310,6 +310,23 @@ export default function DashboardScreen({ canAccessSupervisor = false, onSwitchT
     };
   }, [currentUser, login]);
 
+  // Recordatorio automatico cada hora para reportar
+  useEffect(() => {
+    if (!currentUser) return;
+    const reminderInterval = setInterval(async () => {
+      const completedCount = machines.filter(m => m.status === 'completed').length;
+      const totalMachines = machines.length;
+      if (completedCount < totalMachines) {
+        const { showAppNotification } = await import('../utils/notifications');
+        void showAppNotification('⏰ Recordatorio de Reporte', {
+          body: `Has reportado ${completedCount} de ${totalMachines} máquinas. Recuerda reportar cada hora.`,
+          icon: '/pwa-192x192.png'
+        });
+      }
+    }, 60 * 60 * 1000); // Cada hora
+    return () => clearInterval(reminderInterval);
+  }, [currentUser, machines]);
+
   const filteredMachines = machines.filter(m => m.type === activeTab);
   const pendingMachines = machines.filter(m => m.status === 'pending');
   const pendingCount = pendingMachines.length;

@@ -18,6 +18,7 @@ import ShiftManager from '../components/Admin/ShiftManager';
 
 export default function SupervisorDashboard() {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'personal' | 'horarios' | 'settings'>('dashboard');
+  const [machineViewTab, setMachineViewTab] = useState<'incubadora' | 'nacedora'>('incubadora');
   const [selectedMachine, setSelectedMachine] = useState<any | null>(null);
   const [chartFilter, setChartFilter] = useState('Ver: Planta Completa');
   const [chartTimeRange, setChartTimeRange] = useState('24');
@@ -998,97 +999,69 @@ export default function SupervisorDashboard() {
                     <div className="flex items-center gap-2"><span className="w-3 h-3 rounded-full bg-gray-300"></span> Fuera de Línea</div>
                   </div>
 
-                  <div className="space-y-8 sm:space-y-10">
-                    <div>
-                      <h3 className={`text-xs font-black uppercase tracking-[0.2em] mb-4 flex items-center gap-2 ${isDark ? 'text-white/40' : 'text-brand-gray opacity-60'}`}>
-                        <div className="w-4 h-[2px] bg-brand-primary"></div>
-                        Incubadoras (Planta A)
-                      </h3>
-                      <div className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-8 gap-4">
-                        {machinesData.filter(m => m.type === 'incubadora').map(machine => (
-                          <button
-                            key={machine.id}
-                            onClick={() => setSelectedMachine(machine)}
-                            className={`relative p-4 rounded-2xl border-2 flex flex-col items-center justify-center gap-1 transition-all hover:scale-105 active:scale-95 overflow-hidden shadow-sm ${machine.status === 'alarm' ? 'border-red-500/50' :
-                                machine.status === 'maintenance' ? `${isDark ? 'border-white/10' : 'border-gray-200'}` :
-                                  `${isDark ? 'border-brand-primary/10 hover:border-brand-primary' : 'border-brand-primary/10 hover:border-brand-primary'}`
-                              }`}
-                            style={{ minHeight: '100px' }}
-                          >
-                            {/* Imagen de máquina real */}
-                            <div className="absolute inset-0">
-                              <img
-                                src="/imagen1.png"
-                                alt={machine.name}
-                                className="w-full h-full object-cover"
-                                style={{
-                                  filter: machine.status === 'alarm' ? 'brightness(0.8) saturate(1.3) hue-rotate(-10deg)' : machine.status === 'maintenance' ? 'brightness(0.6) grayscale(0.5)' : 'brightness(1) contrast(1.05)',
-                                  transform: 'scale(1.02)',
-                                  imageRendering: '-webkit-optimize-contrast',
-                                }}
-                              />
-                              <div className="absolute inset-0" style={{
-                                background: machine.status === 'alarm'
-                                  ? 'linear-gradient(180deg, rgba(239,68,68,0.1) 0%, rgba(0,0,0,0.05) 30%, rgba(0,0,0,0.3) 100%)'
-                                  : machine.status === 'maintenance'
-                                  ? 'linear-gradient(180deg, rgba(100,100,100,0.05) 0%, rgba(0,0,0,0.3) 100%)'
-                                  : 'linear-gradient(180deg, rgba(0,0,0,0.1) 0%, rgba(0,0,0,0.03) 30%, rgba(0,0,0,0.25) 100%)',
-                              }} />
-                            </div>
-                            <span className={`relative z-10 font-black text-xs ${machine.status === 'alarm' ? 'text-red-300' : machine.status === 'maintenance' ? 'text-white/30' : isDark ? 'text-white' : 'text-white'}`} style={{ textShadow: '0 2px 6px rgba(0,0,0,0.8)' }}>{machine.name.replace('Incubadora ', '')}</span>
-                            <span className={`relative z-10 text-[10px] font-bold ${machine.status === 'alarm' ? 'text-red-400' : 'text-brand-primary'}`} style={{ textShadow: '0 1px 4px rgba(0,0,0,0.7)' }}>{machine.temp}°F</span>
-                            {machine.data && (
-                              <span className="relative z-10 text-[8px] text-white/50 font-mono" style={{ textShadow: '0 1px 3px rgba(0,0,0,0.6)' }}>{machine.data.lastUpdate || machine.lastUpdate}</span>
-                            )}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
+                  {/* Tabs Incubadoras / Nacedoras */}
+                  <div className="flex rounded-xl overflow-hidden border border-gray-200 mb-6">
+                    <button
+                      onClick={() => setMachineViewTab('incubadora')}
+                      className={`flex-1 py-2.5 text-[9px] font-black rounded-[10px] transition-all uppercase tracking-widest ${machineViewTab === 'incubadora'
+                        ? 'bg-brand-primary text-white shadow-lg'
+                        : `${isDark ? 'bg-white/5 text-white/25 hover:bg-white/10' : 'bg-gray-50 text-gray-400 hover:bg-gray-100'}`
+                      }`}
+                    >
+                      ⬡ Incubadoras ({machinesData.filter(m => m.type === 'incubadora').length})
+                    </button>
+                    <button
+                      onClick={() => setMachineViewTab('nacedora')}
+                      className={`flex-1 py-2.5 text-[9px] font-black rounded-[10px] transition-all uppercase tracking-widest ${machineViewTab === 'nacedora'
+                        ? 'bg-brand-primary text-white shadow-lg'
+                        : `${isDark ? 'bg-white/5 text-white/25 hover:bg-white/10' : 'bg-gray-50 text-gray-400 hover:bg-gray-100'}`
+                      }`}
+                    >
+                      ⬡ Nacedoras ({machinesData.filter(m => m.type === 'nacedora').length})
+                    </button>
+                  </div>
 
-                    <div>
-                      <h3 className={`text-xs font-black uppercase tracking-[0.2em] mb-4 flex items-center gap-2 ${isDark ? 'text-white/40' : 'text-brand-gray opacity-60'}`}>
-                        <div className="w-4 h-[2px] bg-brand-primary"></div>
-                        Nacedoras (Planta B)
-                      </h3>
-                      <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-4">
-                        {machinesData.filter(m => m.type === 'nacedora').map(machine => (
-                          <button
-                            key={machine.id}
-                            onClick={() => setSelectedMachine(machine)}
-                            className={`relative p-4 rounded-2xl border-2 flex flex-col items-center justify-center gap-1 transition-all hover:scale-105 active:scale-95 overflow-hidden shadow-sm ${machine.status === 'alarm' ? 'border-red-500/50' :
-                                machine.status === 'maintenance' ? `${isDark ? 'border-white/10' : 'border-gray-200'}` :
-                                  `${isDark ? 'border-brand-primary/10 hover:border-brand-primary' : 'border-brand-primary/10 hover:border-brand-primary'}`
-                              }`}
-                            style={{ minHeight: '100px' }}
-                          >
-                            <div className="absolute inset-0">
-                              <img
-                                src="/imagen1.png"
-                                alt={machine.name}
-                                className="w-full h-full object-cover"
-                                style={{
-                                  filter: machine.status === 'alarm' ? 'brightness(0.8) saturate(1.3) hue-rotate(-10deg)' : machine.status === 'maintenance' ? 'brightness(0.6) grayscale(0.5)' : 'brightness(1) contrast(1.05)',
-                                  transform: 'scale(1.02)',
-                                  imageRendering: '-webkit-optimize-contrast',
-                                }}
-                              />
-                              <div className="absolute inset-0" style={{
-                                background: machine.status === 'alarm'
-                                  ? 'linear-gradient(180deg, rgba(239,68,68,0.1) 0%, rgba(0,0,0,0.05) 30%, rgba(0,0,0,0.3) 100%)'
-                                  : machine.status === 'maintenance'
-                                  ? 'linear-gradient(180deg, rgba(100,100,100,0.05) 0%, rgba(0,0,0,0.3) 100%)'
-                                  : 'linear-gradient(180deg, rgba(0,0,0,0.1) 0%, rgba(0,0,0,0.03) 30%, rgba(0,0,0,0.25) 100%)',
-                              }} />
-                            </div>
-                            <span className={`relative z-10 font-black text-xs ${machine.status === 'alarm' ? 'text-red-300' : machine.status === 'maintenance' ? 'text-white/30' : isDark ? 'text-white' : 'text-white'}`} style={{ textShadow: '0 2px 6px rgba(0,0,0,0.8)' }}>{machine.name.replace('Nacedora ', '')}</span>
-                            <span className={`relative z-10 text-[10px] font-bold ${machine.status === 'alarm' ? 'text-red-400' : 'text-brand-primary'}`} style={{ textShadow: '0 1px 4px rgba(0,0,0,0.7)' }}>{machine.temp}°F</span>
-                            {machine.data && (
-                              <span className="relative z-10 text-[8px] text-white/50 font-mono" style={{ textShadow: '0 1px 3px rgba(0,0,0,0.6)' }}>{machine.data.lastUpdate || machine.lastUpdate}</span>
-                            )}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
+                  {/* Grid de máquinas filtradas */}
+                  <div className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-6 gap-4">
+                    {machinesData
+                      .filter(m => m.type === machineViewTab)
+                      .map(machine => (
+                        <button
+                          key={machine.id}
+                          onClick={() => setSelectedMachine(machine)}
+                          className={`relative p-4 rounded-2xl border-2 flex flex-col items-center justify-center gap-1 transition-all hover:scale-105 active:scale-95 overflow-hidden shadow-sm ${machine.status === 'alarm' ? 'border-red-500/50' :
+                              machine.status === 'maintenance' ? `${isDark ? 'border-white/10' : 'border-gray-200'}` :
+                                `${isDark ? 'border-brand-primary/10 hover:border-brand-primary' : 'border-brand-primary/10 hover:border-brand-primary'}`
+                            }`}
+                          style={{ minHeight: '100px' }}
+                        >
+                          {/* Imagen de máquina real */}
+                          <div className="absolute inset-0">
+                            <img
+                              src="/imagen1.png"
+                              alt={machine.name}
+                              className="w-full h-full object-cover"
+                              style={{
+                                filter: machine.status === 'alarm' ? 'brightness(0.8) saturate(1.3) hue-rotate(-10deg)' : machine.status === 'maintenance' ? 'brightness(0.6) grayscale(0.5)' : 'brightness(1) contrast(1.05)',
+                                transform: 'scale(1.02)',
+                                imageRendering: '-webkit-optimize-contrast',
+                              }}
+                            />
+                            <div className="absolute inset-0" style={{
+                              background: machine.status === 'alarm'
+                                ? 'linear-gradient(180deg, rgba(239,68,68,0.1) 0%, rgba(0,0,0,0.05) 30%, rgba(0,0,0,0.3) 100%)'
+                                : machine.status === 'maintenance'
+                                ? 'linear-gradient(180deg, rgba(100,100,100,0.05) 0%, rgba(0,0,0,0.3) 100%)'
+                                : 'linear-gradient(180deg, rgba(0,0,0,0.1) 0%, rgba(0,0,0,0.03) 30%, rgba(0,0,0,0.25) 100%)',
+                            }} />
+                          </div>
+                          <span className={`relative z-10 font-black text-xs ${machine.status === 'alarm' ? 'text-red-300' : machine.status === 'maintenance' ? 'text-white/30' : isDark ? 'text-white' : 'text-white'}`} style={{ textShadow: '0 2px 6px rgba(0,0,0,0.8)' }}>{machine.name.replace(/(INC|NAC)-/, '')}</span>
+                          <span className={`relative z-10 text-[10px] font-bold ${machine.status === 'alarm' ? 'text-red-400' : 'text-brand-primary'}`} style={{ textShadow: '0 1px 4px rgba(0,0,0,0.7)' }}>{machine.temp}°F</span>
+                          {machine.data && (
+                            <span className="relative z-10 text-[8px] text-white/50 font-mono" style={{ textShadow: '0 1px 3px rgba(0,0,0,0.6)' }}>{machine.data.lastUpdate || machine.lastUpdate}</span>
+                          )}
+                        </button>
+                      ))}
                   </div>
                 </div>
               </section>

@@ -54,6 +54,8 @@ model Machine {
   tipo           MachineType
   numero_maquina Int
   
+  @@unique([tipo, numero_maquina])
+  
   // Relaciones
   logs           HourlyLog[]
   incidents      Incident[]

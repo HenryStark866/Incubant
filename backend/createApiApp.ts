@@ -450,10 +450,53 @@ async function seedPredefinedUsers() {
           },
         });
       } catch (userError) {
-        // Si el ID no existe pero el PIN sí, el upsert fallará por la restricción única del PIN.
-        // En este caso, simplemente informamos y continuamos con el siguiente usuario.
         console.warn(`[Seed] Saltando usuario '${u.nombre}' (ID o PIN duplicado).`);
       }
+    }
+    console.log(`[Seed] Sincronización de usuarios predefinidos finalizada.`);
+  } catch (error) {
+    console.warn('[Seed] No se pudo conectar a la base de datos para sembrar usuarios.', error instanceof Error ? error.message : '');
+  }
+}
+
+// ==========================================================================
+// SEED - 24 Incubadoras + 12 Nacedoras fijas en la DB
+// ==========================================================================
+async function seedMachines() {
+  try {
+    const prisma = await getPrismaClient();
+    let created = 0;
+    for (let i = 1; i <= 24; i++) {
+      await prisma.machine.upsert({
+        where: {
+          tipo_numero_maquina: { tipo: 'INCUBADORA', numero_maquina: i }
+        },
+        update: {},
+        create: {
+          tipo: 'INCUBADORA',
+          numero_maquina: i,
+        },
+      });
+      created++;
+    }
+    for (let i = 1; i <= 12; i++) {
+      await prisma.machine.upsert({
+        where: {
+          tipo_numero_maquina: { tipo: 'NACEDORA', numero_maquina: i }
+        },
+        update: {},
+        create: {
+          tipo: 'NACEDORA',
+          numero_maquina: i,
+        },
+      });
+      created++;
+    }
+    console.log(`[Seed] ${created} máquinas sembradas (24 INC + 12 NAC).`);
+  } catch (error) {
+    console.warn('[Seed] No se pudo sembrar máquinas:', error instanceof Error ? error.message : '');
+  }
+}
     }
     console.log(`[Seed] Sincronización de usuarios predefinidos finalizada.`);
   } catch (error) {
@@ -494,6 +537,7 @@ export function createApiApp(): Express {
 
   // Intentar semillado al arrancar (no bloquea el arranque)
   void seedPredefinedUsers();
+  void seedMachines();
 
   // ── Health Check ──────────────────────────────────────────────────────────
   app.get('/api/health', (_req, res) => {
@@ -1077,7 +1121,9 @@ export function createApiApp(): Express {
       const prisma = await getPrismaClient();
       const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000);
 
+      // Siempre obtener TODAS las máquinas (24 INC + 12 NAC)
       const machines = await prisma.machine.findMany({
+        orderBy: [{ tipo: 'asc' }, { numero_maquina: 'asc' }],
         include: {
           logs: {
             where: { fecha_hora: { gte: twoHoursAgo } },
@@ -1085,50 +1131,12 @@ export function createApiApp(): Express {
             take: 1,
             include: {
               user: {
-                select: {
-                  nombre: true,
-                },
+                select: { nombre: true },
               },
             },
           },
         },
       });
-
-      // Si no hay máquinas en DB, generar las predefinidas
-      if (machines.length === 0) {
-        const defaultMachines = [];
-        for (let i = 1; i <= 16; i++) {
-          defaultMachines.push({
-            id: `inc-${i}`,
-            name: `INC-${i.toString().padStart(2, '0')}`,
-            type: 'incubadora',
-            status: 'ok',
-            temp: 'N/A',
-            humidity: 'N/A',
-            lastUpdate: 'Sin datos recientes',
-            photoUrl: null,
-            observaciones: null,
-            updatedBy: null,
-            data: null,
-          });
-        }
-        for (let i = 1; i <= 6; i++) {
-          defaultMachines.push({
-            id: `nac-${i}`,
-            name: `NAC-${i.toString().padStart(2, '0')}`,
-            type: 'nacedora',
-            status: 'ok',
-            temp: 'N/A',
-            humidity: 'N/A',
-            lastUpdate: 'Sin datos recientes',
-            photoUrl: null,
-            observaciones: null,
-            updatedBy: null,
-            data: null,
-          });
-        }
-        return res.json(defaultMachines);
-      }
 
       const statusData = machines.map((machine) => {
         const log = machine.logs[0];
@@ -1139,7 +1147,7 @@ export function createApiApp(): Express {
         let photoUrl = null;
         let observaciones = null;
         let updatedBy = null;
-        let data = undefined;
+        let data = null;
 
         if (log) {
           temp = log.temp_principal_actual.toFixed(1);
@@ -1168,13 +1176,13 @@ export function createApiApp(): Express {
             tempOvoscanReal: temp,
             tempOvoscanSP: log.temp_principal_consigna.toFixed(1),
             tempAireReal: tempAire || temp,
-            tempAireSP: tempAire || temp,
+            tempAireSP: log.temp_secundaria_consigna.toFixed(1),
             tempSynchroReal: temp,
             tempSynchroSP: log.temp_principal_consigna.toFixed(1),
             temperaturaReal: tempAire || temp,
-            temperaturaSP: tempAire || temp,
+            temperaturaSP: log.temp_secundaria_consigna.toFixed(1),
             humedadReal: humedadRelativa || log.co2_actual.toFixed(1),
-            humedadSP: humedadRelativa || log.co2_actual.toFixed(1),
+            humedadSP: log.co2_consigna.toFixed(1),
             co2Real: log.co2_actual.toFixed(1),
             co2SP: log.co2_consigna.toFixed(1),
             volteoPosicion: '',
@@ -1189,7 +1197,7 @@ export function createApiApp(): Express {
 
           lastUpdate = `Hace ${diffMins} min`;
         } else {
-          status = 'maintenance';
+          status = 'maintenance'; // Apagada = sin reporte reciente
         }
 
         return {
@@ -1210,14 +1218,14 @@ export function createApiApp(): Express {
       return res.json(statusData);
     } catch (error) {
       console.error('[Dashboard] Error al consultar BD para status:', error);
-      // Fallback: devolver máquinas predefinidas si la DB falla
+      // Fallback: devolver las 36 máquinas predefinidas
       const defaultMachines = [];
-      for (let i = 1; i <= 16; i++) {
+      for (let i = 1; i <= 24; i++) {
         defaultMachines.push({
           id: `inc-${i}`,
           name: `INC-${i.toString().padStart(2, '0')}`,
           type: 'incubadora',
-          status: 'ok',
+          status: 'maintenance',
           temp: 'N/A',
           humidity: 'N/A',
           lastUpdate: 'Sin datos recientes',
@@ -1227,12 +1235,12 @@ export function createApiApp(): Express {
           data: null,
         });
       }
-      for (let i = 1; i <= 6; i++) {
+      for (let i = 1; i <= 12; i++) {
         defaultMachines.push({
           id: `nac-${i}`,
           name: `NAC-${i.toString().padStart(2, '0')}`,
           type: 'nacedora',
-          status: 'ok',
+          status: 'maintenance',
           temp: 'N/A',
           humidity: 'N/A',
           lastUpdate: 'Sin datos recientes',

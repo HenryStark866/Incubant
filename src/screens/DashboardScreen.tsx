@@ -121,6 +121,7 @@ const MachineCard = ({
           style={{
             filter: 'brightness(1) contrast(1.05)',
             transform: 'scale(1.02)',
+            imageRendering: '-webkit-optimize-contrast',
           }}
         />
         {/* Overlay gradiente sutil solo para legibilidad del texto */}

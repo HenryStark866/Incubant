@@ -1096,14 +1096,31 @@ export function createApiApp(): Express {
 
           humidity = humedadRelativa || log.co2_actual.toFixed(1);
           data = {
-            tiempoIncubacion,
-            humedadRelativa,
+            tiempoIncubacion: tiempoIncubacion || '0d 0h',
+            humedadRelativa: humedadRelativa || '0',
             temperatura: temp,
-            tempAire,
-            volteoNumero,
-            alarma: alarmaActiva,
-            ventiladorPrincipal: ventilador,
-            timestamp: log.fecha_hora.toISOString() // Añadimos el tiempo real del reporte
+            tempAire: tempAire || temp,
+            volteoNumero: volteoNumero || '0',
+            alarma: alarmaActiva || 'No',
+            ventiladorPrincipal: ventilador || 'No',
+            timestamp: log.fecha_hora.toISOString(),
+            // Campos para compatibilidad con MachineCard del panel operario
+            tempOvoscanReal: temp,
+            tempOvoscanSP: temp,
+            tempAireReal: tempAire || temp,
+            tempAireSP: tempAire || temp,
+            tempSynchroReal: temp,
+            tempSynchroSP: temp,
+            temperaturaReal: tempAire || temp,
+            temperaturaSP: tempAire || temp,
+            humedadReal: humedadRelativa || log.co2_actual.toFixed(1),
+            humedadSP: humedadRelativa || log.co2_actual.toFixed(1),
+            co2Real: log.co2_actual.toFixed(1),
+            co2SP: log.co2_consigna.toFixed(1),
+            volteoPosicion: '',
+            observaciones: observaciones || '',
+            lastUpdate: `Hace ${diffMins} min`,
+            updatedBy: updatedBy,
           };
 
           if (alarmaActiva === 'Si' || Math.abs(log.temp_principal_actual - log.temp_principal_consigna) > 0.5) {

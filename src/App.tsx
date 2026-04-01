@@ -211,21 +211,13 @@ export default function App() {
            <SupervisorDashboard />
         </div>
         
-        {/* Botón flotante para cambiar a vista de operario - integrado en el diseño */}
+        {/* Botón flotante para cambiar a vista de operario */}
         <button 
           onClick={handleSwitchToMobile}
           className={`fixed bottom-6 right-6 z-50 flex items-center gap-2 border-2 px-5 py-3 rounded-2xl font-bold text-xs shadow-xl transition-all active:scale-95 ${isDark ? 'bg-white/10 border-brand-primary/20 text-white hover:bg-brand-primary hover:text-white hover:border-brand-primary' : 'bg-white border-brand-primary/20 text-brand-dark hover:bg-brand-primary hover:text-white hover:border-brand-primary'}`}
         >
           <Smartphone size={16} />
           <span>Vista Operario</span>
-        </button>
-        
-        {/* Theme toggle */}
-        <button
-          onClick={toggleTheme}
-          className={`fixed bottom-6 right-32 z-50 flex items-center gap-2 border-2 px-4 py-3 rounded-2xl font-bold text-xs shadow-xl transition-all active:scale-95 ${isDark ? 'bg-white/10 border-white/10 text-white hover:bg-white/20' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-100'}`}
-        >
-          {isDark ? <Sun size={16} /> : <Moon size={16} />}
         </button>
       </div>
     );
@@ -236,7 +228,7 @@ export default function App() {
       <UpdatePrompt />
       
       {canAccessSupervisor && (
-        <div className="fixed top-4 right-4 z-[100] animate-fade-in">
+        <div className="fixed top-4 left-4 z-[100] animate-fade-in">
           <button 
             onClick={handleSwitchToSupervisor}
             className={`px-4 py-3 rounded-2xl border flex items-center gap-3 active:scale-95 transition-all shadow-2xl hover:bg-white/5 ${isDark ? 'glass-dark border-brand-primary/30' : 'bg-white border-brand-primary/30'}`}
@@ -245,7 +237,7 @@ export default function App() {
                <Monitor size={16} className="text-brand-primary" />
                <div className="absolute -top-1 -right-1 w-2 h-2 bg-brand-primary rounded-full animate-pulse-glow" />
             </div>
-            <span className={`text-[10px] font-black tracking-widest font-mono-display uppercase ${isDark ? 'text-white/60' : 'text-gray-600'}`}>SISTEMA_ADMIN</span>
+            <span className={`text-[10px] font-black tracking-widest font-mono-display uppercase ${isDark ? 'text-white/60' : 'text-gray-600'}`}>PANEL DE CONTROL</span>
           </button>
         </div>
       )}

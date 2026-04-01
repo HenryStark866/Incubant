@@ -1155,11 +1155,24 @@ export function createApiApp(): Express {
           const volteoNumero = extractObservationValue(observaciones, 'Volteos');
           const alarmaActiva = extractObservationValue(observaciones, 'Alarma');
           const ventilador = extractObservationValue(observaciones, 'Ventilador');
+          const volteoPosicion = extractObservationValue(observaciones, 'Posicion');
+          const notaOperario = extractObservationValue(observaciones, 'Nota');
+
+          // Parse tiempo incubacion string like "20d 12h 30m" into parts
+          let tiempoDias = '0', tiempoHoras = '0', tiempoMinutos = '0';
+          if (tiempoIncubacion) {
+            const dMatch = tiempoIncubacion.match(/(\d+)d/);
+            const hMatch = tiempoIncubacion.match(/(\d+)h/);
+            const mMatch = tiempoIncubacion.match(/(\d+)m/);
+            tiempoDias = dMatch ? dMatch[1] : '0';
+            tiempoHoras = hMatch ? hMatch[1] : '0';
+            tiempoMinutos = mMatch ? mMatch[1] : '0';
+          }
 
           humidity = humedadRelativa || log.co2_actual.toFixed(1);
           const diffMins = Math.floor((Date.now() - log.fecha_hora.getTime()) / 60000);
           data = {
-            tiempoIncubacion: tiempoIncubacion || '0d 0h',
+            tiempoIncubacion: { dias: tiempoDias, horas: tiempoHoras, minutos: tiempoMinutos },
             humedadRelativa: humedadRelativa || '0',
             temperatura: temp,
             tempAire: tempAire || temp,
@@ -1179,8 +1192,8 @@ export function createApiApp(): Express {
             humedadSP: log.co2_consigna.toFixed(1),
             co2Real: log.co2_actual.toFixed(1),
             co2SP: log.co2_consigna.toFixed(1),
-            volteoPosicion: '',
-            observaciones: observaciones || '',
+            volteoPosicion: volteoPosicion || '',
+            observaciones: notaOperario || '',
             lastUpdate: `Hace ${diffMins} min`,
             updatedBy: updatedBy,
           };

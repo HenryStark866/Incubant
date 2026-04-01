@@ -25,6 +25,8 @@ export default function SupervisorDashboard() {
   const [operatorsData, setOperatorsData] = useState<any[]>([]);
   const [reportCount, setReportCount] = useState(0);
   const [shiftClosingCount, setShiftClosingCount] = useState(0);
+  const [responsibleOperator, setResponsibleOperator] = useState('');
+  const [onlineOperators, setOnlineOperators] = useState<any[]>([]);
   const [summaryData, setSummaryData] = useState<{
     lastReportTime: string | null;
     activeOperatorsCount: number;
@@ -239,6 +241,8 @@ export default function SupervisorDashboard() {
           if (json) {
             setReportCount(json.reportCount || 0);
             setShiftClosingCount(json.shiftClosingCount || 0);
+            setResponsibleOperator(json.responsibleOperator || '');
+            setOnlineOperators(json.onlineOperators || []);
             setSummaryData(prev => ({
               ...prev,
               ...json,
@@ -806,11 +810,11 @@ export default function SupervisorDashboard() {
                   </p>
                 </div>
 
-                {/* Operador */}
+                {/* Responsable del turno */}
                 <div>
-                  <p className="text-[7px] text-brand-gray uppercase font-black tracking-wider leading-none mb-0.5">Operador</p>
-                  <p className="text-[10px] font-bold text-brand-dark truncate leading-none">
-                    {activeOperatorsList !== 'N/A' ? activeOperatorsList : '—'}
+                  <p className="text-[7px] text-brand-gray uppercase font-black tracking-wider leading-none mb-0.5">Responsable</p>
+                  <p className="text-[10px] font-black text-brand-primary truncate leading-none">
+                    {responsibleOperator || (activeOperatorsList !== 'N/A' ? activeOperatorsList.split(' | ')[0]?.replace(' (Responsable)', '') : '—')}
                   </p>
                 </div>
 
@@ -825,6 +829,25 @@ export default function SupervisorDashboard() {
                   </div>
                 </div>
               </div>
+
+              {/* Other online operators */}
+              {(onlineOperators.length > 0 || activeOperatorsList.includes('|')) && (
+                <div className="mt-1.5 pt-1.5 border-t border-brand-primary/10 flex items-center gap-2 flex-wrap">
+                  <span className="text-[7px] text-brand-gray uppercase font-black tracking-wider">En línea:</span>
+                  {activeOperatorsList.split(' | ').filter(p => !p.includes('Responsable')).map((part, i) => (
+                    <span key={i} className="text-[8px] text-brand-dark font-medium">
+                      {part.replace(' (Asignado)', '').replace(' (Online)', '')}
+                      <span className="text-brand-gray ml-0.5">{part.includes('Asignado') ? '(Asig.)' : part.includes('Online') ? '(On)' : ''}</span>
+                    </span>
+                  ))}
+                  {onlineOperators.map((op: any, i: number) => (
+                    <span key={`online-${i}`} className="text-[8px] text-green-600 font-medium flex items-center gap-0.5">
+                      <span className="w-1.5 h-1.5 rounded-full bg-green-500 inline-block"></span>
+                      {op.name.split(' ')[0]}
+                    </span>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         </header>

@@ -678,6 +678,119 @@ export function createApiApp(): Express {
     }
   });
 
+  // ── Seed April 1-15 Schedule ─────────────────────────────────────────────
+  app.post('/api/admin/seed-april-schedule', requireRoles(['JEFE', 'SUPERVISOR']), async (_req, res) => {
+    try {
+      const prisma = await getPrismaClient();
+
+      // 1. Ensure all operators exist
+      const operators = [
+        { nombre: 'Luis Cortés', pin: '1001', rol: 'OPERARIO', turno: 'Turno Mañana' },
+        { nombre: 'Juan Suaza', pin: '1002', rol: 'OPERARIO', turno: 'Turno Tarde' },
+        { nombre: 'Juan Alejandro', pin: '1003', rol: 'OPERARIO', turno: 'Turno Tarde' },
+        { nombre: 'Ferney', pin: '1004', rol: 'OPERARIO', turno: 'Turno Noche' },
+        { nombre: 'Kierson', pin: '1005', rol: 'OPERARIO', turno: 'Turno Noche' },
+        { nombre: 'Manuel', pin: '1006', rol: 'OPERARIO', turno: 'Turno Mañana' },
+        { nombre: 'Jerrson', pin: '1007', rol: 'OPERARIO', turno: 'Turno Mañana' },
+      ];
+
+      const createdUsers: Record<string, any> = {};
+      for (const op of operators) {
+        const slugId = op.nombre.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, '-');
+        const user = await prisma.user.upsert({
+          where: { id: slugId },
+          update: { nombre: op.nombre, pin_acceso: op.pin, rol: op.rol as any, turno: op.turno },
+          create: { id: slugId, nombre: op.nombre, pin_acceso: op.pin, rol: op.rol as any, turno: op.turno, estado: 'Activo' },
+        });
+        createdUsers[op.nombre] = user;
+      }
+
+      // 2. Ensure shifts exist
+      const shiftDefs = [
+        { nombre: 'Turno Mañana (6-14:40)', hora_inicio: '06:00', hora_fin: '14:40', color: '#f59e0b' },
+        { nombre: 'Turno Tarde (14-22)', hora_inicio: '14:00', hora_fin: '22:00', color: '#3b82f6' },
+        { nombre: 'Turno Tarde (14:40-22:20)', hora_inicio: '14:40', hora_fin: '22:20', color: '#6366f1' },
+        { nombre: 'Turno Noche (22:20-06:00)', hora_inicio: '22:20', hora_fin: '06:00', color: '#8b5cf6' },
+        { nombre: 'Turno Noche (22-06)', hora_inicio: '22:00', hora_fin: '06:00', color: '#a855f7' },
+      ];
+
+      const createdShifts: Record<string, any> = {};
+      for (const s of shiftDefs) {
+        const shift = await prisma.shift.upsert({
+          where: { nombre: s.nombre },
+          update: s,
+          create: s,
+        });
+        createdShifts[s.nombre] = shift;
+      }
+
+      // 3. Schedule: April 1-15, 2026
+      // Shift mapping per operator:
+      // Luis Cortés:     6:00 - 14:40  (Turno Mañana 6-14:40)
+      // Juan Suaza:      14:00 - 22:00 (Turno Tarde 14-22)
+      // Juan Alejandro:  14:40 - 22:20 (Turno Tarde 14:40-22:20)
+      // Ferney:          22:20 - 06:00 (Turno Noche 22:20-06)
+      // Kierson:         22:00 - 06:00 (Turno Noche 22-06)
+      // Manuel:          06:00 - 14:00 (Turno Mañana 6-14:40)
+      // Jerrson:         Descansa 1 y 2 de abril
+
+      const operatorShiftMap: Record<string, string> = {
+        'Luis Cortés': 'Turno Mañana (6-14:40)',
+        'Juan Suaza': 'Turno Tarde (14-22)',
+        'Juan Alejandro': 'Turno Tarde (14:40-22:20)',
+        'Ferney': 'Turno Noche (22:20-06:00)',
+        'Kierson': 'Turno Noche (22-06)',
+        'Manuel': 'Turno Mañana (6-14:40)',
+        'Jerrson': 'Turno Mañana (6-14:40)',
+      };
+
+      // Days off
+      const daysOff: Record<string, number[]> = {
+        'Jerrson': [1, 2],
+        'Luis Cortés': [4, 5],
+        'Juan Suaza': [8, 9],
+        'Juan Alejandro': [11, 12],
+        'Manuel': [1, 2],
+      };
+
+      let assignmentsCreated = 0;
+      for (let day = 1; day <= 15; day++) {
+        const date = new Date(2026, 3, day); // April 2026 (month 3 = April)
+
+        for (const [nombre, shiftName] of Object.entries(operatorShiftMap)) {
+          // Check if this operator has a day off
+          const offDays = daysOff[nombre] || [];
+          if (offDays.includes(day)) continue;
+
+          const shift = createdShifts[shiftName];
+          const user = createdUsers[nombre];
+
+          if (shift && user) {
+            await prisma.scheduleAssignment.upsert({
+              where: {
+                user_id_fecha: { user_id: user.id, fecha: date },
+              },
+              update: { shift_id: shift.id },
+              create: { user_id: user.id, shift_id: shift.id, fecha: date },
+            });
+            assignmentsCreated++;
+          }
+        }
+      }
+
+      return res.json({
+        success: true,
+        message: `Cronograma Abril 1-15 cargado exitosamente`,
+        operators: Object.keys(createdUsers),
+        shifts: Object.keys(createdShifts),
+        assignmentsCreated,
+      });
+    } catch (error) {
+      console.error('[Admin] Error seeding April schedule:', error);
+      return res.status(500).json({ error: 'Error cargando cronograma' });
+    }
+  });
+
   // ── Dashboard: Summary ───────────────────────────────────────────────────
   app.get('/api/dashboard/summary', requireRoles(SUPERVISOR_ROLES), async (_req, res) => {
     try {
@@ -702,41 +815,61 @@ export function createApiApp(): Express {
 
       const currentShift = currentShiftObj?.nombre || getShiftName(currentTime);
 
-      // 2. Buscar operarios asignados y ONLINE
+      // Operarios ONLINE (activos en los últimos 15 min)
       const fifteenMinsAgo = new Date(currentTime.getTime() - 15 * 60 * 1000);
       const onlineUsers = await prisma.user.findMany({
         where: {
           ultimo_acceso: { gte: fifteenMinsAgo },
           rol: 'OPERARIO'
         },
-        select: { nombre: true }
+        select: { id: true, nombre: true, turno: true }
       });
 
       const onlineNames = onlineUsers.map(u => u.nombre.split(' ')[0]);
 
-      // 3. Buscar asignados por horario (para mostrar quién debería estar)
+      // Operarios asignados al turno actual por cronograma
       const today = new Date();
-      today.setHours(0,0,0,0);
+      today.setHours(0, 0, 0, 0);
 
       const assignments = await prisma.scheduleAssignment.findMany({
         where: {
           fecha: today,
           shift_id: currentShiftObj?.id
         },
-        include: { user: true }
+        include: { user: true, shift: true }
       });
 
       const assignedNames = assignments.map(a => a.user.nombre.split(' ')[0]);
 
-      // Priorizar mostrar los que están ONLINE ahora mismo
+      // Construir lista de operarios: Responsable primero, luego otros online
       let displayNames = 'N/A';
-      if (onlineNames.length > 0) {
+      let responsibleOperator = '';
+
+      if (assignments.length > 0) {
+        // El primer asignado es el responsable del turno
+        responsibleOperator = assignments[0].user.nombre;
+        const otherAssigned = assignments.slice(1).map(a => a.user.nombre.split(' ')[0]);
+        
+        // Operarios online que NO están asignados (extra)
+        const extraOnline = onlineNames.filter(name => 
+          !assignedNames.includes(name) && name !== responsibleOperator.split(' ')[0]
+        );
+
+        let parts = [responsibleOperator + ' (Responsable)'];
+        if (otherAssigned.length > 0) {
+          parts.push(otherAssigned.join(', ') + ' (Asignado)');
+        }
+        if (extraOnline.length > 0) {
+          parts.push(extraOnline.join(', ') + ' (Online)');
+        }
+        displayNames = parts.join(' | ');
+      } else if (onlineNames.length > 0) {
         displayNames = onlineNames.join(', ') + ' (Online)';
       } else if (assignedNames.length > 0) {
         displayNames = assignedNames.join(', ') + ' (Asignado)';
       }
 
-      // Contar reportes de cierre de turno del turno actual
+      // Contar reportes de cierre de turno
       const shiftClosingCount = await prisma.report.count({
         where: {
           isClosingReport: true,
@@ -749,8 +882,10 @@ export function createApiApp(): Express {
         lastReportTime: lastLog?.fecha_hora || null,
         activeOperatorsCount: onlineNames.length || assignedNames.length,
         activeOperatorsNames: displayNames,
+        responsibleOperator,
         currentShift,
-        shiftClosingCount
+        shiftClosingCount,
+        onlineOperators: onlineUsers.map(u => ({ name: u.nombre, turno: u.turno })),
       });
     } catch (error) {
       console.error('[Dashboard] Error al consultar resumen:', error);

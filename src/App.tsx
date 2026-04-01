@@ -156,7 +156,7 @@ export default function App() {
           <div className="space-y-4">
              <div className="flex items-center justify-center gap-2 mb-2">
                 <Cpu size={12} className="text-brand-primary animate-blink" />
-                <span className="text-[9px] font-black uppercase tracking-[0.4em] text-brand-primary/60 font-mono-display">Corporacion CDH Maler</span>
+                <span className="text-[9px] font-black uppercase tracking-[0.4em] text-brand-primary/60 font-mono-display">Corporacion CDH Maker</span>
              </div>
              <h2 className="text-2xl font-black text-white tracking-widest uppercase font-mono-display holo-text">
                INICIANDO APP INCUBANT

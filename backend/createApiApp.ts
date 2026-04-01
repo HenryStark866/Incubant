@@ -870,12 +870,17 @@ export function createApiApp(): Express {
       }
 
       // Contar reportes de cierre de turno
-      const shiftClosingCount = await prisma.report.count({
-        where: {
-          isClosingReport: true,
-          fecha_hora: { gte: fifteenMinsAgo }
-        }
-      });
+      let shiftClosingCount = 0;
+      try {
+        shiftClosingCount = await prisma.report.count({
+          where: {
+            isClosingReport: true,
+            fecha_hora: { gte: fifteenMinsAgo }
+          }
+        });
+      } catch {
+        shiftClosingCount = 0;
+      }
 
       return res.json({ 
         reportCount, 
@@ -889,7 +894,16 @@ export function createApiApp(): Express {
       });
     } catch (error) {
       console.error('[Dashboard] Error al consultar resumen:', error);
-      return res.json({ reportCount: 0, lastReportTime: null, activeOperatorsCount: 0 });
+      return res.json({ 
+        reportCount: 0, 
+        lastReportTime: null, 
+        activeOperatorsCount: 0,
+        activeOperatorsNames: 'N/A',
+        responsibleOperator: '',
+        currentShift: getShiftName(new Date()),
+        shiftClosingCount: 0,
+        onlineOperators: [],
+      });
     }
   });
 

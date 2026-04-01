@@ -267,21 +267,22 @@ export default function FormScreen() {
         {/* ── Time Configuration ── */}
         <HudInput label="TIEMPO_DE_PROCESO" icon={Calendar} error={errors.tiempoIncubacion}>
           <div className="grid grid-cols-3 gap-3">
-            {['DIAS', 'HORAS', 'MIN'].map((label, idx) => {
-              const field = label.toLowerCase();
-              return (
-                <div key={label} className="relative group text-center">
-                  <div className="text-[7px] font-black text-white/15 mb-2 font-mono">{label}</div>
-                  <input
-                    type="number" value={(formData.tiempoIncubacion as any)[field]}
-                    onChange={e => handleTimeChange(field, e.target.value)}
-                    placeholder="00"
-                    className="w-full glass rounded-2xl py-3.5 text-center text-2xl font-black text-white focus:outline-none focus:ring-1 focus:ring-brand-primary/40 border border-white/5 font-mono-display"
-                  />
-                  {idx < 2 && <div className="absolute top-1/2 -right-[1px] translate-y-1 w-[1px] h-4 bg-white/5" />}
-                </div>
-              );
-            })}
+            {[
+              { label: 'DIAS', field: 'dias' },
+              { label: 'HORAS', field: 'horas' },
+              { label: 'MIN', field: 'minutos' },
+            ].map((item, idx) => (
+              <div key={item.label} className="relative group text-center">
+                <div className="text-[7px] font-black text-white/15 mb-2 font-mono">{item.label}</div>
+                <input
+                  type="number" value={(formData.tiempoIncubacion as any)[item.field]}
+                  onChange={e => handleTimeChange(item.field, e.target.value)}
+                  placeholder="00"
+                  className="w-full glass rounded-2xl py-3.5 text-center text-2xl font-black text-white focus:outline-none focus:ring-1 focus:ring-brand-primary/40 border border-white/5 font-mono-display"
+                />
+                {idx < 2 && <div className="absolute top-1/2 -right-[1px] translate-y-1 w-[1px] h-4 bg-white/5" />}
+              </div>
+            ))}
           </div>
         </HudInput>
 

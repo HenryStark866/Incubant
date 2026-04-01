@@ -2,7 +2,13 @@ import { google } from 'googleapis';
 import { Readable } from 'stream';
 
 const CLIENT_EMAIL = process.env.GOOGLE_CLIENT_EMAIL;
-const PRIVATE_KEY = process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\n'); 
+const PRIVATE_KEY = process.env.GOOGLE_PRIVATE_KEY
+  ? process.env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, '\n').replace(/^["']|["']$/g, '').trim()
+  : undefined;
+
+console.log('[Drive Service] CLIENT_EMAIL:', CLIENT_EMAIL);
+console.log('[Drive Service] PRIVATE_KEY length:', PRIVATE_KEY?.length);
+console.log('[Drive Service] PRIVATE_KEY starts with:', PRIVATE_KEY?.substring(0, 27)); 
 
 // Autenticación S2S usando tokens de servicio
 const auth = new google.auth.GoogleAuth({

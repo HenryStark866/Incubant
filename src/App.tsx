@@ -226,21 +226,6 @@ export default function App() {
   return (
     <div className={`h-full w-full relative flex flex-col items-center justify-center overscroll-none overflow-hidden font-mono ${isDark ? 'bg-[#060b18]' : 'bg-gray-50'}`}>
       <UpdatePrompt />
-      
-      {canAccessSupervisor && (
-        <div className="fixed top-4 left-4 z-[100] animate-fade-in">
-          <button 
-            onClick={handleSwitchToSupervisor}
-            className={`px-4 py-3 rounded-2xl border flex items-center gap-3 active:scale-95 transition-all shadow-2xl hover:bg-white/5 ${isDark ? 'glass-dark border-brand-primary/30' : 'bg-white border-brand-primary/30'}`}
-          >
-            <div className="relative">
-               <Monitor size={16} className="text-brand-primary" />
-               <div className="absolute -top-1 -right-1 w-2 h-2 bg-brand-primary rounded-full animate-pulse-glow" />
-            </div>
-            <span className={`text-[10px] font-black tracking-widest font-mono-display uppercase ${isDark ? 'text-white/60' : 'text-gray-600'}`}>PANEL DE CONTROL</span>
-          </button>
-        </div>
-      )}
 
       <div className={`w-full h-full relative overflow-hidden safe-top safe-bottom ${isDark ? 'bg-white shadow-[0_0_100px_rgba(0,0,0,0.5)]' : 'bg-white shadow-[0_0_100px_rgba(0,0,0,0.15)]'}`}>
         {!currentUser ? (

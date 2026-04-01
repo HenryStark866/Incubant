@@ -3,7 +3,7 @@ import {
   Activity, AlertTriangle, Clock, Users, LayoutDashboard,
   Settings, ChevronDown, X, Image as ImageIcon, CheckCircle2,
   Download, Loader2, Egg, Menu, RefreshCw, LogOut, Camera, FileText, FolderOpen,
-  Sun, Moon, Wifi, WifiOff
+  Sun, Moon, Wifi, WifiOff, Monitor
 } from 'lucide-react';
 import { useThemeStore } from '../store/useThemeStore';
 import {
@@ -828,6 +828,18 @@ export default function SupervisorDashboard() {
 
               {/* All actions in one row */}
               <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                {/* Panel de Control (volver a vista operario) */}
+                <button
+                  onClick={() => {
+                    logout();
+                    apiFetch(getApiUrl('/api/logout'), { method: 'POST' }).catch(() => {});
+                  }}
+                  className="bg-brand-primary/10 hover:bg-brand-primary hover:text-white text-brand-primary px-2.5 py-1.5 rounded-lg flex items-center gap-1.5 text-[10px] font-black transition-all shadow-sm active:scale-95 whitespace-nowrap border border-brand-primary/20"
+                >
+                  <Monitor size={12} />
+                  <span className="hidden sm:inline">Panel de Control</span>
+                </button>
+
                 {/* Evidencias */}
                 <button
                   onClick={handleOpenEvidences}

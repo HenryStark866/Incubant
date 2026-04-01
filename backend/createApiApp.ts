@@ -1158,11 +1158,12 @@ export function createApiApp(): Express {
   // ── Dashboard: Trends ────────────────────────────────────────────────────
   app.get('/api/dashboard/trends', requireRoles(SUPERVISOR_ROLES), async (req, res) => {
     try {
-      const { machine } = req.query;
+      const { machine, hours = '24' } = req.query;
       const prisma = await getPrismaClient();
-      const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+      const hoursNum = parseInt(hours as string) || 24;
+      const timeAgo = new Date(Date.now() - hoursNum * 60 * 60 * 1000);
 
-      const filter: any = { fecha_hora: { gte: twentyFourHoursAgo } };
+      const filter: any = { fecha_hora: { gte: timeAgo } };
       if (machine && machine !== 'Ver: Planta Completa' && machine !== 'undefined') {
         filter.machine_id = String(machine);
       }
@@ -1170,38 +1171,29 @@ export function createApiApp(): Express {
       const logs = await prisma.hourlyLog.findMany({
         where: filter,
         orderBy: { fecha_hora: 'asc' },
+        include: { machine: true }
       });
 
-      const grouped: Record<string, {
-        tempOvoSum: number; tempAireSum: number;
-        humSum: number; co2Sum: number; count: number;
-      }> = {};
-
-      logs.forEach((log) => {
-        const hour = `${log.fecha_hora.toISOString().substring(11, 13)}:00`;
-        if (!grouped[hour]) {
-          grouped[hour] = { tempOvoSum: 0, tempAireSum: 0, humSum: 0, co2Sum: 0, count: 0 };
-        }
-        grouped[hour].tempOvoSum  += log.temp_principal_actual;
-        grouped[hour].tempAireSum += log.temp_secundaria_actual;
-        grouped[hour].humSum      += log.temp_superior_actual ?? 0;
-        grouped[hour].co2Sum      += log.co2_actual;
-        grouped[hour].count       += 1;
-      });
-
-      const trendsData = Object.keys(grouped).map((hour) => {
-        const g = grouped[hour];
-        const avg = (v: number) => Number((v / g.count).toFixed(1));
+      const trendsData = logs.map((log) => {
+        const d = new Date(log.fecha_hora);
+        const timeStr = `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
         return {
-          time:        hour,
-          tempOvoscan: avg(g.tempOvoSum),
-          tempAire:    avg(g.tempAireSum),
-          humedad:     avg(g.humSum),
-          co2:         avg(g.co2Sum),
-          // Aliases para modo Planta Completa (mantiene compatibilidad)
-          temp:        avg(g.tempOvoSum),
-          temp_general:   avg(g.tempOvoSum),
-          humedad_general: avg(g.humSum),
+          time: timeStr,
+          // Temperatura principal (Ovoscan/Synchro) - REAL y SP
+          tempOvoscan: log.temp_principal_actual ?? 0,
+          tempOvoscanSP: log.temp_principal_consigna ?? 0,
+          // Temperatura secundaria (Aire) - REAL y SP
+          tempAire: log.temp_secundaria_actual ?? 0,
+          tempAireSP: log.temp_secundaria_consigna ?? 0,
+          // Humedad - REAL y SP
+          humedad: log.temp_superior_actual ?? 0,
+          humedadSP: log.temp_superior_actual ? log.temp_superior_actual * 1.05 : 0, // Estimación SP
+          // CO2 - REAL y SP
+          co2: log.co2_actual ?? 0,
+          co2SP: log.co2_consigna ?? 0,
+          // Aliases para nacedoras
+          temp: log.temp_principal_actual ?? 0,
+          tempSP: log.temp_principal_consigna ?? 0,
         };
       });
 

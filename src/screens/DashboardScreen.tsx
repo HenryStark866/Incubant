@@ -3,7 +3,7 @@ import { useMachineStore, MachineType, Machine } from '../store/useMachineStore'
 import { useThemeStore } from '../store/useThemeStore';
 import {
   CheckCircle2, Clock, UploadCloud, Loader2, LogOut, Egg,
-  AlertTriangle, FileText, Camera, Zap, Activity, Cpu, Wifi, WifiOff, Sun, Moon
+  AlertTriangle, FileText, Camera, Zap, Activity, Cpu, Wifi, WifiOff, Sun, Moon, Monitor
 } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -220,7 +220,7 @@ const MachineCard = ({
 /* ─────────────────────────────────────────────
    Dashboard principal
 ───────────────────────────────────────────── */
-export default function DashboardScreen() {
+export default function DashboardScreen({ canAccessSupervisor = false, onSwitchToSupervisor }: { canAccessSupervisor?: boolean; onSwitchToSupervisor?: () => void }) {
   const [activeTab, setActiveTab] = useState<MachineType>('incubadora');
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncSuccess, setSyncSuccess] = useState(false);
@@ -621,6 +621,16 @@ export default function DashboardScreen() {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            {/* Panel de Control (solo para admin/supervisor) */}
+            {canAccessSupervisor && onSwitchToSupervisor && (
+              <button 
+                onClick={onSwitchToSupervisor}
+                className={`p-2 rounded-xl border flex items-center gap-1 active:scale-95 transition-all ${isDark ? 'glass border-brand-primary/30 text-brand-primary' : 'bg-white border-brand-primary/30 text-brand-primary'}`}
+              >
+                <Monitor size={14} />
+                <span className={`text-[7px] font-black tracking-wider font-mono-display uppercase ${isDark ? 'text-white/60' : 'text-gray-600'}`}>Panel Control</span>
+              </button>
+            )}
             {/* Reloj */}
             <div className={`rounded-xl px-2.5 py-1.5 border flex items-center gap-1.5 ${isDark ? 'glass border-white/6' : 'bg-white border-gray-200'}`}>
               <Clock size={9} className="text-brand-primary" />

@@ -3,7 +3,7 @@ import {
   Activity, AlertTriangle, Clock, Users, LayoutDashboard,
   Settings, ChevronDown, X, Image as ImageIcon, CheckCircle2,
   Download, Loader2, Egg, Menu, RefreshCw, LogOut, Camera, FileText, FolderOpen,
-  Sun, Moon, Wifi, WifiOff, Monitor
+  Sun, Moon, Wifi, WifiOff, Monitor, Thermometer, Droplets, Wind, Gauge
 } from 'lucide-react';
 import { useThemeStore } from '../store/useThemeStore';
 import {
@@ -20,6 +20,13 @@ export default function SupervisorDashboard() {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'personal' | 'horarios' | 'settings'>('dashboard');
   const [selectedMachine, setSelectedMachine] = useState<any | null>(null);
   const [chartFilter, setChartFilter] = useState('Ver: Planta Completa');
+  const [chartTimeRange, setChartTimeRange] = useState('24');
+  const [activeMetrics, setActiveMetrics] = useState<Record<string, boolean>>({
+    tempOvoscan: true,
+    tempAire: true,
+    humedad: false,
+    co2: false,
+  });
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
 
@@ -265,7 +272,7 @@ export default function SupervisorDashboard() {
         // Ejecutamos las llamadas con manejo de error individual (Settled)
         const [statusRes, trendsRes, operatorsRes, summaryRes] = await Promise.allSettled([
           apiFetch(getApiUrl('/api/dashboard/status')),
-          apiFetch(getApiUrl(`/api/dashboard/trends?machine=${encodeURIComponent(chartFilter)}`)),
+          apiFetch(getApiUrl(`/api/dashboard/trends?machine=${encodeURIComponent(chartFilter)}&hours=${chartTimeRange}`)),
           apiFetch(getApiUrl('/api/dashboard/operators')),
           apiFetch(getApiUrl('/api/dashboard/summary'))
         ]);
@@ -828,18 +835,6 @@ export default function SupervisorDashboard() {
 
               {/* All actions in one row */}
               <div className="flex items-center gap-1.5 flex-wrap justify-end">
-                {/* Panel de Control (volver a vista operario) */}
-                <button
-                  onClick={() => {
-                    logout();
-                    apiFetch(getApiUrl('/api/logout'), { method: 'POST' }).catch(() => {});
-                  }}
-                  className="bg-brand-primary/10 hover:bg-brand-primary hover:text-white text-brand-primary px-2.5 py-1.5 rounded-lg flex items-center gap-1.5 text-[10px] font-black transition-all shadow-sm active:scale-95 whitespace-nowrap border border-brand-primary/20"
-                >
-                  <Monitor size={12} />
-                  <span className="hidden sm:inline">Panel de Control</span>
-                </button>
-
                 {/* Evidencias */}
                 <button
                   onClick={handleOpenEvidences}
@@ -1063,61 +1058,220 @@ export default function SupervisorDashboard() {
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
                   <div className="flex items-center gap-4">
                     <div className="w-1.5 h-8 bg-brand-primary rounded-full"></div>
-                    <h2 className="text-xl font-black text-brand-dark flex items-center gap-3">
-                      Tendencias y Analítica
+                    <h2 className={`text-xl font-black flex items-center gap-3 ${isDark ? 'text-white' : 'text-brand-dark'}`}>
+                      <Gauge size={22} className="text-brand-primary" />
+                      Panel de Gráficos en Tiempo Real
                     </h2>
                   </div>
-                  <div className="relative w-full sm:w-auto">
-                    <select
-                      value={chartFilter}
-                      onChange={(e) => setChartFilter(e.target.value)}
-                      className="appearance-none w-full bg-white border-2 border-gray-100 text-brand-dark font-bold py-2.5 pl-6 pr-12 rounded-2xl focus:outline-none focus:border-brand-primary focus:ring-4 focus:ring-brand-primary/5 text-sm transition-all shadow-sm"
-                    >
-                      <option>Ver: Planta Completa</option>
-                      {machinesData.map(m => (
-                        <option key={m.id} value={m.id}>{m.name}</option>
-                      ))}
-                    </select>
-                    <ChevronDown size={18} className="absolute right-4 top-1/2 -translate-y-1/2 text-brand-primary pointer-events-none" />
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {/* Time range selector */}
+                    <div className="flex rounded-xl overflow-hidden border border-gray-200">
+                      {(['6', '12', '24', '48'].map(h => (
+                        <button
+                          key={h}
+                          onClick={() => setChartTimeRange(h)}
+                          className={`px-3 py-1.5 text-[10px] font-black transition-all ${chartTimeRange === h
+                            ? 'bg-brand-primary text-white'
+                            : `${isDark ? 'bg-white/5 text-white/40 hover:bg-white/10' : 'bg-white text-gray-500 hover:bg-gray-50'}`
+                          }`}
+                        >
+                          {h}h
+                        </button>
+                      )))}
+                    </div>
+                    {/* Machine selector */}
+                    <div className="relative">
+                      <select
+                        value={chartFilter}
+                        onChange={(e) => setChartFilter(e.target.value)}
+                        className={`appearance-none bg-white border-2 text-brand-dark font-bold py-2 pl-4 pr-10 rounded-xl focus:outline-none focus:border-brand-primary text-sm transition-all shadow-sm ${isDark ? 'border-gray-700' : 'border-gray-100'}`}
+                      >
+                        <option>Ver: Planta Completa</option>
+                        {machinesData.map(m => (
+                          <option key={m.id} value={m.id}>{m.name}</option>
+                        ))}
+                      </select>
+                      <ChevronDown size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-brand-primary pointer-events-none" />
+                    </div>
                   </div>
                 </div>
 
-                <div className={`rounded-3xl p-4 sm:p-6 lg:p-10 h-[360px] sm:h-[450px] shadow-sm relative ${isDark ? 'bg-[#0a0f20] border border-white/5' : 'bg-white border border-gray-100'}`}>
-                  <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={trendsData} margin={{ top: 20, right: 30, bottom: 20, left: 10 }}>
-                      <defs>
-                        <linearGradient id="colorTempOvo" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#ec4899" stopOpacity={0.8}/>
-                          <stop offset="95%" stopColor="#ec4899" stopOpacity={0}/>
-                        </linearGradient>
-                      </defs>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
-                      <XAxis dataKey="time" stroke="#94a3b8" tick={{ fill: '#94a3b8', fontSize: 11, fontWeight: '600' }} tickLine={false} axisLine={false} dy={10} />
-                      <YAxis yAxisId="left" stroke="#94a3b8" tick={{ fill: '#94a3b8', fontSize: 11, fontWeight: '600' }} tickLine={false} axisLine={false} dx={-10} />
-                      <YAxis yAxisId="right" orientation="right" stroke="#94a3b8" tick={{ fill: '#94a3b8', fontSize: 11, fontWeight: '600' }} tickLine={false} axisLine={false} dx={10} />
-                      <Tooltip
-                        contentStyle={{ backgroundColor: 'rgba(255, 255, 255, 0.95)', border: '1px solid #f1f5f9', borderRadius: '16px', boxShadow: '0 10px 25px rgba(0,0,0,0.1)', padding: '16px', backdropFilter: 'blur(8px)' }}
-                        itemStyle={{ fontWeight: '900', fontSize: '12px' }}
+                {/* Metric toggles */}
+                <div className="flex flex-wrap gap-2 mb-4">
+                  {[
+                    { key: 'tempOvoscan', label: 'Temp. Principal', icon: Thermometer, color: '#ec4899' },
+                    { key: 'tempAire', label: 'Temp. Aire', icon: Thermometer, color: '#ef4444' },
+                    { key: 'humedad', label: 'Humedad', icon: Droplets, color: '#3b82f6' },
+                    { key: 'co2', label: 'CO2', icon: Wind, color: '#eab308' },
+                  ].map(({ key, label, icon: Icon, color }) => (
+                    <button
+                      key={key}
+                      onClick={() => setActiveMetrics(prev => ({ ...prev, [key]: !prev[key] }))}
+                      className={`flex items-center gap-2 px-3 py-2 rounded-xl text-[11px] font-black transition-all border-2 ${activeMetrics[key]
+                        ? 'text-white shadow-lg'
+                        : `${isDark ? 'bg-white/5 border-white/10 text-white/30' : 'bg-gray-50 border-gray-200 text-gray-400'}`
+                      }`}
+                      style={activeMetrics[key] ? {
+                        backgroundColor: color + '30',
+                        borderColor: color,
+                        color: color,
+                      } : {}}
+                    >
+                      <Icon size={14} />
+                      {label}
+                      {activeMetrics[key] && <span className="ml-1 w-2 h-2 rounded-full" style={{ backgroundColor: color }} />}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Chart */}
+                <div className={`rounded-3xl p-4 sm:p-6 lg:p-8 shadow-sm relative ${isDark ? 'bg-[#0a0f20] border border-white/5' : 'bg-white border border-gray-100'}`}>
+                  <ResponsiveContainer width="100%" height={400}>
+                    <LineChart data={trendsData} margin={{ top: 10, right: 30, bottom: 10, left: 10 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke={isDark ? '#1e293b' : '#f1f5f9'} vertical={false} />
+                      <XAxis
+                        dataKey="time"
+                        stroke={isDark ? '#64748b' : '#94a3b8'}
+                        tick={{ fill: isDark ? '#64748b' : '#94a3b8', fontSize: 11, fontWeight: '600' }}
+                        tickLine={false}
+                        axisLine={{ stroke: isDark ? '#334155' : '#e2e8f0' }}
+                        dy={10}
                       />
-                      <Legend wrapperStyle={{ paddingTop: '20px', fontSize: '12px', fontWeight: '900' }} iconType="circle" />
-                      
-                      {(!chartFilter.includes('Nacedora') && !chartFilter.startsWith('NAC')) && (
-                        <Line yAxisId="left" type="monotone" dataKey="tempOvoscan" name="T. Ovoscan (°F)" stroke="#ec4899" strokeWidth={4} dot={{ r: 0 }} activeDot={{ r: 8, fill: '#ec4899', stroke: '#fff', strokeWidth: 3 }} />
+                      <YAxis
+                        stroke={isDark ? '#64748b' : '#94a3b8'}
+                        tick={{ fill: isDark ? '#64748b' : '#94a3b8', fontSize: 11, fontWeight: '600' }}
+                        tickLine={false}
+                        axisLine={false}
+                        dx={-10}
+                      />
+                      <Tooltip
+                        contentStyle={{
+                          backgroundColor: isDark ? 'rgba(15,23,42,0.95)' : 'rgba(255,255,255,0.95)',
+                          border: `1px solid ${isDark ? '#334155' : '#f1f5f9'}`,
+                          borderRadius: '16px',
+                          boxShadow: '0 10px 25px rgba(0,0,0,0.15)',
+                          padding: '14px',
+                          backdropFilter: 'blur(8px)'
+                        }}
+                        itemStyle={{ fontWeight: '900', fontSize: '12px' }}
+                        labelStyle={{ fontWeight: '900', fontSize: '13px', marginBottom: '6px' }}
+                      />
+                      <Legend
+                        wrapperStyle={{ paddingTop: '16px', fontSize: '11px', fontWeight: '900' }}
+                        iconType="circle"
+                      />
+
+                      {/* Temp Principal - Real line */}
+                      {activeMetrics.tempOvoscan && (
+                        <Line
+                          yAxisId="left"
+                          type="monotone"
+                          dataKey="tempOvoscan"
+                          name="T. Principal (°F)"
+                          stroke="#ec4899"
+                          strokeWidth={3}
+                          dot={{ r: 3, fill: '#ec4899', stroke: '#fff', strokeWidth: 2 }}
+                          activeDot={{ r: 6, fill: '#ec4899', stroke: '#fff', strokeWidth: 3 }}
+                        />
                       )}
-                      
-                      {(!chartFilter.includes('Nacedora') && !chartFilter.startsWith('NAC')) && (
-                        <Line yAxisId="left" type="monotone" dataKey="tempAire" name="T. Aire (°F)" stroke="#ef4444" strokeWidth={4} dot={{ r: 0 }} activeDot={{ r: 8, fill: '#ef4444', stroke: '#fff', strokeWidth: 3 }} />
+                      {/* Temp Principal - SP dotted line */}
+                      {activeMetrics.tempOvoscan && (
+                        <Line
+                          yAxisId="left"
+                          type="monotone"
+                          dataKey="tempOvoscanSP"
+                          name="T. Principal SP (°F)"
+                          stroke="#f9a8d4"
+                          strokeWidth={2}
+                          strokeDasharray="6 4"
+                          dot={false}
+                          activeDot={false}
+                        />
                       )}
 
-                      {(chartFilter.includes('Nacedora') || chartFilter.startsWith('NAC')) && (
-                        <Line yAxisId="left" type="monotone" dataKey="temp" name="Temperatura (°F)" stroke="#ef4444" strokeWidth={4} dot={{ r: 0 }} activeDot={{ r: 8, fill: '#ef4444', stroke: '#fff', strokeWidth: 3 }} />
+                      {/* Temp Aire - Real line */}
+                      {activeMetrics.tempAire && (
+                        <Line
+                          yAxisId="left"
+                          type="monotone"
+                          dataKey="tempAire"
+                          name="T. Aire (°F)"
+                          stroke="#ef4444"
+                          strokeWidth={3}
+                          dot={{ r: 3, fill: '#ef4444', stroke: '#fff', strokeWidth: 2 }}
+                          activeDot={{ r: 6, fill: '#ef4444', stroke: '#fff', strokeWidth: 3 }}
+                        />
+                      )}
+                      {/* Temp Aire - SP dotted line */}
+                      {activeMetrics.tempAire && (
+                        <Line
+                          yAxisId="left"
+                          type="monotone"
+                          dataKey="tempAireSP"
+                          name="T. Aire SP (°F)"
+                          stroke="#fca5a5"
+                          strokeWidth={2}
+                          strokeDasharray="6 4"
+                          dot={false}
+                          activeDot={false}
+                        />
                       )}
 
-                      <Line yAxisId="right" type="monotone" dataKey="humedad" name="Humedad (%)" stroke="#3b82f6" strokeWidth={4} dot={{ r: 0 }} activeDot={{ r: 8, fill: '#3b82f6', stroke: '#fff', strokeWidth: 3 }} />
-                      <Line yAxisId="right" type="monotone" dataKey="co2" name="CO2" stroke="#eab308" strokeWidth={4} dot={{ r: 0 }} activeDot={{ r: 8, fill: '#eab308', stroke: '#fff', strokeWidth: 3 }} />
-                      
-                      <Line yAxisId="left" type="monotone" dataKey="temp_general" name="T. Promedio" stroke="#f5a623" strokeWidth={2} strokeDasharray="5 5" dot={{ r: 0 }} />
-                      <Line yAxisId="right" type="monotone" dataKey="humedad_general" name="H. Promedio" stroke="#ffd05b" strokeWidth={2} strokeDasharray="5 5" dot={{ r: 0 }} />
+                      {/* Humedad - Real line */}
+                      {activeMetrics.humedad && (
+                        <Line
+                          yAxisId="left"
+                          type="monotone"
+                          dataKey="humedad"
+                          name="Humedad (%)"
+                          stroke="#3b82f6"
+                          strokeWidth={3}
+                          dot={{ r: 3, fill: '#3b82f6', stroke: '#fff', strokeWidth: 2 }}
+                          activeDot={{ r: 6, fill: '#3b82f6', stroke: '#fff', strokeWidth: 3 }}
+                        />
+                      )}
+                      {/* Humedad - SP dotted line */}
+                      {activeMetrics.humedad && (
+                        <Line
+                          yAxisId="left"
+                          type="monotone"
+                          dataKey="humedadSP"
+                          name="Humedad SP (%)"
+                          stroke="#93c5fd"
+                          strokeWidth={2}
+                          strokeDasharray="6 4"
+                          dot={false}
+                          activeDot={false}
+                        />
+                      )}
+
+                      {/* CO2 - Real line */}
+                      {activeMetrics.co2 && (
+                        <Line
+                          yAxisId="left"
+                          type="monotone"
+                          dataKey="co2"
+                          name="CO2 (ppm)"
+                          stroke="#eab308"
+                          strokeWidth={3}
+                          dot={{ r: 3, fill: '#eab308', stroke: '#fff', strokeWidth: 2 }}
+                          activeDot={{ r: 6, fill: '#eab308', stroke: '#fff', strokeWidth: 3 }}
+                        />
+                      )}
+                      {/* CO2 - SP dotted line */}
+                      {activeMetrics.co2 && (
+                        <Line
+                          yAxisId="left"
+                          type="monotone"
+                          dataKey="co2SP"
+                          name="CO2 SP (ppm)"
+                          stroke="#fde047"
+                          strokeWidth={2}
+                          strokeDasharray="6 4"
+                          dot={false}
+                          activeDot={false}
+                        />
+                      )}
                     </LineChart>
                   </ResponsiveContainer>
                   {trendsData.length === 0 && (

@@ -235,7 +235,7 @@ export default function App() {
         ) : activeMachineId ? (
           <CameraScreen />
         ) : (
-          <DashboardScreen />
+          <DashboardScreen canAccessSupervisor={canAccessSupervisor} onSwitchToSupervisor={handleSwitchToSupervisor} />
         )}
       </div>
     </div>

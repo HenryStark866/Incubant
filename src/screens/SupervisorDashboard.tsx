@@ -969,23 +969,23 @@ export default function SupervisorDashboard() {
                               }`}
                             style={{ minHeight: '100px' }}
                           >
-                            {/* Imagen de fondo con efecto 3D */}
+                            {/* Imagen de máquina real */}
                             <div className="absolute inset-0">
                               <img
                                 src="/imagen1.png"
                                 alt={machine.name}
                                 className="w-full h-full object-cover"
                                 style={{
-                                  filter: machine.status === 'alarm' ? 'brightness(0.3) saturate(1.5) hue-rotate(-30deg)' : machine.status === 'maintenance' ? 'brightness(0.2) grayscale(0.8)' : 'brightness(0.3) saturate(1.2)',
-                                  transform: 'perspective(500px) rotateX(3deg) scale(1.1)',
+                                  filter: machine.status === 'alarm' ? 'brightness(0.8) saturate(1.3) hue-rotate(-10deg)' : machine.status === 'maintenance' ? 'brightness(0.6) grayscale(0.5)' : 'brightness(1) contrast(1.05)',
+                                  transform: 'scale(1.02)',
                                 }}
                               />
                               <div className="absolute inset-0" style={{
                                 background: machine.status === 'alarm'
-                                  ? 'linear-gradient(180deg, rgba(239,68,68,0.15) 0%, rgba(6,11,24,0.7) 100%)'
+                                  ? 'linear-gradient(180deg, rgba(239,68,68,0.1) 0%, rgba(0,0,0,0.05) 30%, rgba(0,0,0,0.3) 100%)'
                                   : machine.status === 'maintenance'
-                                  ? 'linear-gradient(180deg, rgba(100,100,100,0.1) 0%, rgba(6,11,24,0.7) 100%)'
-                                  : 'linear-gradient(180deg, rgba(247,147,26,0.08) 0%, rgba(6,11,24,0.7) 100%)',
+                                  ? 'linear-gradient(180deg, rgba(100,100,100,0.05) 0%, rgba(0,0,0,0.3) 100%)'
+                                  : 'linear-gradient(180deg, rgba(0,0,0,0.1) 0%, rgba(0,0,0,0.03) 30%, rgba(0,0,0,0.25) 100%)',
                               }} />
                             </div>
                             <span className={`relative z-10 font-black text-xs ${machine.status === 'alarm' ? 'text-red-300' : machine.status === 'maintenance' ? 'text-white/30' : isDark ? 'text-white' : 'text-white'}`} style={{ textShadow: '0 2px 6px rgba(0,0,0,0.8)' }}>{machine.name.replace('Incubadora ', '')}</span>

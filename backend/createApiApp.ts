@@ -8,6 +8,7 @@ import type { PrismaClient } from '@prisma/client';
 
 import { processMachineReport, processClosingReport } from './controllers/report.controller';
 import { seedShifts } from './controllers/admin.controller';
+import { uploadWithDateStructure, cleanUserName } from './services/drive.service';
 
 type UserRole = 'OPERARIO' | 'SUPERVISOR' | 'JEFE';
 
@@ -676,6 +677,109 @@ export function createApiApp(): Express {
     } catch (error) {
       console.error('[Sync] Error interno:', error);
       return res.status(500).json({ error: 'Error interno del servidor al sincronizar' });
+    }
+  });
+
+  // ── Sync Hourly with Drive Upload ────────────────────────────────────────
+  // Recibe fotos en base64 + datos, sube a Drive con formato DD/MM/YYYY/HH:MM.nombreoperario
+  app.post('/api/sync-hourly-drive', requireAuthenticatedUser, async (req: AuthenticatedRequest, res) => {
+    try {
+      const { machines } = req.body as { machines?: SubmittedMachine[] };
+      const userName = req.user?.name || 'Operario';
+
+      if (!machines || !Array.isArray(machines)) {
+        return res.status(400).json({ error: 'Datos inválidos o incompletos' });
+      }
+
+      const completedMachines = machines.filter((machine) => machine.status === 'completed' && machine.data);
+
+      if (completedMachines.length === 0) {
+        return res.status(400).json({ error: 'No hay máquinas completadas para sincronizar' });
+      }
+
+      const folderIdPhotos = process.env.DRIVE_FOLDER_PHOTOS_ID;
+      const folderIdReports = process.env.DRIVE_FOLDER_REPORTS_ID;
+
+      const driveResults: { machineId: string; photoUrl?: string; pdfUrl?: string }[] = [];
+
+      // Subir cada foto y PDF a Drive
+      for (const machine of completedMachines) {
+        const result: { machineId: string; photoUrl?: string; pdfUrl?: string } = { machineId: machine.id };
+
+        // Subir foto a Drive
+        if (machine.photoUrl?.startsWith('data:image')) {
+          try {
+            const base64Data = machine.photoUrl.replace(/^data:image\/\w+;base64,/, '');
+            const buffer = Buffer.from(base64Data, 'base64');
+            const uploadResult = await uploadWithDateStructure(
+              buffer, userName, machine.id, 'image/jpeg', folderIdPhotos || '', 'photo'
+            );
+            result.photoUrl = uploadResult.publicUrl;
+            console.log(`[Drive Sync] Foto subida: ${uploadResult.fileName}`);
+          } catch (err) {
+            console.error(`[Drive Sync] Error subiendo foto ${machine.id}:`, err);
+          }
+        }
+
+        driveResults.push(result);
+      }
+
+      // Guardar en BD
+      try {
+        const prisma = await getPrismaClient();
+        const databaseUser = await resolveDatabaseUser(req.user!);
+
+        const logsToInsert = await Promise.all(completedMachines.map(async (machine) => {
+          const resolvedMachine = await resolveDatabaseMachine(machine);
+          const d = machine.data!;
+          const mainTemp = toNumberOrNull(d.tempOvoscan) ?? toNumberOrNull(d.temperatura) ?? 0;
+          const secondaryTemp = toNumberOrNull(d.tempAire) ?? mainTemp;
+          const co2 = toNumberOrNull(d.co2) ?? 0;
+          const humidity = toNumberOrNull(d.humedadRelativa) ?? 0;
+
+          const driveResult = driveResults.find(r => r.machineId === machine.id);
+
+          if (d.alarma === 'Si') {
+            await prisma.incident.create({
+              data: {
+                user_id: databaseUser.id,
+                machine_id: resolvedMachine.id,
+                titulo: `Alarma en ${machine.id}`,
+                descripcion: d.observaciones || 'Alarma detectada en reporte horario',
+                tipo: 'ALARM'
+              }
+            });
+          }
+
+          return {
+            user_id: databaseUser.id,
+            machine_id: resolvedMachine.id,
+            photo_url: driveResult?.photoUrl || null,
+            temp_principal_actual: mainTemp,
+            temp_principal_consigna: mainTemp,
+            co2_actual: co2,
+            co2_consigna: co2,
+            fan_speed: 0,
+            temp_secundaria_actual: secondaryTemp,
+            temp_secundaria_consigna: secondaryTemp,
+            is_na: machine.type === 'nacedora',
+            temp_superior_actual: null,
+            observaciones: buildObservationSummary(d),
+          };
+        }));
+
+        await prisma.hourlyLog.createMany({ data: logsToInsert });
+      } catch (dbError) {
+        console.error('[Sync Drive] Error BD:', dbError);
+      }
+
+      return res.status(200).json({
+        message: 'Sincronización con Drive exitosa',
+        driveResults,
+      });
+    } catch (error) {
+      console.error('[Sync Drive] Error interno:', error);
+      return res.status(500).json({ error: 'Error interno del servidor al sincronizar con Drive' });
     }
   });
 

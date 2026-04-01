@@ -22,6 +22,130 @@ const auth = new google.auth.GoogleAuth({
 const drive = google.drive({ version: 'v3', auth });
 
 /**
+ * Obtiene la hora actual en Colombia (UTC-5)
+ */
+function getBogotaDate(): Date {
+  const now = new Date();
+  const utc = now.getTime() + now.getTimezoneOffset() * 60000;
+  return new Date(utc - 5 * 60 * 60 * 1000);
+}
+
+/**
+ * Formatea fecha como DD/MM/YYYY para nombres de carpetas
+ */
+function formatDateFolder(date: Date): string {
+  const d = date.getDate().toString().padStart(2, '0');
+  const m = (date.getMonth() + 1).toString().padStart(2, '0');
+  const y = date.getFullYear();
+  return `${d}/${m}/${y}`;
+}
+
+/**
+ * Formatea hora como HH:MM para nombres de archivo
+ */
+function formatTimeFile(date: Date): string {
+  const h = date.getHours().toString().padStart(2, '0');
+  const min = date.getMinutes().toString().padStart(2, '0');
+  return `${h}:${min}`;
+}
+
+/**
+ * Busca o crea una carpeta con el nombre dado dentro de una carpeta padre
+ */
+export async function getOrCreateFolder(folderName: string, parentFolderId: string): Promise<string> {
+  try {
+    // Buscar carpeta existente
+    const existing = await drive.files.list({
+      q: `'${parentFolderId}' in parents and name='${folderName}' and mimeType='application/vnd.google-apps.folder' and trashed=false`,
+      fields: 'files(id, name)',
+      spaces: 'drive',
+    });
+
+    if (existing.data.files && existing.data.files.length > 0) {
+      return existing.data.files[0].id!;
+    }
+
+    // Crear carpeta nueva
+    const created = await drive.files.create({
+      requestBody: {
+        name: folderName,
+        mimeType: 'application/vnd.google-apps.folder',
+        parents: [parentFolderId],
+      },
+      fields: 'id, name',
+    });
+
+    return created.data.id!;
+  } catch (error) {
+    console.error('[Drive] Error creando/buscar carpeta:', error);
+    // Fallback: usar carpeta padre directamente
+    return parentFolderId;
+  }
+}
+
+/**
+ * Limpia nombre de usuario para archivo: minúsculas, sin espacios, sin caracteres especiales
+ */
+export function cleanUserName(name: string): string {
+  return name
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, '')
+    .replace(/[^a-zA-Z0-9_]/g, '')
+    .toLowerCase();
+}
+
+/**
+ * Genera el nombre de archivo en formato: DD/MM/YYYY/HH:MM.nombreoperario.ext
+ * Crea la estructura de carpetas por fecha en Drive
+ */
+export async function uploadWithDateStructure(
+  buffer: Buffer,
+  userName: string,
+  machineId: string,
+  mimeType: string,
+  baseFolderId: string,
+  fileType: 'photo' | 'pdf' | 'closing'
+): Promise<{ id: string; publicUrl: string; fileName: string }> {
+  const bogotaDate = getBogotaDate();
+  const dateFolder = formatDateFolder(bogotaDate); // "31/03/2026"
+  const timeStr = formatTimeFile(bogotaDate); // "22:56"
+  const cleanName = cleanUserName(userName); // "henrytaborda"
+  const ext = mimeType.includes('pdf') ? 'pdf' : 'jpg';
+
+  // Nombre del archivo: 22:56.henrytaborda.jpg
+  const fileName = `${timeStr}.${cleanName}.${ext}`;
+
+  // Estructura de carpetas: baseFolderId → "31/03/2026" → (opcional) subcarpetas
+  let targetFolderId = baseFolderId;
+
+  // Crear carpeta de fecha si existe base folder
+  try {
+    targetFolderId = await getOrCreateFolder(dateFolder, baseFolderId);
+  } catch {
+    // Si falla, usar carpeta base directamente
+  }
+
+  // Para PDFs de cierre, subcarpeta adicional
+  if (fileType === 'closing') {
+    try {
+      targetFolderId = await getOrCreateFolder('Cierres', targetFolderId);
+    } catch {
+      // Continuar sin subcarpeta
+    }
+  }
+
+  // Subir archivo
+  const result = await uploadToDrive(buffer, fileName, mimeType, targetFolderId);
+
+  return {
+    id: result.id,
+    publicUrl: result.publicUrl,
+    fileName: `${dateFolder}/${fileName}`,
+  };
+}
+
+/**
  * Uploads a file (image or PDF) to Google Drive.
  * @param buffer - File data in memory
  * @param filename - Name for the file

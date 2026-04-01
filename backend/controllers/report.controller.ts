@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { analyzeIncubatorImage } from '../services/vision.service';
-import { uploadToDrive } from '../services/drive.service';
+import { uploadToDrive, uploadWithDateStructure, cleanUserName } from '../services/drive.service';
 import { generateReportPDF } from '../services/pdf.service';
 import type { PrismaClient } from '@prisma/client';
 
@@ -14,23 +14,31 @@ type AuthenticatedRequest = Request & {
 };
 
 /**
- * Formatea fecha para nombres de archivo: YYYY-MM-DD_HH-mm
+ * Obtiene la hora actual en Colombia (UTC-5)
  */
-function fileTimestamp(): string {
-  const d = new Date();
-  const pad = (n: number) => n.toString().padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}_${pad(d.getHours())}-${pad(d.getMinutes())}`;
+function getBogotaDate(): Date {
+  const now = new Date();
+  const utc = now.getTime() + now.getTimezoneOffset() * 60000;
+  return new Date(utc - 5 * 60 * 60 * 1000);
 }
 
 /**
- * Limpia nombre de usuario para archivo: sin espacios, sin caracteres especiales
+ * Formatea fecha como DD/MM/YYYY para nombres de carpetas
  */
-function cleanUserName(name: string): string {
-  return name
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/\s+/g, '_')
-    .replace(/[^a-zA-Z0-9_]/g, '');
+function formatDateFolder(date: Date): string {
+  const d = date.getDate().toString().padStart(2, '0');
+  const m = (date.getMonth() + 1).toString().padStart(2, '0');
+  const y = date.getFullYear();
+  return `${d}/${m}/${y}`;
+}
+
+/**
+ * Formatea hora como HH:MM para nombres de archivo
+ */
+function formatTimeFile(date: Date): string {
+  const h = date.getHours().toString().padStart(2, '0');
+  const min = date.getMinutes().toString().padStart(2, '0');
+  return `${h}:${min}`;
 }
 
 /**
@@ -58,7 +66,9 @@ export const processMachineReport = async (req: AuthenticatedRequest, res: Respo
       return res.status(400).json({ error: 'No se adjuntó imagen de evidencia.' });
     }
 
-    const ts = fileTimestamp();
+    const bogotaDate = getBogotaDate();
+    const dateFolder = formatDateFolder(bogotaDate);
+    const timeStr = formatTimeFile(bogotaDate);
     const cleanName = cleanUserName(userName);
 
     // 1. Análisis de imagen con Gemini Vision
@@ -86,21 +96,22 @@ export const processMachineReport = async (req: AuthenticatedRequest, res: Respo
       } catch { /* ignorar si el JSON está malformado */ }
     }
 
-    // 2. Subir foto → Carpeta Fotos
+    // 2. Subir foto → Carpeta Fotos con estructura de fecha
     let imageUrl = '';
     try {
       const folderIdPhotos = process.env.DRIVE_FOLDER_PHOTOS_ID;
       if (!folderIdPhotos) throw new Error('DRIVE_FOLDER_PHOTOS_ID no configurada');
 
-      const photoName = `${ts}_${machineId}_${cleanName}.jpg`;
-      const driveResult = await uploadToDrive(file.buffer, photoName, file.mimetype, folderIdPhotos);
-      imageUrl = driveResult.publicUrl ?? '';
-      console.log(`[Drive] Foto subida OK: ${photoName}`);
+      const photoResult = await uploadWithDateStructure(
+        file.buffer, userName, machineId, file.mimetype, folderIdPhotos, 'photo'
+      );
+      imageUrl = photoResult.publicUrl;
+      console.log(`[Drive] Foto subida OK: ${photoResult.fileName}`);
     } catch (driveError) {
       console.error('[Drive] ERROR subiendo foto:', driveError);
     }
 
-    // 3. Generar PDF → Carpeta Reportes por Hora
+    // 3. Generar PDF → Carpeta Reportes por Hora con estructura de fecha
     let pdfUrl = '';
     try {
       const folderIdReports = process.env.DRIVE_FOLDER_REPORTS_ID;
@@ -112,10 +123,11 @@ export const processMachineReport = async (req: AuthenticatedRequest, res: Respo
         finalData,
         file.buffer
       );
-      const pdfName = `${ts}_${machineId}_${cleanName}.pdf`;
-      const pdfResult = await uploadToDrive(pdfBuffer, pdfName, 'application/pdf', folderIdReports);
-      pdfUrl = pdfResult.publicUrl ?? '';
-      console.log(`[Drive] PDF reporte por hora subido OK: ${pdfName}`);
+      const pdfResult = await uploadWithDateStructure(
+        pdfBuffer, userName, machineId, 'application/pdf', folderIdReports, 'pdf'
+      );
+      pdfUrl = pdfResult.publicUrl;
+      console.log(`[Drive] PDF reporte por hora subido OK: ${pdfResult.fileName}`);
     } catch (pdfError) {
       console.error('[Drive] ERROR generando/subiendo PDF:', pdfError);
     }
@@ -221,19 +233,22 @@ export const processClosingReport = async (req: AuthenticatedRequest, res: Respo
       return res.status(400).json({ error: 'No se adjuntó PDF de cierre.' });
     }
 
-    const ts = fileTimestamp();
+    const bogotaDate = getBogotaDate();
+    const dateFolder = formatDateFolder(bogotaDate);
+    const timeStr = formatTimeFile(bogotaDate);
     const cleanName = cleanUserName(userName);
 
-    // Subir PDF → Carpeta Cierres de Turno
+    // Subir PDF → Carpeta Cierres de Turno con estructura de fecha
     let pdfUrl = '';
     try {
       const folderIdClosing = process.env.DRIVE_FOLDER_CLOSING_REPORTS_ID;
       if (!folderIdClosing) throw new Error('DRIVE_FOLDER_CLOSING_REPORTS_ID no configurada');
 
-      const pdfName = `${ts}_Cierre_Turno_${cleanName}.pdf`;
-      const driveResult = await uploadToDrive(file.buffer, pdfName, 'application/pdf', folderIdClosing);
-      pdfUrl = driveResult.publicUrl ?? '';
-      console.log(`[Drive] PDF cierre de turno subido OK: ${pdfName}`);
+      const pdfResult = await uploadWithDateStructure(
+        file.buffer, userName, '', 'application/pdf', folderIdClosing, 'closing'
+      );
+      pdfUrl = pdfResult.publicUrl;
+      console.log(`[Drive] PDF cierre de turno subido OK: ${pdfResult.fileName}`);
     } catch (driveError) {
       console.error('[Drive] ERROR subiendo cierre de turno:', driveError);
     }

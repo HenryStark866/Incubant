@@ -112,22 +112,22 @@ const MachineCard = ({
         background: 'transparent',
       }}
     >
-      {/* Imagen de máquina real con efecto 3D */}
+      {/* Imagen de máquina real */}
       <div className="absolute inset-0">
         <img
           src="/imagen1.png"
           alt={`Máquina ${machineCode}`}
           className="w-full h-full object-cover"
           style={{
-            filter: 'brightness(0.35) contrast(1.1)',
-            transform: 'perspective(600px) rotateX(2deg) scale(1.05)',
+            filter: 'brightness(1) contrast(1.05)',
+            transform: 'scale(1.02)',
           }}
         />
-        {/* Overlay gradiente para contraste */}
+        {/* Overlay gradiente sutil solo para legibilidad del texto */}
         <div
           className="absolute inset-0"
           style={{
-            background: 'linear-gradient(180deg, rgba(6,11,24,0.3) 0%, rgba(6,11,24,0.1) 40%, rgba(6,11,24,0.85) 100%)',
+            background: 'linear-gradient(180deg, rgba(0,0,0,0.15) 0%, rgba(0,0,0,0.05) 30%, rgba(0,0,0,0.4) 100%)',
           }}
         />
       </div>
@@ -425,44 +425,34 @@ export default function DashboardScreen() {
         };
         return m;
       });
-      const { uploadEvidenceImage } = await import('../lib/supabase');
-      const machinesWithPhotos = await Promise.all(
-        preparedMachines.map(async machine => {
-          if (machine.photoUrl?.startsWith('data:image')) {
-            try {
-              const publicUrl = await uploadEvidenceImage(machine.photoUrl, machine.id);
-              return { ...machine, photoUrl: publicUrl };
-            } catch { return machine; }
-          }
-          return machine;
-        })
-      );
+
       setSyncPhase('database');
 
-      // Queue data locally if offline, try to sync if online
+      // Queue data locally if offline
       if (!isOnline) {
-        // Save to localStorage for later sync
         const pendingSync = JSON.parse(localStorage.getItem('incubant-pending-sync') || '[]');
         pendingSync.push({
           userId: currentUser?.id,
-          machines: machinesWithPhotos,
+          machines: preparedMachines,
           timestamp: new Date().toISOString()
         });
         localStorage.setItem('incubant-pending-sync', JSON.stringify(pendingSync));
         setSyncPhase('pdf');
-        await generatePDF(machinesWithPhotos);
+        await generatePDF(preparedMachines);
         setSyncSuccess(true);
         setTimeout(() => { setSyncSuccess(false); resetHourlyStatus(); }, 2000);
         return;
       }
 
-      const response = await apiFetch(getApiUrl('/api/sync-hourly'), {
+      // Upload photos + data to Drive via backend
+      const response = await apiFetch(getApiUrl('/api/sync-hourly-drive'), {
         method: 'POST',
-        body: JSON.stringify({ userId: currentUser?.id, machines: machinesWithPhotos })
+        body: JSON.stringify({ machines: preparedMachines })
       });
       if (!response.ok) throw new Error('Error guardando en servidor');
+
       setSyncPhase('pdf');
-      await generatePDF(machinesWithPhotos);
+      await generatePDF(preparedMachines);
       setSyncSuccess(true);
       setTimeout(() => { setSyncSuccess(false); resetHourlyStatus(); }, 2000);
 
@@ -470,7 +460,6 @@ export default function DashboardScreen() {
       await flushPendingSyncs();
     } catch (error) {
       console.error('Error sincronización:', error);
-      // If sync fails, queue for later
       const pendingSync = JSON.parse(localStorage.getItem('incubant-pending-sync') || '[]');
       pendingSync.push({
         userId: currentUser?.id,
@@ -489,9 +478,9 @@ export default function DashboardScreen() {
     const remaining: any[] = [];
     for (const batch of pendingSync) {
       try {
-        const response = await apiFetch(getApiUrl('/api/sync-hourly'), {
+        const response = await apiFetch(getApiUrl('/api/sync-hourly-drive'), {
           method: 'POST',
-          body: JSON.stringify({ userId: batch.userId, machines: batch.machines })
+          body: JSON.stringify({ machines: batch.machines })
         });
         if (!response.ok) {
           remaining.push(batch);

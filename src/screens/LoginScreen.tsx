@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useMachineStore, type User } from '../store/useMachineStore';
 import { getApiUrl, apiFetch } from '../lib/api';
 import { LogIn, AlertCircle, Loader2, Egg, ShieldCheck, Cpu } from 'lucide-react';
-import { requestNotificationPermission, scheduleHourlyNotifications } from '../utils/notifications';
+import { requestNotificationPermission } from '../utils/notifications';
 
 /* ── Partículas flotantes de fondo ── */
 const Particle = ({ delay, x, duration }: { delay: number; x: number; duration: number }) => (
@@ -77,7 +77,6 @@ export default function LoginScreen() {
   const completeLogin = async (user: User) => {
     try {
       await requestNotificationPermission().catch(() => null);
-      scheduleHourlyNotifications();
     } catch (e) {
       console.warn('Error al iniciar notificaciones:', e);
     } finally {

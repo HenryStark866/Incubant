@@ -6,8 +6,9 @@ import LoginScreen from './screens/LoginScreen';
 import SupervisorDashboard from './screens/SupervisorDashboard';
 import UpdatePrompt from './components/UpdatePrompt';
 import { useMachineStore } from './store/useMachineStore';
+import { useThemeStore } from './store/useThemeStore';
 import { canUseSupervisorPanel } from './lib/fallbackAuth';
-import { Smartphone, Monitor, Loader2, Wifi, WifiOff, Cpu } from 'lucide-react';
+import { Smartphone, Monitor, Loader2, Wifi, WifiOff, Cpu, Sun, Moon } from 'lucide-react';
 import { getApiUrl, apiFetch } from './lib/api';
 
 export default function App() {
@@ -15,6 +16,11 @@ export default function App() {
   const [isSessionReady, setIsSessionReady] = useState(false);
   const [isApiHealthy, setIsApiHealthy] = useState<boolean | null>(null);
   const [retryCount, setRetryCount] = useState(0);
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+
+  const theme = useThemeStore(state => state.theme);
+  const toggleTheme = useThemeStore(state => state.toggleTheme);
+  const isDark = theme === 'dark';
   
   const activeMachineId = useMachineStore(state => state.activeMachineId);
   const capturedPhoto = useMachineStore(state => state.capturedPhoto);
@@ -23,6 +29,17 @@ export default function App() {
   const logout = useMachineStore(state => state.logout);
 
   const canAccessSupervisor = canUseSupervisorPanel(currentUser?.role);
+
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
 
   useEffect(() => {
     let isMounted = true;
@@ -189,43 +206,51 @@ export default function App() {
 
   if (viewMode === 'supervisor' && canAccessSupervisor) {
     return (
-      <div className="relative h-screen w-full font-sans bg-gray-50 flex flex-col">
-        <div className="flex-1 overflow-hidden relative bg-gray-50">
+      <div className={`relative h-screen w-full font-sans flex flex-col ${isDark ? 'bg-[#060b18]' : 'bg-gray-50'}`}>
+        <div className="flex-1 overflow-hidden relative">
            <SupervisorDashboard />
         </div>
         
         {/* Botón flotante para cambiar a vista de operario - integrado en el diseño */}
         <button 
           onClick={handleSwitchToMobile}
-          className="fixed bottom-6 right-6 z-50 flex items-center gap-2 bg-white border-2 border-brand-primary/20 text-brand-dark px-5 py-3 rounded-2xl font-bold text-xs shadow-xl hover:bg-brand-primary hover:text-white hover:border-brand-primary transition-all active:scale-95"
+          className={`fixed bottom-6 right-6 z-50 flex items-center gap-2 border-2 px-5 py-3 rounded-2xl font-bold text-xs shadow-xl transition-all active:scale-95 ${isDark ? 'bg-white/10 border-brand-primary/20 text-white hover:bg-brand-primary hover:text-white hover:border-brand-primary' : 'bg-white border-brand-primary/20 text-brand-dark hover:bg-brand-primary hover:text-white hover:border-brand-primary'}`}
         >
           <Smartphone size={16} />
           <span>Vista Operario</span>
+        </button>
+        
+        {/* Theme toggle */}
+        <button
+          onClick={toggleTheme}
+          className={`fixed bottom-6 right-32 z-50 flex items-center gap-2 border-2 px-4 py-3 rounded-2xl font-bold text-xs shadow-xl transition-all active:scale-95 ${isDark ? 'bg-white/10 border-white/10 text-white hover:bg-white/20' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-100'}`}
+        >
+          {isDark ? <Sun size={16} /> : <Moon size={16} />}
         </button>
       </div>
     );
   }
 
   return (
-    <div className="h-full w-full bg-[#060b18] relative flex flex-col items-center justify-center overscroll-none overflow-hidden font-mono">
+    <div className={`h-full w-full relative flex flex-col items-center justify-center overscroll-none overflow-hidden font-mono ${isDark ? 'bg-[#060b18]' : 'bg-gray-50'}`}>
       <UpdatePrompt />
       
       {canAccessSupervisor && (
         <div className="fixed top-4 right-4 z-[100] animate-fade-in">
           <button 
             onClick={handleSwitchToSupervisor}
-            className="glass-dark px-4 py-3 rounded-2xl border border-brand-primary/30 flex items-center gap-3 active:scale-95 transition-all shadow-2xl hover:bg-white/5"
+            className={`px-4 py-3 rounded-2xl border flex items-center gap-3 active:scale-95 transition-all shadow-2xl hover:bg-white/5 ${isDark ? 'glass-dark border-brand-primary/30' : 'bg-white border-brand-primary/30'}`}
           >
             <div className="relative">
                <Monitor size={16} className="text-brand-primary" />
                <div className="absolute -top-1 -right-1 w-2 h-2 bg-brand-primary rounded-full animate-pulse-glow" />
             </div>
-            <span className="text-[10px] font-black text-white/60 tracking-widest font-mono-display uppercase">SISTEMA_ADMIN</span>
+            <span className={`text-[10px] font-black tracking-widest font-mono-display uppercase ${isDark ? 'text-white/60' : 'text-gray-600'}`}>SISTEMA_ADMIN</span>
           </button>
         </div>
       )}
 
-      <div className="w-full h-full relative overflow-hidden bg-white safe-top safe-bottom shadow-[0_0_100px_rgba(0,0,0,0.5)]">
+      <div className={`w-full h-full relative overflow-hidden safe-top safe-bottom ${isDark ? 'bg-white shadow-[0_0_100px_rgba(0,0,0,0.5)]' : 'bg-white shadow-[0_0_100px_rgba(0,0,0,0.15)]'}`}>
         {!currentUser ? (
           <LoginScreen />
         ) : activeMachineId && capturedPhoto ? (

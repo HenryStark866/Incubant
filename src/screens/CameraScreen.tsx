@@ -1,7 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import Webcam from 'react-webcam';
 import { useMachineStore } from '../store/useMachineStore';
-import { Camera, X, FlipHorizontal, Loader2, AlertTriangle, Cpu, Shield } from 'lucide-react';
+import { useThemeStore } from '../store/useThemeStore';
+import { Camera, X, FlipHorizontal, Loader2, AlertTriangle, Cpu, Shield, Sun, Moon } from 'lucide-react';
 
 type CameraStatus = 'loading' | 'ready' | 'error';
 
@@ -13,6 +14,10 @@ export default function CameraScreen() {
 
   const machine = machines.find(m => m.id === activeMachineId);
   const webcamRef = useRef<Webcam>(null);
+
+  const theme = useThemeStore(state => state.theme);
+  const toggleTheme = useThemeStore(state => state.toggleTheme);
+  const isDark = theme === 'dark';
 
   const [cameraStatus, setCameraStatus] = useState<CameraStatus>('loading');
   const [facingMode, setFacingMode] = useState<'environment' | 'user'>('environment');
@@ -81,13 +86,21 @@ export default function CameraScreen() {
           <div className="font-black text-xl font-mono-display tracking-wider holo-text">{machineLabel}</div>
         </div>
 
-        <button
-          onClick={flipCamera}
-          disabled={cameraStatus === 'error'}
-          className="p-3 glass rounded-2xl border border-white/10 active:scale-90 transition-all disabled:opacity-20"
-        >
-          <FlipHorizontal size={22} className="text-white/70" />
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={toggleTheme}
+            className="p-3 glass rounded-2xl border border-white/10 active:scale-90 transition-all"
+          >
+            {isDark ? <Sun size={22} className="text-white/70" /> : <Moon size={22} className="text-white/70" />}
+          </button>
+          <button
+            onClick={flipCamera}
+            disabled={cameraStatus === 'error'}
+            className="p-3 glass rounded-2xl border border-white/10 active:scale-90 transition-all disabled:opacity-20"
+          >
+            <FlipHorizontal size={22} className="text-white/70" />
+          </button>
+        </div>
       </div>
 
       {/* ── System Stats ── */}

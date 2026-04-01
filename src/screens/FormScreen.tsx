@@ -1,46 +1,56 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { useMachineStore, MachineData } from '../store/useMachineStore';
+import { useThemeStore } from '../store/useThemeStore';
 import {
   ChevronLeft, Save, AlertCircle, Thermometer, Droplets,
   Calendar, RotateCw, Wind, Bell, MessageSquare, Activity,
-  CheckCircle2, Egg, Info, ShieldCheck, Zap, Loader2
+  CheckCircle2, Egg, Info, ShieldCheck, Zap, Loader2, Sun, Moon
 } from 'lucide-react';
 
 /* ── HUD Input Container ── */
-const HudInput = ({ label, icon: Icon, error, children, isAlarm }: any) => (
-  <div className={`glass-card rounded-[1.5rem] p-5 border transition-all duration-300 relative ${
-    isAlarm ? 'border-red-500/40 glow-red' : error ? 'border-red-500/30 glow-red' : 'border-white/5'
-  }`}>
-    <div className="flex items-center justify-between mb-4">
-      <div className="flex items-center gap-2.5">
-        <div className={`p-2 rounded-xl transition-colors duration-300 ${
-          isAlarm ? 'bg-red-500/20 text-red-400' : 'bg-brand-primary/10 text-brand-primary/50'
-        }`}>
-          <Icon size={14} />
+const HudInput = ({ label, icon: Icon, error, children, isAlarm }: any) => {
+  const theme = useThemeStore(state => state.theme);
+  const isDark = theme === 'dark';
+  return (
+    <div className={`rounded-[1.5rem] p-5 border transition-all duration-300 relative ${
+      isDark ? 'glass-card' : 'bg-white shadow-sm'
+    } ${isAlarm ? 'border-red-500/40 glow-red' : error ? 'border-red-500/30 glow-red' : isDark ? 'border-white/5' : 'border-gray-200'}`}>
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-2.5">
+          <div className={`p-2 rounded-xl transition-colors duration-300 ${
+            isAlarm ? 'bg-red-500/20 text-red-400' : 'bg-brand-primary/10 text-brand-primary/50'
+          }`}>
+            <Icon size={14} />
+          </div>
+          <span className={`text-[10px] font-black uppercase tracking-[0.2em] font-mono-display ${
+            isAlarm ? 'text-red-400' : isDark ? 'text-white/40' : 'text-gray-500'
+          }`}>
+            {label}
+          </span>
         </div>
-        <span className={`text-[10px] font-black uppercase tracking-[0.2em] font-mono-display ${
-          isAlarm ? 'text-red-400' : 'text-white/40'
-        }`}>
-          {label}
-        </span>
+        {isAlarm && (
+          <div className="bg-red-500/20 border border-red-500/30 text-red-500 text-[8px] font-black px-2 py-1 rounded-lg animate-pulse uppercase font-mono-display">
+            ALERTA ±1.5°F
+          </div>
+        )}
       </div>
-      {isAlarm && (
-        <div className="bg-red-500/20 border border-red-500/30 text-red-500 text-[8px] font-black px-2 py-1 rounded-lg animate-pulse uppercase font-mono-display">
-          ALERTA ±1.5°F
-        </div>
+      {children}
+      {isDark && (
+        <>
+          <div className="absolute top-0 left-0 w-4 h-4 border-t-2 border-l-2 border-white/5 rounded-tl-xl" />
+          <div className="absolute bottom-0 right-0 w-4 h-4 border-b-2 border-r-2 border-white/5 rounded-br-xl" />
+        </>
       )}
     </div>
-    {children}
-    {/* Corner Marks */}
-    <div className="absolute top-0 left-0 w-4 h-4 border-t-2 border-l-2 border-white/5 rounded-tl-xl" />
-    <div className="absolute bottom-0 right-0 w-4 h-4 border-b-2 border-r-2 border-white/5 rounded-br-xl" />
-  </div>
-);
+  );
+};
 
 /* ── Dual Input Component ── */
 const DualInputField = React.memo(({
   label, real, sp, onChangeReal, onChangeSp, unit, icon, error
 }: any) => {
+  const theme = useThemeStore(state => state.theme);
+  const isDark = theme === 'dark';
   const diff = Math.abs(parseFloat(real || '0') - parseFloat(sp || '0'));
   const isAlarm = !isNaN(diff) && diff >= 1.5;
 
@@ -48,23 +58,23 @@ const DualInputField = React.memo(({
     <HudInput label={label} icon={icon} error={error} isAlarm={isAlarm}>
       <div className="grid grid-cols-2 gap-4">
         <div className="relative">
-          <div className="text-[7px] font-black text-white/20 uppercase tracking-widest mb-1 font-mono">SENSOR_REAL</div>
+          <div className={`text-[7px] font-black uppercase tracking-widest mb-1 font-mono ${isDark ? 'text-white/20' : 'text-gray-400'}`}>SENSOR_REAL</div>
           <input
             type="number" step="0.1" inputMode="decimal"
             value={real} onChange={e => onChangeReal(e.target.value)}
             placeholder="0.0"
-            className="w-full bg-transparent text-4xl font-black text-white focus:outline-none placeholder:text-white/5 leading-none font-mono-display"
+            className={`w-full bg-transparent text-4xl font-black focus:outline-none placeholder:leading-none font-mono-display ${isDark ? 'text-white placeholder:text-white/5' : 'text-gray-900 placeholder:text-gray-300'}`}
           />
         </div>
-        <div className="border-l border-white/10 pl-6">
-          <div className="text-[7px] font-black text-white/20 uppercase tracking-widest mb-1 font-mono">
+        <div className={`pl-6 ${isDark ? 'border-l border-white/10' : 'border-l border-gray-200'}`}>
+          <div className={`text-[7px] font-black uppercase tracking-widest mb-1 font-mono ${isDark ? 'text-white/20' : 'text-gray-400'}`}>
             SETPOINT <span className="text-brand-primary/60">({unit})</span>
           </div>
           <input
             type="number" step="0.1" inputMode="decimal"
             value={sp} onChange={e => onChangeSp(e.target.value)}
             placeholder="0.0"
-            className="w-full bg-transparent text-2xl font-black text-white/40 focus:outline-none focus:text-brand-primary placeholder:text-white/5 leading-none transition-all font-mono-display"
+            className={`w-full bg-transparent text-2xl font-black focus:outline-none focus:text-brand-primary placeholder:leading-none transition-all font-mono-display ${isDark ? 'text-white/40 placeholder:text-white/5' : 'text-gray-400 placeholder:text-gray-300'}`}
           />
         </div>
       </div>
@@ -75,19 +85,23 @@ const DualInputField = React.memo(({
 /* ── Single Input Component ── */
 const InputField = React.memo(({
   label, value, onChange, placeholder, unit, icon, error
-}: any) => (
-  <HudInput label={label} icon={icon} error={error}>
-    <div className="flex items-end gap-3">
-      <input
-        type="number" step="0.1" inputMode="decimal"
-        value={value} onChange={e => onChange(e.target.value)}
-        placeholder={placeholder}
-        className="flex-1 bg-transparent text-4xl font-black text-white focus:outline-none placeholder:text-white/5 leading-none font-mono-display"
-      />
-      <span className="text-[14px] font-black text-brand-primary/40 uppercase tracking-widest mb-1 font-mono-display">{unit}</span>
-    </div>
-  </HudInput>
-));
+}: any) => {
+  const theme = useThemeStore(state => state.theme);
+  const isDark = theme === 'dark';
+  return (
+    <HudInput label={label} icon={icon} error={error}>
+      <div className="flex items-end gap-3">
+        <input
+          type="number" step="0.1" inputMode="decimal"
+          value={value} onChange={e => onChange(e.target.value)}
+          placeholder={placeholder}
+          className={`flex-1 bg-transparent text-4xl font-black focus:outline-none placeholder:leading-none font-mono-display ${isDark ? 'text-white placeholder:text-white/5' : 'text-gray-900 placeholder:text-gray-300'}`}
+        />
+        <span className="text-[14px] font-black text-brand-primary/40 uppercase tracking-widest mb-1 font-mono-display">{unit}</span>
+      </div>
+    </HudInput>
+  );
+});
 
 export default function FormScreen() {
   const activeMachineId = useMachineStore(state => state.activeMachineId);
@@ -95,6 +109,10 @@ export default function FormScreen() {
   const machines        = useMachineStore(state => state.machines);
   const saveMachineData = useMachineStore(state => state.saveMachineData);
   const setCapturedPhoto = useMachineStore(state => state.setCapturedPhoto);
+
+  const theme = useThemeStore(state => state.theme);
+  const toggleTheme = useThemeStore(state => state.toggleTheme);
+  const isDark = theme === 'dark';
 
   const machine = machines.find(m => m.id === activeMachineId);
   const isIncubadora = machine?.type === 'incubadora';
@@ -167,31 +185,38 @@ export default function FormScreen() {
   const hasErrors = Object.keys(errors).length > 0;
 
   return (
-    <div className="flex flex-col h-full bg-[#060b18] relative overflow-hidden font-mono">
+    <div className={`flex flex-col h-full relative overflow-hidden font-mono ${isDark ? 'bg-[#060b18]' : 'bg-gray-50'}`}>
       {/* HUD Background Decorations */}
-      <div className="absolute inset-0 pointer-events-none opacity-20">
-        <div className="absolute inset-0 circuit-bg" />
-        <div className="absolute top-0 right-0 w-64 h-64 rounded-full bg-brand-primary blur-[100px] opacity-10" />
-      </div>
+      {isDark && (
+        <div className="absolute inset-0 pointer-events-none opacity-20">
+          <div className="absolute inset-0 circuit-bg" />
+          <div className="absolute top-0 right-0 w-64 h-64 rounded-full bg-brand-primary blur-[100px] opacity-10" />
+        </div>
+      )}
 
       {/* ── Header HUD ── */}
-      <div className="relative z-30 px-5 pt-12 pb-4 shrink-0 glass-dark border-b border-brand-primary/20 backdrop-blur-3xl">
-        <div className="flex items-center gap-4">
-          <button
-            onClick={() => setCapturedPhoto(null)}
-            className="p-3 glass rounded-2xl border border-white/5 text-white/50 animate-fade-in hover:text-white transition-all active:scale-90"
-          >
-            <ChevronLeft size={20} />
-          </button>
-          <div>
-            <div className="flex items-center gap-2 mb-1.5 opacity-60">
-              <Egg size={12} className="text-brand-primary animate-pulse" />
-              <span className="text-[9px] font-black uppercase tracking-[0.3em] font-mono-display">Protocolo de Registro</span>
+      <div className={`relative z-30 px-5 pt-12 pb-4 shrink-0 border-b backdrop-blur-3xl ${isDark ? 'glass-dark border-brand-primary/20' : 'bg-white/80 border-brand-primary/20'}`}>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <button
+              onClick={() => setCapturedPhoto(null)}
+              className={`p-3 rounded-2xl border transition-all active:scale-90 ${isDark ? 'glass border-white/5 text-white/50 hover:text-white' : 'bg-gray-100 border-gray-200 text-gray-500 hover:text-gray-700'}`}
+            >
+              <ChevronLeft size={20} />
+            </button>
+            <div>
+              <div className="flex items-center gap-2 mb-1.5 opacity-60">
+                <Egg size={12} className="text-brand-primary animate-pulse" />
+                <span className={`text-[9px] font-black uppercase tracking-[0.3em] font-mono-display ${isDark ? 'text-white/60' : 'text-gray-500'}`}>Protocolo de Registro</span>
+              </div>
+              <p className={`text-lg font-black leading-none font-mono-display tracking-wider ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                {isIncubadora ? 'INCUBADORA' : 'NACEDORA'} <span className="holo-text">{machineLabel}</span>
+              </p>
             </div>
-            <p className="text-lg font-black text-white leading-none font-mono-display tracking-wider">
-              {isIncubadora ? 'INCUBADORA' : 'NACEDORA'} <span className="holo-text">{machineLabel}</span>
-            </p>
           </div>
+          <button onClick={toggleTheme} className={`p-3 rounded-2xl border transition-all active:scale-90 ${isDark ? 'glass border-white/5 text-white/50 hover:text-brand-primary' : 'bg-gray-100 border-gray-200 text-gray-500 hover:text-brand-primary'}`}>
+            {isDark ? <Sun size={18} /> : <Moon size={18} />}
+          </button>
         </div>
       </div>
 

@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useMachineStore, MachineType, Machine } from '../store/useMachineStore';
+import { useThemeStore } from '../store/useThemeStore';
 import {
   CheckCircle2, Clock, UploadCloud, Loader2, LogOut, Egg,
-  AlertTriangle, FileText, Camera, Zap, Activity, Cpu, Wifi
+  AlertTriangle, FileText, Camera, Zap, Activity, Cpu, Wifi, WifiOff, Sun, Moon
 } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -65,7 +66,7 @@ const ConfirmationModal = ({
 };
 
 /* ─────────────────────────────────────────────
-   Tarjeta de máquina futurista
+   Tarjeta de máquina futurista con imagen 3D
 ───────────────────────────────────────────── */
 const MachineCard = ({
   machine, onClick, onCameraClick
@@ -100,7 +101,7 @@ const MachineCard = ({
     <button
       onClick={onClick}
       disabled={machine.status === 'completed' && !isAlarm}
-      className={`relative rounded-2xl overflow-hidden flex flex-col p-3.5 transition-all active:scale-95 min-h-[130px] text-left tap-effect ${
+      className={`relative rounded-2xl overflow-hidden flex flex-col transition-all active:scale-95 min-h-[160px] text-left tap-effect ${
         isPending
           ? 'border border-white/8'
           : isAlarm
@@ -108,90 +109,109 @@ const MachineCard = ({
           : 'border border-green-500/20'
       }`}
       style={{
-        background: isPending
-          ? 'linear-gradient(135deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0.02) 100%)'
-          : isAlarm
-          ? 'linear-gradient(135deg, rgba(239,68,68,0.10) 0%, rgba(239,68,68,0.05) 100%)'
-          : 'linear-gradient(135deg, rgba(34,197,94,0.08) 0%, rgba(34,197,94,0.04) 100%)',
+        background: 'transparent',
       }}
     >
+      {/* Imagen de máquina real con efecto 3D */}
+      <div className="absolute inset-0">
+        <img
+          src="/imagen1.png"
+          alt={`Máquina ${machineCode}`}
+          className="w-full h-full object-cover"
+          style={{
+            filter: 'brightness(0.35) contrast(1.1)',
+            transform: 'perspective(600px) rotateX(2deg) scale(1.05)',
+          }}
+        />
+        {/* Overlay gradiente para contraste */}
+        <div
+          className="absolute inset-0"
+          style={{
+            background: 'linear-gradient(180deg, rgba(6,11,24,0.3) 0%, rgba(6,11,24,0.1) 40%, rgba(6,11,24,0.85) 100%)',
+          }}
+        />
+      </div>
+
       {/* Línea superior de color */}
       <div
-        className="absolute top-0 inset-x-0 h-0.5"
+        className="absolute top-0 inset-x-0 h-0.5 z-10"
         style={{
           background: isPending
-            ? 'linear-gradient(90deg, transparent, rgba(247,147,26,0.3), transparent)'
+            ? 'linear-gradient(90deg, transparent, rgba(247,147,26,0.6), transparent)'
             : isAlarm
-            ? 'linear-gradient(90deg, transparent, rgba(239,68,68,0.6), transparent)'
-            : 'linear-gradient(90deg, transparent, rgba(34,197,94,0.4), transparent)',
+            ? 'linear-gradient(90deg, transparent, rgba(239,68,68,0.8), transparent)'
+            : 'linear-gradient(90deg, transparent, rgba(34,197,94,0.6), transparent)',
         }}
       />
 
       {/* Glow de alarma pulsante */}
       {isAlarm && (
-        <div className="absolute inset-0 rounded-2xl pointer-events-none animate-pulse-glow"
-          style={{ boxShadow: 'inset 0 0 20px rgba(239,68,68,0.15)' }} />
+        <div className="absolute inset-0 rounded-2xl pointer-events-none z-10 animate-pulse-glow"
+          style={{ boxShadow: 'inset 0 0 20px rgba(239,68,68,0.25)' }} />
       )}
 
-      {/* Número + estado */}
-      <div className="flex items-start justify-between mb-2">
-        <div>
-          <span className={`text-3xl font-black leading-none machine-number ${
-            isPending ? 'text-white/60' : isAlarm ? 'text-red-400' : 'text-green-400'
-          }`}>{machineCode}</span>
-          <div className={`text-[7px] font-black uppercase tracking-widest mt-0.5 font-mono-display ${
-            isPending ? 'text-white/20' : isAlarm ? 'text-red-400/80' : 'text-green-400/80'
-          }`}>
-            {isPending ? '● PENDIENTE' : isAlarm ? '⚠ ALARMA' : '✓ NORMAL'}
+      {/* Contenido sobre la imagen */}
+      <div className="relative z-10 flex flex-col flex-1 p-3.5">
+        {/* Número + estado */}
+        <div className="flex items-start justify-between mb-2">
+          <div>
+            <span className={`text-3xl font-black leading-none machine-number ${
+              isPending ? 'text-white/80' : isAlarm ? 'text-red-300' : 'text-green-300'
+            }`} style={{ textShadow: '0 2px 8px rgba(0,0,0,0.8)' }}>{machineCode}</span>
+            <div className={`text-[7px] font-black uppercase tracking-widest mt-0.5 font-mono-display ${
+              isPending ? 'text-white/40' : isAlarm ? 'text-red-300/90' : 'text-green-300/90'
+            }`} style={{ textShadow: '0 1px 4px rgba(0,0,0,0.8)' }}>
+              {isPending ? '● PENDIENTE' : isAlarm ? '⚠ ALARMA' : '✓ NORMAL'}
+            </div>
           </div>
+
+          {/* Botón de acción */}
+          {isPending ? (
+            <button
+              type="button"
+              onClick={onCameraClick}
+              className="p-2 rounded-xl transition-all active:scale-90 glow-primary"
+              style={{ background: 'linear-gradient(135deg, #f7931a, #ffb800)' }}>
+              <Camera size={13} className="text-white" />
+            </button>
+          ) : (
+            <div className={`p-1.5 rounded-xl border ${
+              isAlarm ? 'bg-red-500/30 border-red-500/50' : 'bg-green-500/25 border-green-500/40'
+            }`} style={{ backdropFilter: 'blur(8px)' }}>
+              {isAlarm
+                ? <AlertTriangle size={12} className="text-red-300" strokeWidth={2.5} />
+                : <CheckCircle2 size={12} className="text-green-300" strokeWidth={2.5} />
+              }
+            </div>
+          )}
         </div>
 
-        {/* Botón de acción */}
-        {isPending ? (
-          <button
-            type="button"
-            onClick={onCameraClick}
-            className="p-2 rounded-xl transition-all active:scale-90 glow-primary"
-            style={{ background: 'linear-gradient(135deg, #f7931a, #ffb800)' }}>
-            <Camera size={13} className="text-white" />
-          </button>
-        ) : (
-          <div className={`p-1.5 rounded-xl border ${
-            isAlarm ? 'bg-red-500/20 border-red-500/40' : 'bg-green-500/15 border-green-500/30'
-          }`}>
-            {isAlarm
-              ? <AlertTriangle size={12} className="text-red-400" strokeWidth={2.5} />
-              : <CheckCircle2 size={12} className="text-green-400" strokeWidth={2.5} />
-            }
+        {/* Datos de temperatura */}
+        {machine.status === 'completed' && d && (
+          <div className="mt-auto pt-2.5 border-t grid grid-cols-2 gap-x-2"
+            style={{ borderColor: isPending ? 'rgba(255,255,255,0.1)' : isAlarm ? 'rgba(239,68,68,0.2)' : 'rgba(34,197,94,0.15)' }}>
+            {[
+              { label: label1, real: val1Real, sp: val1SP },
+              { label: label2, real: val2Real, sp: val2SP },
+            ].map(({ label, real, sp }) => (
+              <div key={label}>
+                <div className="text-[6px] font-black text-white/40 uppercase tracking-wider font-mono-display" style={{ textShadow: '0 1px 3px rgba(0,0,0,0.6)' }}>{label}</div>
+                <div className={`text-sm font-black leading-tight ${isAlarm ? 'text-red-200' : 'text-white/90'}`} style={{ textShadow: '0 2px 6px rgba(0,0,0,0.7)' }}>
+                  {real}°
+                  <span className="text-[8px] font-bold text-white/40 ml-0.5">/{sp}°</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Punto de estado para pendientes */}
+        {isPending && (
+          <div className="mt-auto">
+            <div className="text-[7px] text-white/40 font-bold" style={{ textShadow: '0 1px 3px rgba(0,0,0,0.6)' }}>Toca para registrar</div>
           </div>
         )}
       </div>
-
-      {/* Datos de temperatura */}
-      {machine.status === 'completed' && d && (
-        <div className="mt-auto pt-2.5 border-t grid grid-cols-2 gap-x-2"
-          style={{ borderColor: isPending ? 'rgba(255,255,255,0.05)' : isAlarm ? 'rgba(239,68,68,0.15)' : 'rgba(34,197,94,0.1)' }}>
-          {[
-            { label: label1, real: val1Real, sp: val1SP },
-            { label: label2, real: val2Real, sp: val2SP },
-          ].map(({ label, real, sp }) => (
-            <div key={label}>
-              <div className="text-[6px] font-black text-white/20 uppercase tracking-wider font-mono-display">{label}</div>
-              <div className={`text-sm font-black leading-tight ${isAlarm ? 'text-red-300' : 'text-white/75'}`}>
-                {real}°
-                <span className="text-[8px] font-bold text-white/25 ml-0.5">/{sp}°</span>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Punto de estado para pendientes */}
-      {isPending && (
-        <div className="mt-auto">
-          <div className="text-[7px] text-white/20 font-bold">Toca para registrar</div>
-        </div>
-      )}
     </button>
   );
 };
@@ -207,6 +227,11 @@ export default function DashboardScreen() {
   const [syncPhase, setSyncPhase] = useState<'uploading' | 'database' | 'pdf'>('uploading');
   const [reportUploaderMachine, setReportUploaderMachine] = useState<Machine | null>(null);
   const [systemTime, setSystemTime] = useState('');
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+
+  const theme = useThemeStore(state => state.theme);
+  const toggleTheme = useThemeStore(state => state.toggleTheme);
+  const isDark = theme === 'dark';
 
   const machines = useMachineStore(state => state.machines);
   const setActiveMachine = useMachineStore(state => state.setActiveMachine);
@@ -224,6 +249,21 @@ export default function DashboardScreen() {
     tick();
     const interval = setInterval(tick, 1000);
     return () => clearInterval(interval);
+  }, []);
+
+  // Online/offline detection
+  useEffect(() => {
+    const handleOnline = () => {
+      setIsOnline(true);
+      flushPendingSyncs();
+    };
+    const handleOffline = () => setIsOnline(false);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
   }, []);
 
   // Nota: El polling de sesión (/api/session) ya lo gestiona App.tsx cada segundo.
@@ -359,7 +399,13 @@ export default function DashboardScreen() {
     } catch (err) { console.error('PDF Error:', err); }
   };
 
-  const handleSyncAttempt = () => { allCompleted ? executeSync() : setShowConfirm(true); };
+  const handleSyncAttempt = () => {
+    if (!isOnline) {
+      alert('Sin conexión. Los datos se guardan localmente y se sincronizarán cuando haya conexión.');
+      // Still allow sync - data is saved locally and will sync when online
+    }
+    allCompleted ? executeSync() : setShowConfirm(true);
+  };
 
   const executeSync = async () => {
     setShowConfirm(false); setIsSyncing(true); setSyncPhase('uploading');
@@ -392,6 +438,24 @@ export default function DashboardScreen() {
         })
       );
       setSyncPhase('database');
+
+      // Queue data locally if offline, try to sync if online
+      if (!isOnline) {
+        // Save to localStorage for later sync
+        const pendingSync = JSON.parse(localStorage.getItem('incubant-pending-sync') || '[]');
+        pendingSync.push({
+          userId: currentUser?.id,
+          machines: machinesWithPhotos,
+          timestamp: new Date().toISOString()
+        });
+        localStorage.setItem('incubant-pending-sync', JSON.stringify(pendingSync));
+        setSyncPhase('pdf');
+        await generatePDF(machinesWithPhotos);
+        setSyncSuccess(true);
+        setTimeout(() => { setSyncSuccess(false); resetHourlyStatus(); }, 2000);
+        return;
+      }
+
       const response = await apiFetch(getApiUrl('/api/sync-hourly'), {
         method: 'POST',
         body: JSON.stringify({ userId: currentUser?.id, machines: machinesWithPhotos })
@@ -401,10 +465,42 @@ export default function DashboardScreen() {
       await generatePDF(machinesWithPhotos);
       setSyncSuccess(true);
       setTimeout(() => { setSyncSuccess(false); resetHourlyStatus(); }, 2000);
+
+      // Try to flush pending offline syncs
+      await flushPendingSyncs();
     } catch (error) {
       console.error('Error sincronización:', error);
-      alert('Error al sincronizar. Verifica tu conexión.');
+      // If sync fails, queue for later
+      const pendingSync = JSON.parse(localStorage.getItem('incubant-pending-sync') || '[]');
+      pendingSync.push({
+        userId: currentUser?.id,
+        machines,
+        timestamp: new Date().toISOString()
+      });
+      localStorage.setItem('incubant-pending-sync', JSON.stringify(pendingSync));
+      alert('Error al sincronizar. Los datos se guardaron localmente y se enviarán cuando haya conexión.');
     } finally { setIsSyncing(false); }
+  };
+
+  const flushPendingSyncs = async () => {
+    const pendingSync = JSON.parse(localStorage.getItem('incubant-pending-sync') || '[]');
+    if (pendingSync.length === 0) return;
+
+    const remaining: any[] = [];
+    for (const batch of pendingSync) {
+      try {
+        const response = await apiFetch(getApiUrl('/api/sync-hourly'), {
+          method: 'POST',
+          body: JSON.stringify({ userId: batch.userId, machines: batch.machines })
+        });
+        if (!response.ok) {
+          remaining.push(batch);
+        }
+      } catch {
+        remaining.push(batch);
+      }
+    }
+    localStorage.setItem('incubant-pending-sync', JSON.stringify(remaining));
   };
 
   /* ── Overlay de sincronización futurista ── */
@@ -415,20 +511,22 @@ export default function DashboardScreen() {
   };
 
   return (
-    <div className="flex flex-col h-full relative overflow-hidden" style={{ background: '#060b18' }}>
+    <div className={`flex flex-col h-full relative overflow-hidden ${isDark ? '' : 'bg-gray-50'}`} style={isDark ? { background: '#060b18' } : {}}>
 
       {/* ── Fondo futurista ── */}
-      <div className="absolute inset-0 pointer-events-none overflow-hidden">
-        <div className="absolute inset-0 circuit-bg opacity-40" />
-        <div
-          className="absolute -top-20 -right-20 w-72 h-72 rounded-full"
-          style={{ background: 'radial-gradient(circle, rgba(247,147,26,0.08) 0%, transparent 65%)' }}
-        />
-        <div
-          className="absolute bottom-32 -left-16 w-56 h-56 rounded-full"
-          style={{ background: 'radial-gradient(circle, rgba(0,212,255,0.04) 0%, transparent 65%)' }}
-        />
-      </div>
+      {isDark && (
+        <div className="absolute inset-0 pointer-events-none overflow-hidden">
+          <div className="absolute inset-0 circuit-bg opacity-40" />
+          <div
+            className="absolute -top-20 -right-20 w-72 h-72 rounded-full"
+            style={{ background: 'radial-gradient(circle, rgba(247,147,26,0.08) 0%, transparent 65%)' }}
+          />
+          <div
+            className="absolute bottom-32 -left-16 w-56 h-56 rounded-full"
+            style={{ background: 'radial-gradient(circle, rgba(0,212,255,0.04) 0%, transparent 65%)' }}
+          />
+        </div>
+      )}
 
       {/* ── Overlay de Sincronización ── */}
       {(isSyncing || syncSuccess) && (
@@ -517,12 +615,24 @@ export default function DashboardScreen() {
           </div>
           <div className="flex items-center gap-2">
             {/* Reloj */}
-            <div className="glass rounded-xl px-2.5 py-1.5 border border-white/6 flex items-center gap-1.5">
+            <div className={`rounded-xl px-2.5 py-1.5 border flex items-center gap-1.5 ${isDark ? 'glass border-white/6' : 'bg-white border-gray-200'}`}>
               <Clock size={9} className="text-brand-primary" />
-              <span className="text-[9px] font-black text-white/50 font-mono-display">{systemTime}</span>
+              <span className={`text-[9px] font-black font-mono-display ${isDark ? 'text-white/50' : 'text-gray-600'}`}>{systemTime}</span>
             </div>
+            {/* Online/Offline */}
+            <div className={`rounded-xl px-2 py-1.5 border flex items-center gap-1 ${isDark ? 'glass border-white/6' : 'bg-white border-gray-200'}`}>
+              {isOnline ? <Wifi size={9} className="text-green-400" /> : <WifiOff size={9} className="text-red-400" />}
+              <span className={`text-[7px] font-mono uppercase tracking-wider ${isOnline ? 'text-green-400/60' : 'text-red-400/60'}`}>
+                {isOnline ? 'ONLINE' : 'OFFLINE'}
+              </span>
+            </div>
+            {/* Theme toggle */}
+            <button onClick={toggleTheme}
+              className={`p-2 rounded-xl border transition-colors active:scale-95 ${isDark ? 'glass border-white/6 text-white/30 hover:text-brand-primary' : 'bg-white border-gray-200 text-gray-400 hover:text-brand-primary'}`}>
+              {isDark ? <Sun size={16} /> : <Moon size={16} />}
+            </button>
             <button onClick={handleLogout}
-              className="p-2.5 glass rounded-xl border border-white/6 text-white/30 hover:text-red-400 transition-colors active:scale-95">
+              className={`p-2.5 rounded-xl border transition-colors active:scale-95 ${isDark ? 'glass border-white/6 text-white/30 hover:text-red-400' : 'bg-white border-gray-200 text-gray-400 hover:text-red-400'}`}>
               <LogOut size={16} />
             </button>
           </div>

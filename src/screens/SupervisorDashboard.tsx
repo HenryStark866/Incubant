@@ -2,8 +2,10 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   Activity, AlertTriangle, Clock, Users, LayoutDashboard,
   Settings, ChevronDown, X, Image as ImageIcon, CheckCircle2,
-  Download, Loader2, Egg, Menu, RefreshCw, LogOut, Camera, FileText, FolderOpen
+  Download, Loader2, Egg, Menu, RefreshCw, LogOut, Camera, FileText, FolderOpen,
+  Sun, Moon, Wifi, WifiOff
 } from 'lucide-react';
+import { useThemeStore } from '../store/useThemeStore';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
 } from 'recharts';
@@ -19,6 +21,11 @@ export default function SupervisorDashboard() {
   const [selectedMachine, setSelectedMachine] = useState<any | null>(null);
   const [chartFilter, setChartFilter] = useState('Ver: Planta Completa');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+
+  const theme = useThemeStore(state => state.theme);
+  const toggleTheme = useThemeStore(state => state.toggleTheme);
+  const isDark = theme === 'dark';
 
   const [machinesData, setMachinesData] = useState<any[]>([]);
   const [trendsData, setTrendsData] = useState<any[]>([]);
@@ -62,19 +69,23 @@ export default function SupervisorDashboard() {
   const [previousReportCount, setPreviousReportCount] = useState<number | null>(null);
 
   useEffect(() => {
-    const notifyNewReport = async () => {
-      const { showAppNotification } = await import('../utils/notifications');
-      await showAppNotification('¡Incubant: Nuevo Reporte!', {
-        body: `Un operario acaba de sincronizar datos de su rutina.`,
-        icon: '/pwa-192x192.png'
-      });
-    };
-
     if (previousReportCount !== null && reportCount > previousReportCount) {
-      void notifyNewReport();
+      console.log('[Dashboard] Nuevo reporte detectado:', reportCount);
     }
     setPreviousReportCount(reportCount);
   }, [reportCount]);
+
+  // Online/offline detection
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
 
   // Reloj y reglas de turno en tiempo real
   const [currentTime, setCurrentTime] = useState(new Date());
@@ -490,7 +501,7 @@ export default function SupervisorDashboard() {
   }
 
   return (
-    <div className="relative flex h-screen bg-gray-50 text-brand-dark font-sans overflow-hidden">
+    <div className={`relative flex h-screen font-sans overflow-hidden ${isDark ? 'bg-[#060b18] text-white' : 'bg-gray-50 text-brand-dark'}`}>
       {isSidebarOpen && (
         <button
           type="button"
@@ -500,23 +511,22 @@ export default function SupervisorDashboard() {
         />
       )}
 
-      <div className={`fixed inset-y-0 left-0 z-40 w-72 bg-white border-r border-gray-100 flex flex-col shadow-xl transform transition-transform duration-300 lg:static lg:translate-x-0 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
-        }`}>
-        <div className="p-6 sm:p-8 flex flex-col items-center gap-4 border-b border-gray-50 bg-brand-secondary/5">
+      <div className={`fixed inset-y-0 left-0 z-40 w-72 flex flex-col shadow-xl transform transition-transform duration-300 lg:static lg:translate-x-0 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'} ${isDark ? 'bg-[#0a0f20] border-r border-white/5' : 'bg-white border-r border-gray-100'}`}>
+        <div className={`p-6 sm:p-8 flex flex-col items-center gap-4 border-b ${isDark ? 'border-white/5 bg-white/[0.02]' : 'border-gray-50 bg-brand-secondary/5'}`}>
           <div className="flex w-full items-start justify-between gap-4">
             <div className="flex items-center gap-2 mb-2">
               <div className="bg-brand-primary p-2 rounded-xl text-white shadow-md">
                 <Egg size={24} />
               </div>
               <div className="flex flex-col">
-                <span className="text-2xl font-black text-brand-dark tracking-tight leading-none">INCUBANT</span>
+                <span className={`text-2xl font-black tracking-tight leading-none ${isDark ? 'text-white' : 'text-brand-dark'}`}>INCUBANT</span>
                 <span className="text-[0.5rem] font-bold text-brand-gray tracking-widest uppercase mt-0.5">Antioqueña de Incubación S.A.S.</span>
               </div>
             </div>
             <button
               type="button"
               onClick={() => setIsSidebarOpen(false)}
-              className="lg:hidden p-2 rounded-xl bg-white border border-gray-100 text-brand-gray"
+              className={`lg:hidden p-2 rounded-xl ${isDark ? 'bg-white/5 border border-white/10 text-white/60' : 'bg-white border border-gray-100 text-brand-gray'}`}
             >
               <X size={18} />
             </button>
@@ -532,7 +542,7 @@ export default function SupervisorDashboard() {
         <nav className="flex-1 p-6 space-y-3 overflow-y-auto">
           <button
             onClick={() => handleTabChange('dashboard')}
-            className={`w-full flex items-center gap-4 px-5 py-4 rounded-2xl transition-all ${activeTab === 'dashboard' ? 'bg-brand-primary text-white shadow-lg shadow-brand-primary/30 active:scale-95' : 'hover:bg-gray-50 text-brand-gray font-semibold'
+            className={`w-full flex items-center gap-4 px-5 py-4 rounded-2xl transition-all ${activeTab === 'dashboard' ? 'bg-brand-primary text-white shadow-lg shadow-brand-primary/30 active:scale-95' : `${isDark ? 'hover:bg-white/5 text-white/50' : 'hover:bg-gray-50 text-brand-gray'} font-semibold`
               }`}
           >
             <LayoutDashboard size={20} />
@@ -540,7 +550,7 @@ export default function SupervisorDashboard() {
           </button>
           <button
             onClick={() => handleTabChange('personal')}
-            className={`w-full flex items-center gap-4 px-5 py-4 rounded-2xl transition-all ${activeTab === 'personal' ? 'bg-brand-primary text-white shadow-lg shadow-brand-primary/30 active:scale-95' : 'hover:bg-gray-50 text-brand-gray font-semibold'
+            className={`w-full flex items-center gap-4 px-5 py-4 rounded-2xl transition-all ${activeTab === 'personal' ? 'bg-brand-primary text-white shadow-lg shadow-brand-primary/30 active:scale-95' : `${isDark ? 'hover:bg-white/5 text-white/50' : 'hover:bg-gray-50 text-brand-gray'} font-semibold`
               }`}
           >
             <Users size={20} />
@@ -548,7 +558,7 @@ export default function SupervisorDashboard() {
           </button>
           <button
             onClick={() => handleTabChange('horarios')}
-            className={`w-full flex items-center gap-4 px-5 py-4 rounded-2xl transition-all ${activeTab === 'horarios' ? 'bg-brand-primary text-white shadow-lg shadow-brand-primary/30 active:scale-95' : 'hover:bg-gray-50 text-brand-gray font-semibold'
+            className={`w-full flex items-center gap-4 px-5 py-4 rounded-2xl transition-all ${activeTab === 'horarios' ? 'bg-brand-primary text-white shadow-lg shadow-brand-primary/30 active:scale-95' : `${isDark ? 'hover:bg-white/5 text-white/50' : 'hover:bg-gray-50 text-brand-gray'} font-semibold`
               }`}
           >
             <Clock size={20} />
@@ -595,7 +605,7 @@ export default function SupervisorDashboard() {
         <div className="p-6 border-t border-gray-50">
           <button
             onClick={() => handleTabChange('settings')}
-            className={`w-full flex items-center gap-4 px-5 py-4 rounded-2xl transition-all ${activeTab === 'settings' ? 'bg-brand-primary text-white shadow-lg shadow-brand-primary/30 active:scale-95' : 'hover:bg-gray-50 text-brand-gray font-semibold'
+            className={`w-full flex items-center gap-4 px-5 py-4 rounded-2xl transition-all ${activeTab === 'settings' ? 'bg-brand-primary text-white shadow-lg shadow-brand-primary/30 active:scale-95' : `${isDark ? 'hover:bg-white/5 text-white/50' : 'hover:bg-gray-50 text-brand-gray'} font-semibold`
               }`}
           >
             <Settings size={20} />
@@ -793,28 +803,28 @@ export default function SupervisorDashboard() {
 
         {/* Evidences Modal removed since it now redirects directly to Google Drive */}
 
-        <header className="bg-white border-b border-gray-100 px-4 sm:px-6 lg:px-8 py-2.5 shrink-0 z-10">
+        <header className={`px-4 sm:px-6 lg:px-8 py-2.5 shrink-0 z-10 ${isDark ? 'bg-[#0a0f20] border-b border-white/5' : 'bg-white border-b border-gray-100'}`}>
           <div className="flex flex-col gap-2">
             {/* Row 1: Supervisor info + Actions */}
             <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-3">
-                <button
-                  type="button"
-                  onClick={() => setIsSidebarOpen(true)}
-                  className="lg:hidden p-2 rounded-xl bg-gray-50 border border-gray-100 text-brand-dark"
-                >
-                  <Menu size={18} />
-                </button>
-                <div className="flex items-center gap-2.5">
-                  <div className="w-9 h-9 rounded-lg bg-brand-primary/10 flex items-center justify-center border border-brand-primary/20">
-                    <Users size={18} className="text-brand-primary" />
-                  </div>
-                  <div className="hidden sm:block">
-                    <p className="text-[8px] text-brand-gray font-black uppercase tracking-widest">Supervisor</p>
-                    <p className="text-xs font-black text-brand-dark leading-none">{currentUser?.name || 'Sin responsable'}</p>
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setIsSidebarOpen(true)}
+                    className={`lg:hidden p-2 rounded-xl ${isDark ? 'bg-white/5 border border-white/10 text-white' : 'bg-gray-50 border border-gray-100 text-brand-dark'}`}
+                  >
+                    <Menu size={18} />
+                  </button>
+                  <div className="flex items-center gap-2.5">
+                    <div className={`w-9 h-9 rounded-lg flex items-center justify-center border ${isDark ? 'bg-brand-primary/10 border-brand-primary/20' : 'bg-brand-primary/10 border-brand-primary/20'}`}>
+                      <Users size={18} className="text-brand-primary" />
+                    </div>
+                    <div className="hidden sm:block">
+                      <p className={`text-[8px] font-black uppercase tracking-widest ${isDark ? 'text-white/30' : 'text-brand-gray'}`}>Supervisor</p>
+                      <p className={`text-xs font-black leading-none ${isDark ? 'text-white' : 'text-brand-dark'}`}>{currentUser?.name || 'Sin responsable'}</p>
+                    </div>
                   </div>
                 </div>
-              </div>
 
               {/* All actions in one row */}
               <div className="flex items-center gap-1.5 flex-wrap justify-end">
@@ -836,6 +846,22 @@ export default function SupervisorDashboard() {
                   <span className="hidden sm:inline">PDF</span>
                 </button>
 
+                {/* Online/Offline */}
+                <div className={`rounded-lg px-2 py-1.5 flex items-center gap-1.5 ${isOnline ? 'bg-green-50 border border-green-100' : 'bg-red-50 border border-red-100'}`}>
+                  {isOnline ? <Wifi className="text-green-500" size={12} /> : <WifiOff className="text-red-500" size={12} />}
+                  <span className={`text-[10px] font-black leading-none ${isOnline ? 'text-green-700' : 'text-red-700'}`}>
+                    {isOnline ? 'ON' : 'OFF'}
+                  </span>
+                </div>
+
+                {/* Theme toggle */}
+                <button
+                  onClick={toggleTheme}
+                  className={`px-2.5 py-1.5 rounded-lg flex items-center gap-1.5 text-[10px] font-black transition-all active:scale-95 whitespace-nowrap ${isDark ? 'bg-white/10 hover:bg-white/20 text-white' : 'bg-gray-100 hover:bg-gray-200 text-gray-600'}`}
+                >
+                  {isDark ? <Sun size={12} /> : <Moon size={12} />}
+                </button>
+
                 {/* Report count */}
                 <div className="bg-green-50 border border-green-100 rounded-lg px-2 py-1.5 flex items-center gap-1.5">
                   <CheckCircle2 className="text-green-500" size={12} />
@@ -854,22 +880,22 @@ export default function SupervisorDashboard() {
             </div>
 
             {/* Row 2: Shift monitor card - Full width */}
-            <div className="bg-gradient-to-r from-brand-primary/5 via-brand-primary/10 to-brand-secondary/5 border border-brand-primary/20 rounded-xl px-3 py-2 flex items-center gap-3">
+            <div className={`rounded-xl px-3 py-2 flex items-center gap-3 ${isDark ? 'bg-brand-primary/5 border border-brand-primary/20' : 'bg-gradient-to-r from-brand-primary/5 via-brand-primary/10 to-brand-secondary/5 border border-brand-primary/20'}`}>
               {/* Clock + Live */}
               <div className="flex flex-col items-center gap-0.5 flex-shrink-0">
                 <div className="relative">
                   <div className="p-2 bg-brand-primary rounded-lg text-white shadow-md">
                     <Clock size={16} className="animate-pulse" />
                   </div>
-                  <div className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-green-500 rounded-full border-2 border-white"></div>
+                  <div className={`absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full border-2 ${isOnline ? 'bg-green-500 border-white' : 'bg-red-500 border-white'}`}></div>
                 </div>
               </div>
 
               {/* Info grid */}
               <div className="flex-1 min-w-0 grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-1">
-                {/* Turno */}
+                {/* Turno actual */}
                 <div>
-                  <p className="text-[7px] text-brand-gray uppercase font-black tracking-wider leading-none mb-0.5">Turno</p>
+                  <p className={`text-[7px] uppercase font-black tracking-wider leading-none mb-0.5 ${isDark ? 'text-white/30' : 'text-brand-gray'}`}>Turno Actual</p>
                   <span className="px-1.5 py-0.5 bg-brand-primary text-white text-[8px] font-black uppercase rounded-sm">
                     {currentShiftName}
                   </span>
@@ -877,55 +903,38 @@ export default function SupervisorDashboard() {
 
                 {/* Hora */}
                 <div>
-                  <p className="text-[7px] text-brand-gray uppercase font-black tracking-wider leading-none mb-0.5">Hora</p>
-                  <p className="text-xs font-black text-brand-dark font-mono-display tabular-nums leading-none">
+                  <p className={`text-[7px] uppercase font-black tracking-wider leading-none mb-0.5 ${isDark ? 'text-white/30' : 'text-brand-gray'}`}>Hora</p>
+                  <p className={`text-xs font-black font-mono-display tabular-nums leading-none ${isDark ? 'text-white' : 'text-brand-dark'}`}>
                     {currentTime.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
                   </p>
                 </div>
 
-                {/* Responsable del turno */}
+                {/* Usuarios en línea */}
                 <div>
-                  <p className="text-[7px] text-brand-gray uppercase font-black tracking-wider leading-none mb-0.5">Responsable</p>
-                  <p className="text-[10px] font-black text-brand-primary truncate leading-none">
-                    {responsibleOperator || (activeOperatorsList !== 'N/A' ? activeOperatorsList.split(' | ')[0]?.replace(' (Responsable)', '') : '—')}
+                  <p className={`text-[7px] uppercase font-black tracking-wider leading-none mb-0.5 ${isDark ? 'text-white/30' : 'text-brand-gray'}`}>Usuarios en Línea</p>
+                  <p className={`text-[10px] font-black truncate leading-none ${isDark ? 'text-brand-primary' : 'text-brand-primary'}`}>
+                    {onlineOperators.length > 0
+                      ? onlineOperators.map((op: any) => op.name.split(' ')[0]).join(', ')
+                      : 'Sin personal activo'}
                   </p>
                 </div>
 
                   {/* Cierres de turno */}
                 <div>
-                  <p className="text-[7px] text-brand-gray uppercase font-black tracking-wider leading-none mb-0.5">Reportes turno</p>
+                  <p className={`text-[7px] uppercase font-black tracking-wider leading-none mb-0.5 ${isDark ? 'text-white/30' : 'text-brand-gray'}`}>Reportes turno</p>
                   <div className="flex items-center gap-1.5">
-                    <span className="text-lg font-black text-brand-primary leading-none">{shiftClosingCount}</span>
-                    <span className="text-[8px] text-brand-gray font-medium leading-none">
+                    <span className={`text-lg font-black leading-none ${isDark ? 'text-brand-primary' : 'text-brand-primary'}`}>{shiftClosingCount}</span>
+                    <span className={`text-[8px] font-medium leading-none ${isDark ? 'text-white/40' : 'text-brand-gray'}`}>
                       {shiftClosingCount === 1 ? 'reporte' : 'reportes'}
                     </span>
                   </div>
                 </div>
               </div>
-
-              {/* Other online operators */}
-              {(onlineOperators.length > 0 || activeOperatorsList.includes('|')) && (
-                <div className="mt-1.5 pt-1.5 border-t border-brand-primary/10 flex items-center gap-2 flex-wrap">
-                  <span className="text-[7px] text-brand-gray uppercase font-black tracking-wider">En línea:</span>
-                  {activeOperatorsList.split(' | ').filter(p => !p.includes('Responsable')).map((part, i) => (
-                    <span key={i} className="text-[8px] text-brand-dark font-medium">
-                      {part.replace(' (Asignado)', '').replace(' (Online)', '')}
-                      <span className="text-brand-gray ml-0.5">{part.includes('Asignado') ? '(Asig.)' : part.includes('Online') ? '(On)' : ''}</span>
-                    </span>
-                  ))}
-                  {onlineOperators.map((op: any, i: number) => (
-                    <span key={`online-${i}`} className="text-[8px] text-green-600 font-medium flex items-center gap-0.5">
-                      <span className="w-1.5 h-1.5 rounded-full bg-green-500 inline-block"></span>
-                      {op.name.split(' ')[0]}
-                    </span>
-                  ))}
-                </div>
-              )}
             </div>
           </div>
         </header>
 
-        <div className="flex-1 overflow-auto p-4 sm:p-6 lg:p-10 bg-gray-50/30">
+        <div className={`flex-1 overflow-auto p-4 sm:p-6 lg:p-10 ${isDark ? 'bg-[#060b18]' : 'bg-gray-50/30'}`}>
           {activeTab === 'dashboard' ? (
             <div className="space-y-8 lg:space-y-10">
               <section>
@@ -936,8 +945,8 @@ export default function SupervisorDashboard() {
                   </h2>
                 </div>
 
-                <div className="bg-white border border-gray-100 rounded-3xl p-5 sm:p-8 shadow-sm">
-                  <div className="mb-6 flex flex-wrap gap-4 sm:gap-6 text-[10px] font-black uppercase tracking-widest text-brand-gray">
+                <div className={`rounded-3xl p-5 sm:p-8 shadow-sm ${isDark ? 'bg-[#0a0f20] border border-white/5' : 'bg-white border border-gray-100'}`}>
+                  <div className={`mb-6 flex flex-wrap gap-4 sm:gap-6 text-[10px] font-black uppercase tracking-widest ${isDark ? 'text-white/40' : 'text-brand-gray'}`}>
                     <div className="flex items-center gap-2 sm:pr-4 sm:border-r sm:border-gray-100"><span className="w-3 h-3 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.4)]"></span> Operación OK</div>
                     <div className="flex items-center gap-2 sm:pr-4 sm:border-r sm:border-gray-100"><span className="w-3 h-3 rounded-full bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.4)]"></span> Alarma Crítica</div>
                     <div className="flex items-center gap-2"><span className="w-3 h-3 rounded-full bg-gray-300"></span> Fuera de Línea</div>
@@ -945,7 +954,7 @@ export default function SupervisorDashboard() {
 
                   <div className="space-y-8 sm:space-y-10">
                     <div>
-                      <h3 className="text-xs font-black text-brand-gray uppercase tracking-[0.2em] mb-4 flex items-center gap-2 opacity-60">
+                      <h3 className={`text-xs font-black uppercase tracking-[0.2em] mb-4 flex items-center gap-2 ${isDark ? 'text-white/40' : 'text-brand-gray opacity-60'}`}>
                         <div className="w-4 h-[2px] bg-brand-primary"></div>
                         Incubadoras (Planta A)
                       </h3>
@@ -954,20 +963,40 @@ export default function SupervisorDashboard() {
                           <button
                             key={machine.id}
                             onClick={() => setSelectedMachine(machine)}
-                            className={`p-4 rounded-2xl border-2 flex flex-col items-center justify-center gap-1 transition-all hover:scale-105 active:scale-95 shadow-sm ${machine.status === 'alarm' ? 'bg-red-50 border-red-500/50 text-red-600' :
-                                machine.status === 'maintenance' ? 'bg-gray-50 border-gray-200 text-gray-400' :
-                                  'bg-white border-brand-primary/10 hover:border-brand-primary text-brand-dark'
+                            className={`relative p-4 rounded-2xl border-2 flex flex-col items-center justify-center gap-1 transition-all hover:scale-105 active:scale-95 overflow-hidden shadow-sm ${machine.status === 'alarm' ? 'border-red-500/50' :
+                                machine.status === 'maintenance' ? `${isDark ? 'border-white/10' : 'border-gray-200'}` :
+                                  `${isDark ? 'border-brand-primary/10 hover:border-brand-primary' : 'border-brand-primary/10 hover:border-brand-primary'}`
                               }`}
+                            style={{ minHeight: '100px' }}
                           >
-                            <span className="font-black text-xs">{machine.name.replace('Incubadora ', '')}</span>
-                            <span className={`text-[10px] font-bold ${machine.status === 'alarm' ? 'text-red-500' : 'text-brand-primary'}`}>{machine.temp}°F</span>
+                            {/* Imagen de fondo con efecto 3D */}
+                            <div className="absolute inset-0">
+                              <img
+                                src="/imagen1.png"
+                                alt={machine.name}
+                                className="w-full h-full object-cover"
+                                style={{
+                                  filter: machine.status === 'alarm' ? 'brightness(0.3) saturate(1.5) hue-rotate(-30deg)' : machine.status === 'maintenance' ? 'brightness(0.2) grayscale(0.8)' : 'brightness(0.3) saturate(1.2)',
+                                  transform: 'perspective(500px) rotateX(3deg) scale(1.1)',
+                                }}
+                              />
+                              <div className="absolute inset-0" style={{
+                                background: machine.status === 'alarm'
+                                  ? 'linear-gradient(180deg, rgba(239,68,68,0.15) 0%, rgba(6,11,24,0.7) 100%)'
+                                  : machine.status === 'maintenance'
+                                  ? 'linear-gradient(180deg, rgba(100,100,100,0.1) 0%, rgba(6,11,24,0.7) 100%)'
+                                  : 'linear-gradient(180deg, rgba(247,147,26,0.08) 0%, rgba(6,11,24,0.7) 100%)',
+                              }} />
+                            </div>
+                            <span className={`relative z-10 font-black text-xs ${machine.status === 'alarm' ? 'text-red-300' : machine.status === 'maintenance' ? 'text-white/30' : isDark ? 'text-white' : 'text-white'}`} style={{ textShadow: '0 2px 6px rgba(0,0,0,0.8)' }}>{machine.name.replace('Incubadora ', '')}</span>
+                            <span className={`relative z-10 text-[10px] font-bold ${machine.status === 'alarm' ? 'text-red-400' : 'text-brand-primary'}`} style={{ textShadow: '0 1px 4px rgba(0,0,0,0.7)' }}>{machine.temp}°F</span>
                           </button>
                         ))}
                       </div>
                     </div>
 
                     <div>
-                      <h3 className="text-xs font-black text-brand-gray uppercase tracking-[0.2em] mb-4 flex items-center gap-2 opacity-60">
+                      <h3 className={`text-xs font-black uppercase tracking-[0.2em] mb-4 flex items-center gap-2 ${isDark ? 'text-white/40' : 'text-brand-gray opacity-60'}`}>
                         <div className="w-4 h-[2px] bg-brand-primary"></div>
                         Nacedoras (Planta B)
                       </h3>
@@ -976,13 +1005,32 @@ export default function SupervisorDashboard() {
                           <button
                             key={machine.id}
                             onClick={() => setSelectedMachine(machine)}
-                            className={`p-4 rounded-2xl border-2 flex flex-col items-center justify-center gap-1 transition-all hover:scale-105 active:scale-95 shadow-sm ${machine.status === 'alarm' ? 'bg-red-50 border-red-500/50 text-red-600' :
-                                machine.status === 'maintenance' ? 'bg-gray-50 border-gray-200 text-gray-400' :
-                                  'bg-white border-brand-primary/10 hover:border-brand-primary text-brand-dark'
+                            className={`relative p-4 rounded-2xl border-2 flex flex-col items-center justify-center gap-1 transition-all hover:scale-105 active:scale-95 overflow-hidden shadow-sm ${machine.status === 'alarm' ? 'border-red-500/50' :
+                                machine.status === 'maintenance' ? `${isDark ? 'border-white/10' : 'border-gray-200'}` :
+                                  `${isDark ? 'border-brand-primary/10 hover:border-brand-primary' : 'border-brand-primary/10 hover:border-brand-primary'}`
                               }`}
+                            style={{ minHeight: '100px' }}
                           >
-                            <span className="font-black text-xs">{machine.name.replace('Nacedora ', '')}</span>
-                            <span className={`text-[10px] font-bold ${machine.status === 'alarm' ? 'text-red-500' : 'text-brand-primary'}`}>{machine.temp}°F</span>
+                            <div className="absolute inset-0">
+                              <img
+                                src="/imagen1.png"
+                                alt={machine.name}
+                                className="w-full h-full object-cover"
+                                style={{
+                                  filter: machine.status === 'alarm' ? 'brightness(0.3) saturate(1.5) hue-rotate(-30deg)' : machine.status === 'maintenance' ? 'brightness(0.2) grayscale(0.8)' : 'brightness(0.3) saturate(1.2)',
+                                  transform: 'perspective(500px) rotateX(3deg) scale(1.1)',
+                                }}
+                              />
+                              <div className="absolute inset-0" style={{
+                                background: machine.status === 'alarm'
+                                  ? 'linear-gradient(180deg, rgba(239,68,68,0.15) 0%, rgba(6,11,24,0.7) 100%)'
+                                  : machine.status === 'maintenance'
+                                  ? 'linear-gradient(180deg, rgba(100,100,100,0.1) 0%, rgba(6,11,24,0.7) 100%)'
+                                  : 'linear-gradient(180deg, rgba(247,147,26,0.08) 0%, rgba(6,11,24,0.7) 100%)',
+                              }} />
+                            </div>
+                            <span className={`relative z-10 font-black text-xs ${machine.status === 'alarm' ? 'text-red-300' : machine.status === 'maintenance' ? 'text-white/30' : isDark ? 'text-white' : 'text-white'}`} style={{ textShadow: '0 2px 6px rgba(0,0,0,0.8)' }}>{machine.name.replace('Nacedora ', '')}</span>
+                            <span className={`relative z-10 text-[10px] font-bold ${machine.status === 'alarm' ? 'text-red-400' : 'text-brand-primary'}`} style={{ textShadow: '0 1px 4px rgba(0,0,0,0.7)' }}>{machine.temp}°F</span>
                           </button>
                         ))}
                       </div>
@@ -1014,7 +1062,7 @@ export default function SupervisorDashboard() {
                   </div>
                 </div>
 
-                <div className="bg-white border border-gray-100 rounded-3xl p-4 sm:p-6 lg:p-10 h-[360px] sm:h-[450px] shadow-sm relative">
+                <div className={`rounded-3xl p-4 sm:p-6 lg:p-10 h-[360px] sm:h-[450px] shadow-sm relative ${isDark ? 'bg-[#0a0f20] border border-white/5' : 'bg-white border border-gray-100'}`}>
                   <ResponsiveContainer width="100%" height="100%">
                     <LineChart data={trendsData} margin={{ top: 20, right: 30, bottom: 20, left: 10 }}>
                       <defs>
@@ -1065,11 +1113,11 @@ export default function SupervisorDashboard() {
           ) : activeTab === 'horarios' ? (
             <ShiftManager />
           ) : activeTab === 'personal' ? (
-            <div className="bg-white border border-gray-100 rounded-[2rem] overflow-hidden shadow-sm">
-              <div className="p-6 sm:p-8 border-b border-gray-50 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div className={`rounded-[2rem] overflow-hidden shadow-sm ${isDark ? 'bg-[#0a0f20] border border-white/5' : 'bg-white border border-gray-100'}`}>
+              <div className={`p-6 sm:p-8 border-b flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 ${isDark ? 'border-white/5' : 'border-gray-50'}`}>
                 <div>
-                  <h2 className="text-xl font-black text-brand-dark">Gestión de Personal</h2>
-                  <p className="text-sm text-brand-gray font-medium">Administración de turnos y operarios en planta</p>
+                  <h2 className={`text-xl font-black ${isDark ? 'text-white' : 'text-brand-dark'}`}>Gestión de Personal</h2>
+                  <p className={`text-sm font-medium ${isDark ? 'text-white/40' : 'text-brand-gray'}`}>Administración de turnos y operarios en planta</p>
                 </div>
                 <button
                   onClick={() => setShowCreateOperator(true)}
@@ -1079,8 +1127,8 @@ export default function SupervisorDashboard() {
                 </button>
               </div>
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[680px] text-left text-sm">
-                  <thead className="bg-gray-50 text-brand-gray uppercase text-[10px] font-black tracking-[0.2em]">
+                <table className={`w-full min-w-[680px] text-left text-sm ${isDark ? 'text-white' : ''}`}>
+                  <thead className={`${isDark ? 'bg-white/5 text-white/40' : 'bg-gray-50 text-brand-gray'} uppercase text-[10px] font-black tracking-[0.2em]`}>
                     <tr>
                       <th className="px-8 py-5">Operario</th>
                       <th className="px-8 py-5">Turno Asignado</th>
@@ -1089,25 +1137,25 @@ export default function SupervisorDashboard() {
                       <th className="px-8 py-5 text-right">Acciones</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-50">
+                  <tbody className={`${isDark ? 'divide-white/5' : 'divide-gray-50'} divide-y`}>
                     {operatorsData && operatorsData.length > 0 ? (
                       operatorsData.map((op) => (
-                        <tr key={op.id} className="group hover:bg-gray-50/50 transition-colors border-b border-gray-50 last:border-0">
+                        <tr key={op.id} className={`group transition-colors border-b last:border-0 ${isDark ? 'border-white/5 hover:bg-white/5' : 'border-gray-50 hover:bg-gray-50/50'}`}>
                           <td className="px-6 py-4">
                             <div className="flex items-center gap-3">
                               <div className="w-10 h-10 rounded-xl bg-brand-primary/10 flex items-center justify-center text-sm text-brand-primary font-black shadow-inner">
                                 {(op.nombre || op.name || '?')[0].toUpperCase()}
                               </div>
                               <div className="flex flex-col">
-                                <span className="font-bold text-brand-dark text-sm">{op.nombre || op.name}</span>
-                                <span className="text-[10px] text-brand-gray tracking-widest uppercase">{op.rol || op.role}</span>
+                                <span className={`font-bold text-sm ${isDark ? 'text-white' : 'text-brand-dark'}`}>{op.nombre || op.name}</span>
+                                <span className={`text-[10px] tracking-widest uppercase ${isDark ? 'text-white/40' : 'text-brand-gray'}`}>{op.rol || op.role}</span>
                               </div>
                             </div>
                           </td>
                           <td className="px-6 py-4">
                             <div className="flex items-center gap-2">
                               <div className="w-2 h-2 rounded-full bg-brand-primary"></div>
-                              <span className="text-xs font-bold text-brand-gray tracking-tight">
+                              <span className={`text-xs font-bold tracking-tight ${isDark ? 'text-white/50' : 'text-brand-gray'}`}>
                                 {(op.rol === 'JEFE' || op.role === 'JEFE' || op.rol === 'SUPERVISOR' || op.role === 'SUPERVISOR')
                                   ? '—'
                                   : (op.turno || op.shift || 'Disponible')}
@@ -1122,7 +1170,7 @@ export default function SupervisorDashboard() {
                             </td>
                           )}
                           <td className="px-6 py-4">
-                             <span className={`px-2 py-1 rounded-md text-[10px] font-black uppercase tracking-tighter ${op.estado === 'Activo' || op.status === 'Activo' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-brand-gray'}`}>
+                             <span className={`px-2 py-1 rounded-md text-[10px] font-black uppercase tracking-tighter ${op.estado === 'Activo' || op.status === 'Activo' ? 'bg-green-500/10 text-green-400' : isDark ? 'bg-white/5 text-white/30' : 'bg-gray-100 text-brand-gray'}`}>
                                 {op.estado || op.status || 'Activo'}
                              </span>
                           </td>
@@ -1130,13 +1178,13 @@ export default function SupervisorDashboard() {
                             <div className="flex justify-end gap-2">
                                <button 
                                  onClick={() => setEditingOperator(op)}
-                                 className="p-2 text-brand-gray hover:text-brand-primary hover:bg-white rounded-lg transition-all"
+                                 className={`p-2 rounded-lg transition-all ${isDark ? 'text-white/40 hover:text-brand-primary hover:bg-white/5' : 'text-brand-gray hover:text-brand-primary hover:bg-white'}`}
                                >
                                   <Settings size={14} />
                                </button>
                                <button 
                                 onClick={() => handleDeleteOperator(op.id)}
-                                className="text-red-500 hover:text-red-700 font-black text-[10px] sm:text-xs uppercase tracking-widest transition-colors py-2 px-3 hover:bg-red-50 rounded-lg"
+                                className="text-red-500 hover:text-red-700 font-black text-[10px] sm:text-xs uppercase tracking-widest transition-colors py-2 px-3 hover:bg-red-500/10 rounded-lg"
                               >
                                 Borrar
                               </button>
@@ -1147,10 +1195,10 @@ export default function SupervisorDashboard() {
                     ) : (
                       <tr>
                         <td colSpan={currentUser?.role === 'JEFE' ? 5 : 4} className="px-8 py-10 text-center">
-                          <p className="text-brand-dark font-bold mb-2">
+                          <p className={`font-bold mb-2 ${isDark ? 'text-white' : 'text-brand-dark'}`}>
                             {dbError || "No hay operarios registrados o no se pudieron cargar."}
                           </p>
-                          <p className="text-brand-gray text-xs">
+                          <p className={`text-xs ${isDark ? 'text-white/40' : 'text-brand-gray'}`}>
                             Verifique la conexión con el servidor si este mensaje persiste.
                           </p>
                         </td>
@@ -1162,21 +1210,21 @@ export default function SupervisorDashboard() {
             </div>
           ) : (
             <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
-              <div className="bg-white border border-gray-100 rounded-[2rem] shadow-sm overflow-hidden">
-                <div className="p-6 sm:p-8 border-b border-gray-50">
-                  <h2 className="text-xl font-black text-brand-dark">Configuración del Panel</h2>
-                  <p className="text-sm text-brand-gray font-medium mt-2">Acciones seguras para mantener el panel sincronizado y estable.</p>
+              <div className={`rounded-[2rem] shadow-sm overflow-hidden ${isDark ? 'bg-[#0a0f20] border border-white/5' : 'bg-white border border-gray-100'}`}>
+                <div className={`p-6 sm:p-8 border-b ${isDark ? 'border-white/5' : 'border-gray-50'}`}>
+                  <h2 className={`text-xl font-black ${isDark ? 'text-white' : 'text-brand-dark'}`}>Configuración del Panel</h2>
+                  <p className={`text-sm font-medium mt-2 ${isDark ? 'text-white/40' : 'text-brand-gray'}`}>Acciones seguras para mantener el panel sincronizado y estable.</p>
                 </div>
                 <div className="p-6 sm:p-8 grid gap-4 sm:grid-cols-2">
-                  <div className="rounded-3xl border border-gray-100 bg-gray-50/70 p-5">
-                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-gray mb-3">Usuario autenticado</p>
-                    <p className="text-xl font-black text-brand-dark">{currentUser?.name || 'Sin sesión'}</p>
-                    <p className="text-sm font-medium text-brand-gray mt-1">Rol actual: {currentUser?.role || 'N/A'}</p>
+                  <div className={`rounded-3xl border p-5 ${isDark ? 'border-white/5 bg-white/5' : 'border-gray-100 bg-gray-50/70'}`}>
+                    <p className={`text-[10px] font-black uppercase tracking-[0.2em] mb-3 ${isDark ? 'text-white/40' : 'text-brand-gray'}`}>Usuario autenticado</p>
+                    <p className={`text-xl font-black ${isDark ? 'text-white' : 'text-brand-dark'}`}>{currentUser?.name || 'Sin sesión'}</p>
+                    <p className={`text-sm font-medium mt-1 ${isDark ? 'text-white/40' : 'text-brand-gray'}`}>Rol actual: {currentUser?.role || 'N/A'}</p>
                   </div>
-                  <div className="rounded-3xl border border-gray-100 bg-gray-50/70 p-5">
-                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-gray mb-3">Reportes en DB</p>
-                    <p className="text-3xl font-black text-brand-dark">{reportCount}</p>
-                    <p className="text-sm font-medium text-brand-gray mt-1">Datos en tiempo real desde Supabase</p>
+                  <div className={`rounded-3xl border p-5 ${isDark ? 'border-white/5 bg-white/5' : 'border-gray-100 bg-gray-50/70'}`}>
+                    <p className={`text-[10px] font-black uppercase tracking-[0.2em] mb-3 ${isDark ? 'text-white/40' : 'text-brand-gray'}`}>Reportes en DB</p>
+                    <p className={`text-3xl font-black ${isDark ? 'text-white' : 'text-brand-dark'}`}>{reportCount}</p>
+                    <p className={`text-sm font-medium mt-1 ${isDark ? 'text-white/40' : 'text-brand-gray'}`}>Datos en tiempo real desde Supabase</p>
                   </div>
                   <button
                     type="button"
@@ -1190,16 +1238,16 @@ export default function SupervisorDashboard() {
                     type="button"
                     onClick={handleClearDb}
                     disabled={isClearingDb}
-                    className="rounded-3xl border border-red-200 bg-red-50 p-5 text-red-600 font-black hover:bg-red-600 hover:text-white transition-all disabled:opacity-50"
+                    className="rounded-3xl border border-red-500/20 bg-red-500/10 p-5 text-red-400 font-black hover:bg-red-600 hover:text-white transition-all disabled:opacity-50"
                   >
                     {isClearingDb ? 'Limpiando...' : 'Limpiar DB'}
                   </button>
                 </div>
               </div>
 
-              <div className="bg-white border border-gray-100 rounded-[2rem] shadow-sm p-6 sm:p-8 flex flex-col gap-4">
-                <h3 className="text-lg font-black text-brand-dark">Sesión y acceso</h3>
-                <p className="text-sm text-brand-gray font-medium">
+              <div className={`rounded-[2rem] shadow-sm p-6 sm:p-8 flex flex-col gap-4 ${isDark ? 'bg-[#0a0f20] border border-white/5' : 'bg-white border border-gray-100'}`}>
+                <h3 className={`text-lg font-black ${isDark ? 'text-white' : 'text-brand-dark'}`}>Sesión y acceso</h3>
+                <p className={`text-sm font-medium ${isDark ? 'text-white/40' : 'text-brand-gray'}`}>
                   Usa esta opción para cerrar la sesión del panel administrativo y evitar accesos no autorizados.
                 </p>
                 <button

@@ -24,9 +24,16 @@ const drive = google.drive({ version: 'v3', auth });
  * @returns Object with the file id and public view link
  */
 export async function uploadToDrive(buffer: Buffer, filename: string, mimeType: string, folderId: string) {
+  console.log('[Drive Service] Attempting upload...');
+  console.log('[Drive Service] CLIENT_EMAIL present:', !!CLIENT_EMAIL);
+  console.log('[Drive Service] PRIVATE_KEY present:', !!PRIVATE_KEY);
+  console.log('[Drive Service] PRIVATE_KEY length:', PRIVATE_KEY?.length);
+  console.log('[Drive Service] PRIVATE_KEY starts with:', PRIVATE_KEY?.substring(0, 30));
+  console.log('[Drive Service] Folder ID:', folderId);
+  console.log('[Drive Service] Filename:', filename);
+  
   if (!CLIENT_EMAIL || !PRIVATE_KEY) {
     console.warn('[Drive Service] Credenciales de Drive ausentes. Saltando carga...');
-    // Para entornos locales sin credenciales devolvemos un mock.
     return {
       id: 'local_id_' + Date.now(),
       publicUrl: 'http://localhost/mock-url/' + filename

@@ -1,7 +1,5 @@
 // Manual Redeploy for CORS sync by HenryStark866
 import crypto from 'crypto';
-import path from 'path';
-import fs from 'fs';
 import cron from 'node-cron';
 import express, { type Express, type NextFunction, type Request, type Response } from 'express';
 import cors from 'cors';
@@ -11,7 +9,6 @@ import type { PrismaClient } from '@prisma/client';
 import { processMachineReport, processClosingReport } from './controllers/report.controller';
 import { seedShifts } from './controllers/admin.controller';
 import { uploadWithDateStructure, cleanUserName } from './services/drive.service';
-import { savePhotoFromBase64 } from './services/local-storage.service';
 
 type UserRole = 'OPERARIO' | 'SUPERVISOR' | 'JEFE';
 
@@ -511,12 +508,6 @@ export function createApiApp(): Express {
 
   app.use(express.json({ limit: '50mb' }));
   
-  // Serve local evidence photos
-  const evidenciasPath = path.join(process.cwd(), 'evidencias');
-  if (fs.existsSync(evidenciasPath)) {
-    app.use('/api/evidencias', express.static(evidenciasPath));
-  }
-  
   // CORS Configuration
   const allowedOrigins = [
     'https://incubantmonitor.vercel.app',
@@ -782,21 +773,12 @@ export function createApiApp(): Express {
 
       const driveResults: { machineId: string; photoUrl?: string; pdfUrl?: string; photoError?: string }[] = [];
 
-      // Subir cada foto a Drive (con fallback local)
+      // Subir cada foto a Drive
       for (const machine of completedMachines) {
         const result: { machineId: string; photoUrl?: string; pdfUrl?: string; photoError?: string } = { machineId: machine.id };
 
         const photoStr = machine.photoUrl;
         if (photoStr && photoStr.length > 100 && photoStr.startsWith('data:image')) {
-          // Primero guardar localmente (siempre)
-          try {
-            const localResult = savePhotoFromBase64(photoStr, userName, machine.id);
-            console.log(`[Sync] ✅ Local: ${localResult.relativePath}`);
-          } catch (localErr) {
-            console.error(`[Sync] ❌ Error local ${machine.id}:`, localErr);
-          }
-
-          // Luego intentar Drive
           try {
             const base64Data = photoStr.replace(/^data:image\/\w+;base64,/, '');
             const buffer = Buffer.from(base64Data, 'base64');
@@ -809,13 +791,10 @@ export function createApiApp(): Express {
             console.log(`[Drive Sync] ✅ Foto subida OK: ${uploadResult.fileName} -> ${uploadResult.publicUrl}`);
           } catch (err) {
             result.photoError = err instanceof Error ? err.message : 'Error desconocido';
-            // Fallback: guardar la foto como URL local para que el dashboard pueda servirla
-            const localResult = savePhotoFromBase64(photoStr, userName, machine.id);
-            result.photoUrl = `/api/evidencias/${encodeURIComponent(localResult.relativePath)}`;
-            console.log(`[Drive Sync] ⚠ Fallback local para ${machine.id}: ${result.photoUrl}`);
+            console.error(`[Drive Sync] ❌ Error subiendo foto ${machine.id}:`, err);
           }
         } else if (photoStr && photoStr.length > 100 && !photoStr.startsWith('data:')) {
-          // Already a URL
+          // Already a URL (from previous sync or ReportUploader)
           result.photoUrl = photoStr;
           console.log(`[Drive Sync] Foto ya es URL para ${machine.id}`);
         } else {

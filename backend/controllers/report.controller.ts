@@ -1,7 +1,6 @@
 import { Request, Response } from 'express';
 import { analyzeIncubatorImage } from '../services/vision.service';
 import { uploadToDrive, uploadWithDateStructure, cleanUserName } from '../services/drive.service';
-import { savePhotoLocally, savePdfLocally } from '../services/local-storage.service';
 import { generateReportPDF } from '../services/pdf.service';
 import type { PrismaClient } from '@prisma/client';
 
@@ -97,16 +96,7 @@ export const processMachineReport = async (req: AuthenticatedRequest, res: Respo
       } catch { /* ignorar si el JSON está malformado */ }
     }
 
-    // 2. Guardar foto localmente (siempre)
-    let localPhotoPath = '';
-    try {
-      const localResult = savePhotoLocally(file.buffer, userName, machineId, file.mimetype);
-      localPhotoPath = localResult.relativePath;
-    } catch (localError) {
-      console.error('[Local Storage] ERROR guardando foto local:', localError);
-    }
-
-    // 3. Subir foto → Carpeta Fotos con estructura de fecha (Drive)
+    // 2. Subir foto → Drive
     let imageUrl = '';
     let drivePhotoError = '';
     try {
@@ -123,9 +113,8 @@ export const processMachineReport = async (req: AuthenticatedRequest, res: Respo
       console.error('[Drive] ERROR subiendo foto:', driveError);
     }
 
-    // 4. Generar PDF → Carpeta Reportes por Hora con estructura de fecha
+    // 3. Generar PDF → Subir a Drive
     let pdfUrl = '';
-    let localPdfPath = '';
     let drivePdfError = '';
     try {
       const pdfBuffer = await generateReportPDF(
@@ -134,14 +123,6 @@ export const processMachineReport = async (req: AuthenticatedRequest, res: Respo
         finalData,
         file.buffer
       );
-
-      // Guardar PDF localmente
-      try {
-        const localPdfResult = savePdfLocally(pdfBuffer, userName, machineId);
-        localPdfPath = localPdfResult.relativePath;
-      } catch (localPdfError) {
-        console.error('[Local Storage] ERROR guardando PDF:', localPdfError);
-      }
 
       // Subir PDF a Drive
       const folderIdReports = process.env.DRIVE_FOLDER_REPORTS_ID;
@@ -225,9 +206,7 @@ export const processMachineReport = async (req: AuthenticatedRequest, res: Respo
         isAlarm: savedReport?.isAlarm || false,
         isClosingReport: false,
         imageUrl,
-        localPhotoPath,
         pdfUrl,
-        localPdfPath,
         savedToDb: !!savedReport,
         warnings: [drivePhotoError, drivePdfError].filter(Boolean),
       }

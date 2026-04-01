@@ -123,8 +123,16 @@ export const useMachineStore = create<MachineState>()(
     {
       name: 'incubant-storage',
       storage: createJSONStorage(() => localStorage),
-      // Omitir el estado temporal de la persistencia
-      partialize: (state) => ({ machines: state.machines, currentUser: state.currentUser }),
+      partialize: (state) => ({
+        machines: state.machines.map(m => ({
+          id: m.id,
+          type: m.type,
+          number: m.number,
+          status: m.status,
+          lastChecked: m.lastChecked,
+        })),
+        currentUser: state.currentUser,
+      }),
     }
   )
 );

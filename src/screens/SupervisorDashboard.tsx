@@ -554,6 +554,23 @@ export default function SupervisorDashboard() {
       doc.setTextColor(0, 0, 255);
       doc.textWithLink('>>> VER EVIDENCIAS FOTOGRÁFICAS EN LA NUBE <<<', 14, footerY, { url: window.location.origin });
 
+      // Upload to Drive before downloading locally
+      try {
+        const pdfBlob = doc.output('blob');
+        const reader = new FileReader();
+        reader.readAsDataURL(pdfBlob);
+        const base64 = await new Promise<string>((resolve) => {
+          reader.onloadend = () => resolve(reader.result as string);
+        });
+        await apiFetch(getApiUrl('/api/upload-pdf-drive'), {
+          method: 'POST',
+          body: JSON.stringify({ pdfBase64: base64 })
+        });
+        console.log('[Supervisor] Minuta PDF uploaded to Drive');
+      } catch (err) {
+        console.error('[Supervisor] Error uploading minuta to Drive:', err);
+      }
+
       doc.save(`Minuta_Incubant_${new Date().toISOString().split('T')[0]}_Turno.pdf`);
     } catch (error) {
       console.error('Error al generar PDF:', error);

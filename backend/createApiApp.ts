@@ -503,6 +503,26 @@ export function createApiApp(): Express {
   // ── Admin: Seed Operations ───────────────────────────────────────────────
   app.post('/api/admin/seed-shifts', seedShifts);
 
+  // ── SSE Events Stream ────────────────────────────────────────────────────
+  app.get('/api/events', (req: Request, res: Response) => {
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.flushHeaders();
+
+    // Heartbeat para mantener conexión viva
+    const heartbeat = setInterval(() => {
+      res.write(': heartbeat\n\n');
+    }, 30000);
+
+    clients.push(res);
+
+    req.on('close', () => {
+      clearInterval(heartbeat);
+      clients = clients.filter(c => c !== res);
+    });
+  });
+
   // ── Smart Reporting (Gemini + Drive + PDF) ────────────────────────────────
   app.post('/api/reports', requireAuthenticatedUser, upload.single('evidence'), processMachineReport);
   app.post('/api/reports/closing', requireAuthenticatedUser, upload.single('evidence'), processClosingReport);
@@ -665,6 +685,8 @@ export function createApiApp(): Express {
           data: logsToInsert,
         });
 
+        sendEventToAll({ type: 'NEW_REPORT', message: 'Nuevo reporte sincronizado', timestamp: new Date().toISOString() });
+
         return res.status(200).json({
           message: 'Sincronización exitosa',
           count: result.count,
@@ -769,6 +791,8 @@ export function createApiApp(): Express {
         }));
 
         await prisma.hourlyLog.createMany({ data: logsToInsert });
+        // Notificar a todos los clientes conectados
+        sendEventToAll({ type: 'NEW_REPORT', message: 'Nuevo reporte sincronizado', timestamp: new Date().toISOString() });
       } catch (dbError) {
         console.error('[Sync Drive] Error BD:', dbError);
       }

@@ -267,8 +267,48 @@ export default function DashboardScreen({ canAccessSupervisor = false, onSwitchT
     };
   }, []);
 
-  // Nota: El polling de sesión (/api/session) ya lo gestiona App.tsx cada segundo.
-  // No duplicamos el intervalo aquí para evitar doble carga y re-renders innecesarios.
+  // Nota: El polling de sesión (/api/session) ya lo gestiona App.tsx cada 10 segundos.
+
+  // SSE - Escucha permanente de cambios en la DB (para operarios)
+  useEffect(() => {
+    if (!currentUser) return;
+
+    let eventSource: EventSource | null = null;
+    let reconnectTimer: ReturnType<typeof setTimeout>;
+
+    const connectSSE = () => {
+      try {
+        eventSource = new EventSource(getApiUrl('/api/events'));
+
+        eventSource.onmessage = (event) => {
+          try {
+            const data = JSON.parse(event.data);
+            if (data.targetUserId && data.targetUserId !== currentUser.id) return;
+            // Cuando hay un nuevo reporte, refrescar sesión
+            if (data.type === 'NEW_REPORT' || data.type === 'SHIFT_UPDATE') {
+              login({ ...currentUser, lastSync: Date.now() });
+            }
+          } catch {
+            // Ignorar
+          }
+        };
+
+        eventSource.onerror = () => {
+          eventSource?.close();
+          reconnectTimer = setTimeout(connectSSE, 5000);
+        };
+      } catch {
+        reconnectTimer = setTimeout(connectSSE, 5000);
+      }
+    };
+
+    connectSSE();
+
+    return () => {
+      eventSource?.close();
+      clearTimeout(reconnectTimer);
+    };
+  }, [currentUser, login]);
 
   const filteredMachines = machines.filter(m => m.type === activeTab);
   const pendingMachines = machines.filter(m => m.status === 'pending');

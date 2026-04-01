@@ -128,7 +128,7 @@ export default function App() {
       }
     };
 
-    const interval = setInterval(syncProfile, 1000);
+    const interval = setInterval(syncProfile, 10000);
     return () => clearInterval(interval);
   }, [currentUser, login, logout]);
 
@@ -141,6 +141,39 @@ export default function App() {
       setViewMode('supervisor');
     }
   }, [canAccessSupervisor, isSessionReady]);
+
+  // Wake Lock API - mantener pantalla activa para usuarios admin
+  useEffect(() => {
+    if (!currentUser || !canAccessSupervisor) return;
+    let wakeLock: WakeLockSentinel | null = null;
+
+    const requestWakeLock = async () => {
+      try {
+        if ('wakeLock' in navigator) {
+          wakeLock = await (navigator as any).wakeLock.request('screen');
+          console.log('[WakeLock] Pantalla mantenida activa');
+        }
+      } catch (err) {
+        console.warn('[WakeLock] No se pudo activar:', err);
+      }
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && !wakeLock) {
+        requestWakeLock();
+      }
+    };
+
+    requestWakeLock();
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      if (wakeLock) {
+        wakeLock.release().catch(() => {});
+      }
+    };
+  }, [currentUser, canAccessSupervisor]);
 
   const handleSwitchToMobile = useCallback(() => {
     hasAutoSwitchedRef.current = false;

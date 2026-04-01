@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Activity, AlertTriangle, Clock, Users, LayoutDashboard,
   Settings, ChevronDown, X, Image as ImageIcon, CheckCircle2,
@@ -258,79 +258,118 @@ export default function SupervisorDashboard() {
   };
 
   const isFetchingRef = useRef(false);
-  useEffect(() => {
-    const fetchData = async () => {
-      if (!currentUser || !canAccessSupervisor || isFetchingRef.current) {
-        if (!canAccessSupervisor) setIsLoading(false);
-        return;
+
+  const fetchData = useCallback(async () => {
+    if (!currentUser || !canAccessSupervisor || isFetchingRef.current) {
+      if (!canAccessSupervisor) setIsLoading(false);
+      return;
+    }
+
+    isFetchingRef.current = true;
+    try {
+      setDbError(null);
+      
+      const [statusRes, trendsRes, operatorsRes, summaryRes] = await Promise.allSettled([
+        apiFetch(getApiUrl('/api/dashboard/status')),
+        apiFetch(getApiUrl(`/api/dashboard/trends?machine=${encodeURIComponent(chartFilter)}&hours=${chartTimeRange}`)),
+        apiFetch(getApiUrl('/api/dashboard/operators')),
+        apiFetch(getApiUrl('/api/dashboard/summary'))
+      ]);
+
+      if (statusRes.status === 'fulfilled' && statusRes.value.ok) {
+        const json = await statusRes.value.json();
+        setMachinesData(Array.isArray(json) ? json : []);
       }
 
-      isFetchingRef.current = true;
+      if (trendsRes.status === 'fulfilled' && trendsRes.value.ok) {
+        const json = await trendsRes.value.json();
+        setTrendsData(Array.isArray(json) ? json : []);
+      }
+
+      if (operatorsRes.status === 'fulfilled' && operatorsRes.value.ok) {
+        const json = await operatorsRes.value.json();
+        setOperatorsData(Array.isArray(json) ? json : []);
+      }
+
+      if (summaryRes.status === 'fulfilled' && summaryRes.value.ok) {
+        const json = await summaryRes.value.json();
+        if (json) {
+          setReportCount(json.reportCount || 0);
+          setShiftClosingCount(json.shiftClosingCount || 0);
+          setResponsibleOperator(json.responsibleOperator || '');
+          setOnlineOperators(json.onlineOperators || []);
+          setSummaryData(prev => ({
+            ...prev,
+            ...json,
+            activeOperatorsNames: json.activeOperatorsNames || 'N/A',
+            currentShift: json.currentShift || prev.currentShift
+          }));
+        }
+      }
+
+      if (statusRes.status === 'rejected' && summaryRes.status === 'rejected') {
+        console.warn("Conexión intermitente con el servidor.");
+      }
+
+    } catch (err: any) {
+      console.error("Dashboard error:", err);
+    } finally {
+      setIsLoading(false);
+      isFetchingRef.current = false;
+    }
+  }, [currentUser, canAccessSupervisor, chartFilter, chartTimeRange]);
+
+  // Polling de datos cada 3 segundos
+  useEffect(() => {
+    void fetchData();
+    const interval = setInterval(fetchData, 3000);
+    return () => clearInterval(interval);
+  }, [fetchData]);
+
+  // SSE - Escucha permanente de cambios en la DB
+  useEffect(() => {
+    if (!currentUser || !canAccessSupervisor) return;
+
+    let eventSource: EventSource | null = null;
+    let reconnectTimer: ReturnType<typeof setTimeout>;
+
+    const connectSSE = () => {
       try {
-        setDbError(null);
-        
-        // Ejecutamos las llamadas con manejo de error individual (Settled)
-        const [statusRes, trendsRes, operatorsRes, summaryRes] = await Promise.allSettled([
-          apiFetch(getApiUrl('/api/dashboard/status')),
-          apiFetch(getApiUrl(`/api/dashboard/trends?machine=${encodeURIComponent(chartFilter)}&hours=${chartTimeRange}`)),
-          apiFetch(getApiUrl('/api/dashboard/operators')),
-          apiFetch(getApiUrl('/api/dashboard/summary'))
-        ]);
+        eventSource = new EventSource(getApiUrl('/api/events'));
 
-        // 1. Status (Máquinas)
-        if (statusRes.status === 'fulfilled' && statusRes.value.ok) {
-          const json = await statusRes.value.json();
-          setMachinesData(Array.isArray(json) ? json : []);
-        }
+        eventSource.onopen = () => {
+          console.log('[SSE] Conectado al servidor de eventos');
+        };
 
-        // 2. Tendencias (Gráfico)
-        if (trendsRes.status === 'fulfilled' && trendsRes.value.ok) {
-          const json = await trendsRes.value.json();
-          setTrendsData(Array.isArray(json) ? json : []);
-        }
-
-        // 3. Operarios
-        if (operatorsRes.status === 'fulfilled' && operatorsRes.value.ok) {
-          const json = await operatorsRes.value.json();
-          setOperatorsData(Array.isArray(json) ? json : []);
-        }
-
-        // 4. Resumen
-        if (summaryRes.status === 'fulfilled' && summaryRes.value.ok) {
-          const json = await summaryRes.value.json();
-          if (json) {
-            setReportCount(json.reportCount || 0);
-            setShiftClosingCount(json.shiftClosingCount || 0);
-            setResponsibleOperator(json.responsibleOperator || '');
-            setOnlineOperators(json.onlineOperators || []);
-            setSummaryData(prev => ({
-              ...prev,
-              ...json,
-              activeOperatorsNames: json.activeOperatorsNames || 'N/A',
-              currentShift: json.currentShift || prev.currentShift
-            }));
+        eventSource.onmessage = (event) => {
+          try {
+            const data = JSON.parse(event.data);
+            if (data.targetUserId && data.targetUserId !== currentUser.id) return;
+            console.log('[SSE] Evento recibido:', data.type);
+            void fetchData();
+          } catch {
+            void fetchData();
           }
-        }
+        };
 
-        // Verificación de salud general
-        if (statusRes.status === 'rejected' && summaryRes.status === 'rejected') {
-          // Solo mostrar error si fallan llamadas críticas
-          console.warn("Conexión intermitente con el servidor.");
-        }
-
-      } catch (err: any) {
-        console.error("Dashboard error:", err);
-      } finally {
-        setIsLoading(false);
-        isFetchingRef.current = false;
+        eventSource.onerror = () => {
+          console.warn('[SSE] Conexión perdida, reconectando...');
+          eventSource?.close();
+          reconnectTimer = setTimeout(connectSSE, 5000);
+        };
+      } catch (err) {
+        console.error('[SSE] Error conectando:', err);
+        reconnectTimer = setTimeout(connectSSE, 5000);
       }
     };
 
-    // Ejecución inicial y polling de alta frecuencia (1 segundo)
-    void fetchData();
-    const interval = setInterval(fetchData, 1000);
-    return () => clearInterval(interval);
-  }, [canAccessSupervisor, currentUser, chartFilter]);
+    connectSSE();
+
+    return () => {
+      eventSource?.close();
+      clearTimeout(reconnectTimer);
+    };
+  }, [currentUser, canAccessSupervisor, fetchData]);
 
   const activeAlarms = machinesData.filter(m => m.status === 'alarm').length;
   const efficiency = machinesData.length > 0

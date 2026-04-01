@@ -413,7 +413,7 @@ export default function DashboardScreen({ canAccessSupervisor = false, onSwitchT
     const incs = syncedMachines.filter(m => m.type === 'incubadora');
     const incData = incs.map(m => {
       const d = m.data;
-      const time = d?.tiempoIncubacion ? `${d.tiempoIncubacion.dias}d ${d.tiempoIncubacion.horas}h` : '--';
+      const time = d?.tiempoIncubacion ? `${d.tiempoIncubacion.dias}d ${d.tiempoIncubacion.horas}h ${d.tiempoIncubacion.minutos || '0'}m` : '--';
       return [m.number, m.status === 'completed' ? 'OK' : 'APAGADA', time,
         d?.tempOvoscanReal || '--', d?.tempOvoscanSP || '--',
         d?.tempAireReal || '--', d?.tempAireSP || '--',
@@ -434,7 +434,7 @@ export default function DashboardScreen({ canAccessSupervisor = false, onSwitchT
     const nacs = syncedMachines.filter(m => m.type === 'nacedora');
     const nacData = nacs.map(m => {
       const d = m.data;
-      const time = d?.tiempoIncubacion ? `${d.tiempoIncubacion.dias}d ${d.tiempoIncubacion.horas}h` : '--';
+      const time = d?.tiempoIncubacion ? `${d.tiempoIncubacion.dias}d ${d.tiempoIncubacion.horas}h ${d.tiempoIncubacion.minutos || '0'}m` : '--';
       return [m.number, m.status === 'completed' ? 'OK' : 'APAGADA', time,
         d?.tempSynchroReal || '--', d?.tempSynchroSP || '--',
         d?.humedadReal || '--', d?.co2Real || '--',

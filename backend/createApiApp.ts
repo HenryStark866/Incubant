@@ -756,11 +756,21 @@ export function createApiApp(): Express {
       const { machines } = req.body as { machines?: SubmittedMachine[] };
       const userName = req.user?.name || 'Operario';
 
+      console.log(`[Sync Drive] Recibido: ${machines?.length || 0} máquinas, usuario: ${userName}`);
+
       if (!machines || !Array.isArray(machines)) {
         return res.status(400).json({ error: 'Datos inválidos o incompletos' });
       }
 
       const completedMachines = machines.filter((machine) => machine.status === 'completed' && machine.data);
+
+      // Log photo status for each completed machine
+      completedMachines.forEach(m => {
+        const hasPhoto = !!m.photoUrl;
+        const photoLen = m.photoUrl?.length || 0;
+        const isBase64 = m.photoUrl?.startsWith('data:image');
+        console.log(`[Sync Drive] Máquina ${m.id}: status=${m.status}, hasPhoto=${hasPhoto}, photoLen=${photoLen}, isBase64=${isBase64}`);
+      });
 
       if (completedMachines.length === 0) {
         return res.status(400).json({ error: 'No hay máquinas completadas para sincronizar' });
@@ -768,6 +778,7 @@ export function createApiApp(): Express {
 
       const folderIdPhotos = process.env.DRIVE_FOLDER_PHOTOS_ID;
       const folderIdReports = process.env.DRIVE_FOLDER_REPORTS_ID;
+      console.log(`[Sync Drive] DRIVE_FOLDER_PHOTOS_ID: ${folderIdPhotos ? 'SET' : 'NOT SET'}`);
 
       const driveResults: { machineId: string; photoUrl?: string; pdfUrl?: string; photoError?: string }[] = [];
 

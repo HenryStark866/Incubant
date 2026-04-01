@@ -96,7 +96,7 @@ export function cleanUserName(name: string): string {
 }
 
 /**
- * Genera el nombre de archivo en formato: DD/MM/YYYY/HH:MM.nombreoperario.ext
+ * Genera el nombre de archivo: YYYY-MM-DD_HH-MM-SS_nombre.ext
  * Crea la estructura de carpetas por fecha en Drive
  */
 export async function uploadWithDateStructure(
@@ -108,15 +108,21 @@ export async function uploadWithDateStructure(
   fileType: 'photo' | 'pdf' | 'closing'
 ): Promise<{ id: string; publicUrl: string; fileName: string }> {
   const bogotaDate = getBogotaDate();
-  const dateFolder = formatDateFolder(bogotaDate); // "31/03/2026"
-  const timeStr = formatTimeFile(bogotaDate); // "22:56"
-  const cleanName = cleanUserName(userName); // "henrytaborda"
+  const cleanName = cleanUserName(userName);
   const ext = mimeType.includes('pdf') ? 'pdf' : 'jpg';
 
-  // Nombre del archivo: 22:56.henrytaborda.jpg
-  const fileName = `${timeStr}.${cleanName}.${ext}`;
+  // Formato: 2026-04-01_14-30-45_henrytaborda.jpg
+  const y = bogotaDate.getFullYear();
+  const m = (bogotaDate.getMonth() + 1).toString().padStart(2, '0');
+  const d = bogotaDate.getDate().toString().padStart(2, '0');
+  const h = bogotaDate.getHours().toString().padStart(2, '0');
+  const min = bogotaDate.getMinutes().toString().padStart(2, '0');
+  const s = bogotaDate.getSeconds().toString().padStart(2, '0');
+  const fileName = `${y}-${m}-${d}_${h}-${min}-${s}_${cleanName}.${ext}`;
 
-  // Estructura de carpetas: baseFolderId → "31/03/2026" → (opcional) subcarpetas
+  // Carpeta por fecha: YYYY-MM-DD
+  const dateFolder = `${y}-${m}-${d}`;
+
   let targetFolderId = baseFolderId;
 
   // Crear carpeta de fecha si existe base folder
@@ -158,16 +164,12 @@ export async function uploadToDrive(buffer: Buffer, filename: string, mimeType: 
   console.log('[Drive Service] CLIENT_EMAIL present:', !!CLIENT_EMAIL);
   console.log('[Drive Service] PRIVATE_KEY present:', !!PRIVATE_KEY);
   console.log('[Drive Service] PRIVATE_KEY length:', PRIVATE_KEY?.length);
-  console.log('[Drive Service] PRIVATE_KEY starts with:', PRIVATE_KEY?.substring(0, 30));
   console.log('[Drive Service] Folder ID:', folderId);
   console.log('[Drive Service] Filename:', filename);
   
   if (!CLIENT_EMAIL || !PRIVATE_KEY) {
-    console.warn('[Drive Service] Credenciales de Drive ausentes. Saltando carga...');
-    return {
-      id: 'local_id_' + Date.now(),
-      publicUrl: 'http://localhost/mock-url/' + filename
-    };
+    console.warn('[Drive Service] ❌ Credenciales de Drive ausentes. NO se puede subir.');
+    throw new Error('DRIVE_CREDENTIALS_MISSING');
   }
 
   try {

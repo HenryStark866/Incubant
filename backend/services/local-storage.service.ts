@@ -53,13 +53,17 @@ export function savePhotoFromBase64(
   const utc = now.getTime() + now.getTimezoneOffset() * 60000;
   const bogotaDate = new Date(utc - 5 * 60 * 60 * 1000);
 
+  const y = bogotaDate.getFullYear();
+  const mo = (bogotaDate.getMonth() + 1).toString().padStart(2, '0');
+  const d = bogotaDate.getDate().toString().padStart(2, '0');
   const h = bogotaDate.getHours().toString().padStart(2, '0');
   const min = bogotaDate.getMinutes().toString().padStart(2, '0');
   const s = bogotaDate.getSeconds().toString().padStart(2, '0');
 
   const cleanName = cleanUserName(userName);
   const ext = base64DataUrl.includes('png') ? 'png' : base64DataUrl.includes('webp') ? 'webp' : 'jpg';
-  const fileName = `${h}${min}${s}_${machineId.replace(/[^a-zA-Z0-9-]/g, '')}_${cleanName}.${ext}`;
+  // Formato: 2026-04-01_14-30-45_henrytaborda.jpg
+  const fileName = `${y}-${mo}-${d}_${h}-${min}-${s}_${cleanName}.${ext}`;
   const localPath = path.join(dateFolder, fileName);
 
   const base64Data = base64DataUrl.replace(/^data:image\/\w+;base64,/, '');
@@ -127,12 +131,16 @@ export function savePdfLocally(
   const utc = now.getTime() + now.getTimezoneOffset() * 60000;
   const bogotaDate = new Date(utc - 5 * 60 * 60 * 1000);
 
+  const y = bogotaDate.getFullYear();
+  const mo = (bogotaDate.getMonth() + 1).toString().padStart(2, '0');
+  const d = bogotaDate.getDate().toString().padStart(2, '0');
   const h = bogotaDate.getHours().toString().padStart(2, '0');
   const min = bogotaDate.getMinutes().toString().padStart(2, '0');
   const s = bogotaDate.getSeconds().toString().padStart(2, '0');
 
   const cleanName = cleanUserName(userName);
-  const fileName = `${h}${min}${s}_${machineId.replace(/[^a-zA-Z0-9-]/g, '')}_${cleanName}.pdf`;
+  // Formato: 2026-04-01_14-30-45_henrytaborda.pdf
+  const fileName = `${y}-${mo}-${d}_${h}-${min}-${s}_${cleanName}.pdf`;
   const localPath = path.join(reportFolder, fileName);
 
   fs.writeFileSync(localPath, buffer);

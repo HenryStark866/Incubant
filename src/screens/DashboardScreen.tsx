@@ -342,61 +342,70 @@ export default function DashboardScreen() {
     e.stopPropagation(); setReportUploaderMachine(machine);
   };
 
-  const generatePDF = async (syncedMachines: Machine[]) => {
+  const generatePDF = async (syncedMachines: Machine[]): Promise<Blob> => {
+    const doc = new jsPDF();
+    const primaryColor: [number, number, number] = [245, 166, 35];
+    doc.setFontSize(22); doc.setTextColor(...primaryColor); doc.setFont('helvetica', 'bold');
+    doc.text('INCUBANT MONITOR', 14, 20);
+    doc.setFontSize(12); doc.setTextColor(50, 50, 50);
+    doc.text('REPORTE DIARIO DE OPERACIÓN', 14, 28);
+    doc.setFontSize(10); doc.setTextColor(100, 100, 100); doc.setFont('helvetica', 'normal');
+    doc.text(`Fecha: ${new Date().toLocaleDateString()} | Hora: ${new Date().toLocaleTimeString()}`, 14, 35);
+    doc.text(`Operario: ${currentUser?.name || 'Sistema'}`, 14, 40);
+    const incs = syncedMachines.filter(m => m.type === 'incubadora');
+    const incData = incs.map(m => {
+      const d = m.data;
+      const time = d?.tiempoIncubacion ? `${d.tiempoIncubacion.dias}d ${d.tiempoIncubacion.horas}h` : '--';
+      return [m.number, m.status === 'completed' ? 'OK' : 'APAGADA', time,
+        d?.tempOvoscanReal || '--', d?.tempOvoscanSP || '--',
+        d?.tempAireReal || '--', d?.tempAireSP || '--',
+        d?.humedadReal || '--', d?.co2Real || '--',
+        d?.volteoNumero || '--', d?.volteoPosicion || '--',
+        d?.alarma || 'No', d?.ventiladorPrincipal || '--',
+        m.photoUrl ? 'VER FOTO' : '--', d?.observaciones || ''];
+    });
+    doc.setFontSize(14); doc.setTextColor(0, 0, 0); doc.setFont('helvetica', 'bold');
+    doc.text('CONTROL INCUBADORAS', 14, 55);
+    autoTable(doc, {
+      startY: 60,
+      head: [['N°', 'Est.', 'Tiempo', 'Real', 'SP', 'Aire', 'ASP', 'Hum%', 'CO2', 'V/N', 'V/P', 'Alm', 'Vent', 'Evid.', 'Obs']],
+      body: incData, theme: 'grid',
+      headStyles: { fillColor: [245, 166, 35] as [number, number, number], textColor: 255, fontSize: 8 },
+      styles: { fontSize: 7 },
+    });
+    const nacs = syncedMachines.filter(m => m.type === 'nacedora');
+    const nacData = nacs.map(m => {
+      const d = m.data;
+      const time = d?.tiempoIncubacion ? `${d.tiempoIncubacion.dias}d ${d.tiempoIncubacion.horas}h` : '--';
+      return [m.number, m.status === 'completed' ? 'OK' : 'APAGADA', time,
+        d?.tempSynchroReal || '--', d?.tempSynchroSP || '--',
+        d?.humedadReal || '--', d?.co2Real || '--',
+        d?.ventiladorPrincipal || '--', m.photoUrl ? 'VER FOTO' : '--', d?.observaciones || ''];
+    });
+    const currentY = (doc as any).lastAutoTable.finalY + 15;
+    doc.text('CONTROL NACEDORAS', 14, currentY);
+    autoTable(doc, {
+      startY: currentY + 5,
+      head: [['N°', 'Est.', 'Tiempo', 'Temp', 'SP', 'Hum%', 'CO2', 'Vent', 'Evid.', 'Obs']],
+      body: nacData, theme: 'grid',
+      headStyles: { fillColor: [80, 80, 80] as [number, number, number], textColor: 255, fontSize: 8 },
+      styles: { fontSize: 8 },
+    });
+    return doc.output('blob');
+  };
+
+  const uploadPDFToDrive = async (pdfBlob: Blob) => {
     try {
-      const doc = new jsPDF();
-      const primaryColor: [number, number, number] = [245, 166, 35];
-      doc.setFontSize(22); doc.setTextColor(...primaryColor); doc.setFont('helvetica', 'bold');
-      doc.text('INCUBANT MONITOR', 14, 20);
-      doc.setFontSize(12); doc.setTextColor(50, 50, 50);
-      doc.text('REPORTE DIARIO DE OPERACIÓN', 14, 28);
-      doc.setFontSize(10); doc.setTextColor(100, 100, 100); doc.setFont('helvetica', 'normal');
-      doc.text(`Fecha: ${new Date().toLocaleDateString()} | Hora: ${new Date().toLocaleTimeString()}`, 14, 35);
-      doc.text(`Operario: ${currentUser?.name || 'Sistema'}`, 14, 40);
-      const incs = syncedMachines.filter(m => m.type === 'incubadora');
-      const incData = incs.map(m => {
-        const d = m.data;
-        const time = d?.tiempoIncubacion ? `${d.tiempoIncubacion.dias}d ${d.tiempoIncubacion.horas}h` : '--';
-        return [m.number, m.status === 'completed' ? 'OK' : 'APAGADA', time,
-          d?.tempOvoscanReal || '--', d?.tempOvoscanSP || '--',
-          d?.tempAireReal || '--', d?.tempAireSP || '--',
-          d?.humedadReal || '--', d?.co2Real || '--',
-          d?.volteoNumero || '--', d?.volteoPosicion || '--',
-          d?.alarma || 'No', d?.ventiladorPrincipal || '--',
-          m.photoUrl ? 'VER FOTO' : '--', d?.observaciones || ''];
+      const reader = new FileReader();
+      reader.readAsDataURL(pdfBlob);
+      const base64 = await new Promise<string>((resolve) => {
+        reader.onloadend = () => resolve(reader.result as string);
       });
-      doc.setFontSize(14); doc.setTextColor(0, 0, 0); doc.setFont('helvetica', 'bold');
-      doc.text('CONTROL INCUBADORAS', 14, 55);
-      autoTable(doc, {
-        startY: 60,
-        head: [['N°', 'Est.', 'Tiempo', 'Real', 'SP', 'Aire', 'ASP', 'Hum%', 'CO2', 'V/N', 'V/P', 'Alm', 'Vent', 'Evid.', 'Obs']],
-        body: incData, theme: 'grid',
-        headStyles: { fillColor: [245, 166, 35] as [number, number, number], textColor: 255, fontSize: 8 },
-        styles: { fontSize: 7 },
+      await apiFetch(getApiUrl('/api/upload-pdf-drive'), {
+        method: 'POST',
+        body: JSON.stringify({ pdfBase64: base64 })
       });
-      const nacs = syncedMachines.filter(m => m.type === 'nacedora');
-      const nacData = nacs.map(m => {
-        const d = m.data;
-        const time = d?.tiempoIncubacion ? `${d.tiempoIncubacion.dias}d ${d.tiempoIncubacion.horas}h` : '--';
-        return [m.number, m.status === 'completed' ? 'OK' : 'APAGADA', time,
-          d?.tempSynchroReal || '--', d?.tempSynchroSP || '--',
-          d?.humedadReal || '--', d?.co2Real || '--',
-          d?.ventiladorPrincipal || '--', m.photoUrl ? 'VER FOTO' : '--', d?.observaciones || ''];
-      });
-      const currentY = (doc as any).lastAutoTable.finalY + 15;
-      doc.text('CONTROL NACEDORAS', 14, currentY);
-      autoTable(doc, {
-        startY: currentY + 5,
-        head: [['N°', 'Est.', 'Tiempo', 'Temp', 'SP', 'Hum%', 'CO2', 'Vent', 'Evid.', 'Obs']],
-        body: nacData, theme: 'grid',
-        headStyles: { fillColor: [80, 80, 80] as [number, number, number], textColor: 255, fontSize: 8 },
-        styles: { fontSize: 8 },
-      });
-      const pdfBlob = doc.output('blob');
-      doc.save(`Reporte_Incubant_${new Date().toISOString().split('T')[0]}.pdf`);
-      const { uploadEvidencePDF } = await import('../lib/supabase');
-      await uploadEvidencePDF(pdfBlob, currentUser?.name || 'Sistema');
-    } catch (err) { console.error('PDF Error:', err); }
+    } catch (err) { console.error('PDF Drive upload error:', err); }
   };
 
   const handleSyncAttempt = () => {
@@ -452,7 +461,15 @@ export default function DashboardScreen() {
       if (!response.ok) throw new Error('Error guardando en servidor');
 
       setSyncPhase('pdf');
-      await generatePDF(preparedMachines);
+      const pdfBlob = await generatePDF(preparedMachines);
+      // Download locally
+      const url = URL.createObjectURL(pdfBlob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Reporte_Incubant_${new Date().toISOString().split('T')[0]}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+      await uploadPDFToDrive(pdfBlob);
       setSyncSuccess(true);
       setTimeout(() => { setSyncSuccess(false); resetHourlyStatus(); }, 2000);
 

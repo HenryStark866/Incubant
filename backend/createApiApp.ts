@@ -783,6 +783,41 @@ export function createApiApp(): Express {
     }
   });
 
+  // ── Upload PDF to Drive ─────────────────────────────────────────────────
+  app.post('/api/upload-pdf-drive', requireAuthenticatedUser, async (req: AuthenticatedRequest, res) => {
+    try {
+      const { pdfBase64 } = req.body as { pdfBase64?: string };
+      const userName = req.user?.name || 'Operario';
+      const folderIdReports = process.env.DRIVE_FOLDER_REPORTS_ID;
+
+      if (!pdfBase64) {
+        return res.status(400).json({ error: 'No se proporcionó PDF' });
+      }
+
+      if (!folderIdReports) {
+        return res.status(500).json({ error: 'DRIVE_FOLDER_REPORTS_ID no configurada' });
+      }
+
+      const base64Data = pdfBase64.replace(/^data:application\/pdf;base64,/, '');
+      const buffer = Buffer.from(base64Data, 'base64');
+
+      const uploadResult = await uploadWithDateStructure(
+        buffer, userName, '', 'application/pdf', folderIdReports, 'pdf'
+      );
+
+      console.log(`[Drive PDF] PDF subido: ${uploadResult.fileName}`);
+
+      return res.status(200).json({
+        message: 'PDF subido a Drive',
+        fileName: uploadResult.fileName,
+        publicUrl: uploadResult.publicUrl,
+      });
+    } catch (error) {
+      console.error('[Drive PDF] Error:', error);
+      return res.status(500).json({ error: 'Error subiendo PDF a Drive' });
+    }
+  });
+
   // ── Seed April 1-15 Schedule ─────────────────────────────────────────────
   app.post('/api/admin/seed-april-schedule', requireRoles(['JEFE', 'SUPERVISOR']), async (_req, res) => {
     try {

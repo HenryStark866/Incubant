@@ -1094,6 +1094,42 @@ export function createApiApp(): Express {
         },
       });
 
+      // Si no hay máquinas en DB, generar las predefinidas
+      if (machines.length === 0) {
+        const defaultMachines = [];
+        for (let i = 1; i <= 16; i++) {
+          defaultMachines.push({
+            id: `inc-${i}`,
+            name: `INC-${i.toString().padStart(2, '0')}`,
+            type: 'incubadora',
+            status: 'ok',
+            temp: 'N/A',
+            humidity: 'N/A',
+            lastUpdate: 'Sin datos recientes',
+            photoUrl: null,
+            observaciones: null,
+            updatedBy: null,
+            data: null,
+          });
+        }
+        for (let i = 1; i <= 6; i++) {
+          defaultMachines.push({
+            id: `nac-${i}`,
+            name: `NAC-${i.toString().padStart(2, '0')}`,
+            type: 'nacedora',
+            status: 'ok',
+            temp: 'N/A',
+            humidity: 'N/A',
+            lastUpdate: 'Sin datos recientes',
+            photoUrl: null,
+            observaciones: null,
+            updatedBy: null,
+            data: null,
+          });
+        }
+        return res.json(defaultMachines);
+      }
+
       const statusData = machines.map((machine) => {
         const log = machine.logs[0];
         let status = 'ok';
@@ -1119,6 +1155,7 @@ export function createApiApp(): Express {
           const ventilador = extractObservationValue(observaciones, 'Ventilador');
 
           humidity = humedadRelativa || log.co2_actual.toFixed(1);
+          const diffMins = Math.floor((Date.now() - log.fecha_hora.getTime()) / 60000);
           data = {
             tiempoIncubacion: tiempoIncubacion || '0d 0h',
             humedadRelativa: humedadRelativa || '0',
@@ -1128,13 +1165,12 @@ export function createApiApp(): Express {
             alarma: alarmaActiva || 'No',
             ventiladorPrincipal: ventilador || 'No',
             timestamp: log.fecha_hora.toISOString(),
-            // Campos para compatibilidad con MachineCard del panel operario
             tempOvoscanReal: temp,
-            tempOvoscanSP: temp,
+            tempOvoscanSP: log.temp_principal_consigna.toFixed(1),
             tempAireReal: tempAire || temp,
             tempAireSP: tempAire || temp,
             tempSynchroReal: temp,
-            tempSynchroSP: temp,
+            tempSynchroSP: log.temp_principal_consigna.toFixed(1),
             temperaturaReal: tempAire || temp,
             temperaturaSP: tempAire || temp,
             humedadReal: humedadRelativa || log.co2_actual.toFixed(1),
@@ -1151,7 +1187,6 @@ export function createApiApp(): Express {
             status = 'alarm';
           }
 
-          const diffMins = Math.floor((Date.now() - log.fecha_hora.getTime()) / 60000);
           lastUpdate = `Hace ${diffMins} min`;
         } else {
           status = 'maintenance';
@@ -1175,7 +1210,39 @@ export function createApiApp(): Express {
       return res.json(statusData);
     } catch (error) {
       console.error('[Dashboard] Error al consultar BD para status:', error);
-      return res.json([]);
+      // Fallback: devolver máquinas predefinidas si la DB falla
+      const defaultMachines = [];
+      for (let i = 1; i <= 16; i++) {
+        defaultMachines.push({
+          id: `inc-${i}`,
+          name: `INC-${i.toString().padStart(2, '0')}`,
+          type: 'incubadora',
+          status: 'ok',
+          temp: 'N/A',
+          humidity: 'N/A',
+          lastUpdate: 'Sin datos recientes',
+          photoUrl: null,
+          observaciones: null,
+          updatedBy: null,
+          data: null,
+        });
+      }
+      for (let i = 1; i <= 6; i++) {
+        defaultMachines.push({
+          id: `nac-${i}`,
+          name: `NAC-${i.toString().padStart(2, '0')}`,
+          type: 'nacedora',
+          status: 'ok',
+          temp: 'N/A',
+          humidity: 'N/A',
+          lastUpdate: 'Sin datos recientes',
+          photoUrl: null,
+          observaciones: null,
+          updatedBy: null,
+          data: null,
+        });
+      }
+      return res.json(defaultMachines);
     }
   });
 

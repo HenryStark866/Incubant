@@ -1,6 +1,5 @@
 import { Request, Response } from 'express';
 import { analyzeIncubatorImage } from '../services/vision.service';
-import { uploadToDrive, uploadWithDateStructure, cleanUserName } from '../services/drive.service';
 import { generateReportPDF } from '../services/pdf.service';
 import type { PrismaClient } from '@prisma/client';
 
@@ -20,6 +19,18 @@ function getBogotaDate(): Date {
   const now = new Date();
   const utc = now.getTime() + now.getTimezoneOffset() * 60000;
   return new Date(utc - 5 * 60 * 60 * 1000);
+}
+
+/**
+ * Limpia nombre de usuario para archivo: minúsculas, sin espacios, sin caracteres especiales
+ */
+function cleanUserName(name: string): string {
+  return name
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, '')
+    .replace(/[^a-zA-Z0-9_]/g, '')
+    .toLowerCase();
 }
 
 /**

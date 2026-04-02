@@ -8,7 +8,6 @@ import type { PrismaClient } from '@prisma/client';
 
 import { processMachineReport, processClosingReport } from './controllers/report.controller';
 import { seedShifts } from './controllers/admin.controller';
-import { uploadWithDateStructure, cleanUserName } from './services/drive.service';
 import { uploadToSupabase } from './services/supabase_storage.service';
 
 type UserRole = 'OPERARIO' | 'SUPERVISOR' | 'JEFE';

@@ -353,7 +353,7 @@ export default function SupervisorDashboard() {
   // Polling de datos cada 3 segundos
   useEffect(() => {
     void fetchData();
-    const interval = setInterval(fetchData, 3000);
+    const interval = setInterval(fetchData, 30000);
     return () => clearInterval(interval);
   }, [fetchData]);
 

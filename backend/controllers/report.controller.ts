@@ -96,26 +96,24 @@ export const processMachineReport = async (req: AuthenticatedRequest, res: Respo
       } catch { /* ignorar si el JSON está malformado */ }
     }
 
-    // 2. Subir foto → Drive
+    // 2. Subir foto → Supabase Storage
     let imageUrl = '';
-    let drivePhotoError = '';
+    let storagePhotoError = '';
     try {
-      const folderIdPhotos = process.env.DRIVE_FOLDER_PHOTOS_ID;
-      if (!folderIdPhotos) throw new Error('DRIVE_FOLDER_PHOTOS_ID no configurada');
-
-      const photoResult = await uploadWithDateStructure(
-        file.buffer, userName, machineId, file.mimetype, folderIdPhotos, 'photo'
+      const { uploadToSupabase } = await import('../services/supabase_storage.service');
+      const photoResult = await uploadToSupabase(
+        file.buffer, userName, 'photos', file.mimetype
       );
       imageUrl = photoResult.publicUrl;
-      console.log(`[Drive] Foto subida OK: ${photoResult.fileName}`);
-    } catch (driveError) {
-      drivePhotoError = `Drive: ${driveError instanceof Error ? driveError.message : 'Error desconocido'}`;
-      console.error('[Drive] ERROR subiendo foto:', driveError);
+      console.log(`[Storage] Foto subida OK: ${photoResult.fileName}`);
+    } catch (storageError) {
+      storagePhotoError = `Storage: ${storageError instanceof Error ? storageError.message : 'Error desconocido'}`;
+      console.error('[Storage] ERROR subiendo foto:', storageError);
     }
 
-    // 3. Generar PDF → Subir a Drive
+    // 3. Generar PDF → Subir a Supabase Storage
     let pdfUrl = '';
-    let drivePdfError = '';
+    let storagePdfError = '';
     try {
       const pdfBuffer = await generateReportPDF(
         { id: machineId, name: `Máquina ${machineId}` },
@@ -124,18 +122,16 @@ export const processMachineReport = async (req: AuthenticatedRequest, res: Respo
         file.buffer
       );
 
-      // Subir PDF a Drive
-      const folderIdReports = process.env.DRIVE_FOLDER_REPORTS_ID;
-      if (!folderIdReports) throw new Error('DRIVE_FOLDER_REPORTS_ID no configurada');
-
-      const pdfResult = await uploadWithDateStructure(
-        pdfBuffer, userName, machineId, 'application/pdf', folderIdReports, 'pdf'
+      // Subir PDF a Supabase Storage
+      const { uploadToSupabase } = await import('../services/supabase_storage.service');
+      const pdfResult = await uploadToSupabase(
+        pdfBuffer, userName, 'reports', 'application/pdf'
       );
       pdfUrl = pdfResult.publicUrl;
-      console.log(`[Drive] PDF reporte por hora subido OK: ${pdfResult.fileName}`);
+      console.log(`[Storage] PDF reporte por hora subido OK: ${pdfResult.fileName}`);
     } catch (pdfError) {
-      drivePdfError = `Drive PDF: ${pdfError instanceof Error ? pdfError.message : 'Error desconocido'}`;
-      console.error('[Drive] ERROR generando/subiendo PDF:', pdfError);
+      storagePdfError = `Storage PDF: ${pdfError instanceof Error ? pdfError.message : 'Error desconocido'}`;
+      console.error('[Storage] ERROR generando/subiendo PDF:', pdfError);
     }
 
     // 4. Guardar en la base de datos
@@ -208,7 +204,7 @@ export const processMachineReport = async (req: AuthenticatedRequest, res: Respo
         imageUrl,
         pdfUrl,
         savedToDb: !!savedReport,
-        warnings: [drivePhotoError, drivePdfError].filter(Boolean),
+        warnings: [storagePhotoError, storagePdfError].filter(Boolean),
       }
     });
 
@@ -245,19 +241,17 @@ export const processClosingReport = async (req: AuthenticatedRequest, res: Respo
     const timeStr = formatTimeFile(bogotaDate);
     const cleanName = cleanUserName(userName);
 
-    // Subir PDF → Carpeta Cierres de Turno con estructura de fecha
+    // Subir PDF → Supabase Storage
     let pdfUrl = '';
     try {
-      const folderIdClosing = process.env.DRIVE_FOLDER_CLOSING_REPORTS_ID;
-      if (!folderIdClosing) throw new Error('DRIVE_FOLDER_CLOSING_REPORTS_ID no configurada');
-
-      const pdfResult = await uploadWithDateStructure(
-        file.buffer, userName, '', 'application/pdf', folderIdClosing, 'closing'
+      const { uploadToSupabase } = await import('../services/supabase_storage.service');
+      const pdfResult = await uploadToSupabase(
+        file.buffer, userName, 'closing', 'application/pdf'
       );
       pdfUrl = pdfResult.publicUrl;
-      console.log(`[Drive] PDF cierre de turno subido OK: ${pdfResult.fileName}`);
-    } catch (driveError) {
-      console.error('[Drive] ERROR subiendo cierre de turno:', driveError);
+      console.log(`[Storage] PDF cierre de turno subido OK: ${pdfResult.fileName}`);
+    } catch (storageError) {
+      console.error('[Storage] ERROR subiendo cierre de turno:', storageError);
     }
 
     // Guardar en BD

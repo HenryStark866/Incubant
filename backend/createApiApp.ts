@@ -9,6 +9,7 @@ import type { PrismaClient } from '@prisma/client';
 import { processMachineReport, processClosingReport } from './controllers/report.controller';
 import { seedShifts } from './controllers/admin.controller';
 import { uploadWithDateStructure, cleanUserName } from './services/drive.service';
+import { uploadToSupabase } from './services/supabase_storage.service';
 
 type UserRole = 'OPERARIO' | 'SUPERVISOR' | 'JEFE';
 
@@ -740,14 +741,14 @@ export function createApiApp(): Express {
     }
   });
 
-  // ── Sync Hourly with Drive Upload ────────────────────────────────────────
-  // Recibe fotos en base64 + datos, sube a Drive con formato DD/MM/YYYY/HH:MM.nombreoperario
+  // ── Sync Hourly with Storage Upload ─────────────────────────────────────
+  // Recibe fotos en base64 + datos, sube a Supabase Storage
   app.post('/api/sync-hourly-drive', requireAuthenticatedUser, async (req: AuthenticatedRequest, res) => {
     try {
       const { machines } = req.body as { machines?: SubmittedMachine[] };
       const userName = req.user?.name || 'Operario';
 
-      console.log(`[Sync Drive] Recibido: ${machines?.length || 0} máquinas, usuario: ${userName}`);
+      console.log(`[Sync Storage] Recibido: ${machines?.length || 0} máquinas, usuario: ${userName}`);
 
       if (!machines || !Array.isArray(machines)) {
         return res.status(400).json({ error: 'Datos inválidos o incompletos' });
@@ -755,53 +756,36 @@ export function createApiApp(): Express {
 
       const completedMachines = machines.filter((machine) => machine.status === 'completed' && machine.data);
 
-      // Log photo status for each completed machine
-      completedMachines.forEach(m => {
-        const hasPhoto = !!m.photoUrl;
-        const photoLen = m.photoUrl?.length || 0;
-        const isBase64 = m.photoUrl?.startsWith('data:image');
-        console.log(`[Sync Drive] Máquina ${m.id}: status=${m.status}, hasPhoto=${hasPhoto}, photoLen=${photoLen}, isBase64=${isBase64}`);
-      });
-
       if (completedMachines.length === 0) {
         return res.status(400).json({ error: 'No hay máquinas completadas para sincronizar' });
       }
 
-      const folderIdPhotos = process.env.DRIVE_FOLDER_PHOTOS_ID;
-      const folderIdReports = process.env.DRIVE_FOLDER_REPORTS_ID;
-      console.log(`[Sync Drive] DRIVE_FOLDER_PHOTOS_ID: ${folderIdPhotos ? 'SET' : 'NOT SET'}`);
+      const storageResults: { machineId: string; photoUrl?: string; photoError?: string }[] = [];
 
-      const driveResults: { machineId: string; photoUrl?: string; pdfUrl?: string; photoError?: string }[] = [];
-
-      // Subir cada foto a Drive
+      // Subir cada foto a Storage
       for (const machine of completedMachines) {
-        const result: { machineId: string; photoUrl?: string; pdfUrl?: string; photoError?: string } = { machineId: machine.id };
+        const result: { machineId: string; photoUrl?: string; photoError?: string } = { machineId: machine.id };
 
         const photoStr = machine.photoUrl;
         if (photoStr && photoStr.length > 100 && photoStr.startsWith('data:image')) {
           try {
             const base64Data = photoStr.replace(/^data:image\/\w+;base64,/, '');
             const buffer = Buffer.from(base64Data, 'base64');
-            console.log(`[Drive Sync] Subiendo foto para ${machine.id}, buffer size: ${buffer.length} bytes`);
-
-            const uploadResult = await uploadWithDateStructure(
-              buffer, userName, machine.id, 'image/jpeg', folderIdPhotos || '', 'photo'
+            
+            const uploadResult = await uploadToSupabase(
+              buffer, userName, 'photos', 'image/jpeg'
             );
             result.photoUrl = uploadResult.publicUrl;
-            console.log(`[Drive Sync] ✅ Foto subida OK: ${uploadResult.fileName} -> ${uploadResult.publicUrl}`);
+            console.log(`[Storage Sync] ✅ Foto subida OK: ${uploadResult.fileName} -> ${uploadResult.publicUrl}`);
           } catch (err) {
             result.photoError = err instanceof Error ? err.message : 'Error desconocido';
-            console.error(`[Drive Sync] ❌ Error subiendo foto ${machine.id}:`, err);
+            console.error(`[Storage Sync] ❌ Error subiendo foto ${machine.id}:`, err);
           }
         } else if (photoStr && photoStr.length > 100 && !photoStr.startsWith('data:')) {
-          // Already a URL (from previous sync or ReportUploader)
           result.photoUrl = photoStr;
-          console.log(`[Drive Sync] Foto ya es URL para ${machine.id}`);
-        } else {
-          console.log(`[Drive Sync] ⚠ Sin foto válida para ${machine.id} (length: ${photoStr?.length || 0})`);
         }
 
-        driveResults.push(result);
+        storageResults.push(result);
       }
 
       // Guardar en BD
@@ -815,9 +799,8 @@ export function createApiApp(): Express {
           const mainTemp = toNumberOrNull(d.tempOvoscan) ?? toNumberOrNull(d.temperatura) ?? 0;
           const secondaryTemp = toNumberOrNull(d.tempAire) ?? mainTemp;
           const co2 = toNumberOrNull(d.co2) ?? 0;
-          const humidity = toNumberOrNull(d.humedadRelativa) ?? 0;
 
-          const driveResult = driveResults.find(r => r.machineId === machine.id);
+          const storageResult = storageResults.find(r => r.machineId === machine.id);
 
           if (d.alarma === 'Si') {
             await prisma.incident.create({
@@ -834,7 +817,7 @@ export function createApiApp(): Express {
           return {
             user_id: databaseUser.id,
             machine_id: resolvedMachine.id,
-            photo_url: driveResult?.photoUrl || null,
+            photo_url: storageResult?.photoUrl || null,
             temp_principal_actual: mainTemp,
             temp_principal_consigna: mainTemp,
             co2_actual: co2,
@@ -849,54 +832,48 @@ export function createApiApp(): Express {
         }));
 
         await prisma.hourlyLog.createMany({ data: logsToInsert });
-        // Notificar a todos los clientes conectados
         sendEventToAll({ type: 'NEW_REPORT', message: 'Nuevo reporte sincronizado', timestamp: new Date().toISOString() });
       } catch (dbError) {
-        console.error('[Sync Drive] Error BD:', dbError);
+        console.error('[Sync Storage] Error BD:', dbError);
       }
 
       return res.status(200).json({
-        message: 'Sincronización con Drive exitosa',
-        driveResults,
+        message: 'Sincronización con Storage exitosa',
+        storageResults,
       });
     } catch (error) {
-      console.error('[Sync Drive] Error interno:', error);
-      return res.status(500).json({ error: 'Error interno del servidor al sincronizar con Drive' });
+      console.error('[Sync Storage] Error interno:', error);
+      return res.status(500).json({ error: 'Error interno del servidor al sincronizar con Storage' });
     }
   });
 
-  // ── Upload PDF to Drive ─────────────────────────────────────────────────
+  // ── Upload PDF to Storage ────────────────────────────────────────────────
   app.post('/api/upload-pdf-drive', requireAuthenticatedUser, async (req: AuthenticatedRequest, res) => {
     try {
       const { pdfBase64 } = req.body as { pdfBase64?: string };
       const userName = req.user?.name || 'Operario';
-      const folderIdReports = process.env.DRIVE_FOLDER_REPORTS_ID;
 
       if (!pdfBase64) {
         return res.status(400).json({ error: 'No se proporcionó PDF' });
       }
 
-      if (!folderIdReports) {
-        return res.status(500).json({ error: 'DRIVE_FOLDER_REPORTS_ID no configurada' });
-      }
-
       const base64Data = pdfBase64.replace(/^data:application\/pdf;base64,/, '');
       const buffer = Buffer.from(base64Data, 'base64');
 
-      const uploadResult = await uploadWithDateStructure(
-        buffer, userName, '', 'application/pdf', folderIdReports, 'pdf'
+      const uploadResult = await uploadToSupabase(
+        buffer, userName, 'reports', 'application/pdf'
       );
 
-      console.log(`[Drive PDF] PDF subido: ${uploadResult.fileName}`);
+      console.log(`[Storage PDF] PDF subido: ${uploadResult.fileName}`);
 
       return res.status(200).json({
-        message: 'PDF subido a Drive',
+        message: 'PDF subido a Storage',
         fileName: uploadResult.fileName,
         publicUrl: uploadResult.publicUrl,
       });
     } catch (error) {
-      console.error('[Drive PDF] Error:', error);
-      return res.status(500).json({ error: 'Error subiendo PDF a Drive' });
+      console.error('[Storage PDF] Error:', error);
+      return res.status(500).json({ error: 'Error subiendo PDF a Storage' });
     }
   });
 

@@ -4,7 +4,9 @@ import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
 
 // Use the same auth pattern as the backend service
 const CLIENT_EMAIL = process.env.GOOGLE_CLIENT_EMAIL;
-const PRIVATE_KEY = process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\n');
+const PRIVATE_KEY = process.env.GOOGLE_PRIVATE_KEY
+  ? process.env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, '\n').replace(/\r/g, '').replace(/^["']|["']$/g, '').trim()
+  : undefined;
 
 console.log('Auth config:');
 console.log('  Client email:', CLIENT_EMAIL);

@@ -1,5 +1,3 @@
-// Ubicación: prisma/schema.prisma
-
 generator client {
   provider        = "prisma-client-js"
   previewFeatures = ["driverAdapters"]
@@ -11,9 +9,126 @@ datasource db {
   directUrl = env("DIRECT_URL")
 }
 
-// ==========================================
-// ENUMS
-// ==========================================
+model User {
+  id              String               @id @default(uuid())
+  nombre          String
+  pin_acceso      String               @unique
+  rol             Role                 @default(OPERARIO)
+  turno           String               @default("Turno 1")
+  estado          String               @default("Activo")
+  ultimo_acceso   DateTime?
+  session_expires DateTime?
+  breaks          Break[]
+  logs            HourlyLog[]
+  incidents       Incident[]
+  reports         Report[]
+  assignments     ScheduleAssignment[]
+  sessions        Session[]
+}
+
+model Machine {
+  id             String      @id @default(uuid())
+  tipo           MachineType
+  numero_maquina Int
+  logs           HourlyLog[]
+  incidents      Incident[]
+  reports        Report[]
+}
+
+model Report {
+  id                String   @id @default(uuid())
+  fecha_hora        DateTime @default(now())
+  imageUrl          String?
+  pdfUrl            String?
+  tempPrincipalReal Float?   @default(0)
+  tempPrincipalSP   Float?   @default(0)
+  tempAireReal      Float?   @default(0)
+  tempAireSP        Float?   @default(0)
+  humidityReal      Float?   @default(0)
+  humiditySP        Float?   @default(0)
+  co2Real           Float?   @default(0)
+  co2SP             Float?   @default(0)
+  isAlarm           Boolean? @default(false)
+  isClosingReport   Boolean? @default(false)
+  processStatus     String?  @default("NORMAL")
+  observaciones     String?  @default("")
+  temperature       Float?   @default(0)
+  humidity          Float?   @default(0)
+  user_id           String
+  machine_id        String
+  machine           Machine  @relation(fields: [machine_id], references: [id], onDelete: Cascade)
+  user              User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+}
+
+model Break {
+  id         String   @id @default(uuid())
+  fecha_hora DateTime @default(now())
+  tipo       String
+  duracion   Int?
+  estado     String   @default("EN_CURSO")
+  user_id    String
+  user       User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+}
+
+model Shift {
+  id          String               @id @default(uuid())
+  nombre      String               @unique
+  hora_inicio String
+  hora_fin    String
+  color       String?              @default("#f5a623")
+  assignments ScheduleAssignment[]
+}
+
+model ScheduleAssignment {
+  id       String   @id @default(uuid())
+  user_id  String
+  shift_id String
+  fecha    DateTime
+  shift    Shift    @relation(fields: [shift_id], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([user_id, fecha])
+}
+
+model HourlyLog {
+  id                       String   @id @default(uuid())
+  fecha_hora               DateTime @default(now())
+  user_id                  String
+  machine_id               String
+  photo_url                String?
+  temp_principal_actual    Float
+  temp_principal_consigna  Float
+  co2_actual               Float
+  co2_consigna             Float
+  fan_speed                Float
+  temp_secundaria_actual   Float
+  temp_secundaria_consigna Float
+  is_na                    Boolean  @default(false)
+  temp_superior_actual     Float?
+  observaciones            String?
+  machine                  Machine  @relation(fields: [machine_id], references: [id], onDelete: Cascade)
+  user                     User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+}
+
+model Incident {
+  id          String   @id @default(uuid())
+  fecha_hora  DateTime @default(now())
+  user_id     String
+  machine_id  String?
+  titulo      String
+  descripcion String
+  tipo        String
+  machine     Machine? @relation(fields: [machine_id], references: [id], onDelete: Cascade)
+  user        User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+}
+
+model Session {
+  id        String   @id @default(uuid())
+  token     String   @unique
+  user_id   String
+  expiresAt DateTime
+  user      User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+}
 
 enum Role {
   OPERARIO
@@ -24,177 +139,4 @@ enum Role {
 enum MachineType {
   INCUBADORA
   NACEDORA
-}
-
-// ==========================================
-// MODELOS PRINCIPALES
-// ==========================================
-
-model User {
-  id              String      @id @default(uuid())
-  nombre          String
-  pin_acceso      String      @unique
-  rol             Role        @default(OPERARIO)
-  turno           String      @default("Turno 1")
-  estado          String      @default("Activo")
-  ultimo_acceso   DateTime?
-  session_expires DateTime?
-  
-  // Relaciones
-  logs            HourlyLog[]
-  incidents       Incident[]
-  assignments     ScheduleAssignment[]
-  sessions        Session[]
-  reports         Report[]             
-  breaks          Break[]              
-}
-
-model Machine {
-  id             String      @id @default(uuid())
-  tipo           MachineType
-  numero_maquina Int
-  
-  @@unique([tipo, numero_maquina])
-  
-  // Relaciones
-  logs           HourlyLog[]
-  incidents      Incident[]
-  reports        Report[]            
-}
-
-// ==========================================
-// NUEVO: REPORTES Y DESCANSOS (FASE 1)
-// ==========================================
-
-model Report {
-  id            String   @id @default(uuid())
-  fecha_hora    DateTime @default(now())
-  imageUrl      String?  
-  pdfUrl        String?  
-  
-  // Datos Principales (Ovoscan en INC / Synchrohatch en NAC)
-  tempPrincipalReal Float?    @default(0)
-  tempPrincipalSP   Float?    @default(0)
-  
-  // Datos Aire
-  tempAireReal      Float?    @default(0)
-  tempAireSP        Float?    @default(0)
-  
-  // Humedad y CO2
-  humidityReal      Float?    @default(0)
-  humiditySP        Float?    @default(0)
-  
-  co2Real           Float?    @default(0)
-  co2SP             Float?    @default(0)
-  
-  // Status y Alarmas
-  isAlarm           Boolean?  @default(false)
-  isClosingReport   Boolean?  @default(false)
-  processStatus     String?   @default("NORMAL")
-  observaciones     String?   @default("")
-  
-  // Legacy fields (compatibilidad)
-  temperature       Float?    @default(0)
-  humidity          Float?    @default(0)
-  
-  // Claves Foráneas
-  user_id       String
-  machine_id    String
-
-  // Relaciones
-  user          User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
-  machine       Machine  @relation(fields: [machine_id], references: [id], onDelete: Cascade)
-}
-
-model Break {
-  id          String   @id @default(uuid())
-  fecha_hora  DateTime @default(now())
-  tipo        String   
-  duracion    Int?     
-  estado      String   @default("EN_CURSO") 
-  
-  // Clave Foránea
-  user_id     String
-
-  // Relación
-  user        User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
-}
-
-// ==========================================
-// TURNOS Y ASIGNACIONES
-// ==========================================
-
-model Shift {
-  id          String   @id @default(uuid())
-  nombre      String   @unique 
-  hora_inicio String   
-  hora_fin    String   
-  color       String?  @default("#f5a623")
-
-  assignments ScheduleAssignment[]
-}
-
-model ScheduleAssignment {
-  id       String   @id @default(uuid())
-  fecha    DateTime 
-
-  // Claves Foráneas
-  user_id  String
-  shift_id String
-
-  // Relaciones
-  user     User  @relation(fields: [user_id], references: [id], onDelete: Cascade)
-  shift    Shift @relation(fields: [shift_id], references: [id], onDelete: Cascade)
-
-  @@unique([user_id, fecha]) 
-}
-
-// ==========================================
-// LOGS, INCIDENTES Y SESIONES PREEXISTENTES
-// ==========================================
-
-model HourlyLog {
-  id                       String   @id @default(uuid())
-  fecha_hora               DateTime @default(now())
-  user_id                  String
-  machine_id               String
-  photo_url                String?
-  
-  temp_principal_actual    Float    
-  temp_principal_consigna  Float    
-  co2_actual               Float
-  co2_consigna             Float
-  fan_speed                Float
-  temp_secundaria_actual   Float    
-  temp_secundaria_consigna Float    
-  
-  is_na                    Boolean  @default(false)
-  temp_superior_actual     Float?   
-  
-  observaciones            String?
-
-  user    User    @relation(fields: [user_id], references: [id], onDelete: Cascade)
-  machine Machine @relation(fields: [machine_id], references: [id], onDelete: Cascade)
-}
-
-model Incident {
-  id          String   @id @default(uuid())
-  fecha_hora  DateTime @default(now())
-  user_id     String
-  machine_id  String?
-  titulo      String
-  descripcion String
-  tipo        String   
-  
-  user    User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
-  machine Machine? @relation(fields: [machine_id], references: [id], onDelete: Cascade)
-}
-
-model Session {
-  id        String   @id @default(uuid())
-  token     String   @unique
-  user_id   String
-  expiresAt DateTime
-
-  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
 }

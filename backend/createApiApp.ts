@@ -558,11 +558,12 @@ export function createApiApp(): Express {
       res.write(': heartbeat\n\n');
     }, 30000);
 
-    clients.push(res);
+    const { addClient, removeClient } = require('./services/event.service');
+    addClient(res);
 
     req.on('close', () => {
       clearInterval(heartbeat);
-      clients = clients.filter(c => c !== res);
+      removeClient(res);
     });
   });
 

@@ -148,35 +148,61 @@ export const processMachineReport = async (req: AuthenticatedRequest, res: Respo
         calcDiff(data.tempAireReal || data.temperaturaReal, data.tempAireSP || data.temperaturaSP) >= 1.5 ||
         calcDiff(data.humidityReal, data.humiditySP) >= 1.5;
 
+      // Create Report entry (for evidence history)
       savedReport = await prisma.report.create({
         data: {
           machine_id: machine.id,
           user_id: userId,
-
           tempPrincipalReal: Number(data.tempOvoscanReal || data.tempSynchroReal) || 0,
           tempPrincipalSP: Number(data.tempOvoscanSP || data.tempSynchroSP) || 0,
-
           tempAireReal: Number(data.tempAireReal || data.temperaturaReal) || 0,
           tempAireSP: Number(data.tempAireSP || data.temperaturaSP) || 0,
-
           humidityReal: Number(data.humidityReal) || 0,
           humiditySP: Number(data.humiditySP) || 0,
-
           co2Real: Number(data.co2Real) || 0,
           co2SP: Number(data.co2SP) || 0,
-
           isAlarm: isAlarm,
           isClosingReport: false,
           observaciones: String(data.observaciones || ''),
           processStatus: String(isAlarm ? 'ALARMA' : 'NORMAL'),
-
           imageUrl,
           pdfUrl: '',
-
           temperature: Number(data.tempOvoscanReal || data.tempSynchroReal) || 0,
           humidity: Number(data.humidityReal) || 0,
         }
       });
+
+      // ALSO create HourlyLog entry (THIS IS WHAT THE DASHBOARD READS IN REAL-TIME)
+      await prisma.hourlyLog.create({
+        data: {
+          user_id: userId,
+          machine_id: machine.id,
+          photo_url: imageUrl,
+          temp_principal_actual: Number(data.tempOvoscanReal || data.tempSynchroReal) || 0,
+          temp_principal_consigna: Number(data.tempOvoscanSP || data.tempSynchroSP) || 0,
+          co2_actual: Number(data.co2Real) || 0,
+          co2_consigna: Number(data.co2SP) || 0,
+          fan_speed: 0,
+          temp_secundaria_actual: Number(data.tempAireReal || data.temperaturaReal) || 0,
+          temp_secundaria_consigna: Number(data.tempAireSP || data.temperaturaSP) || 0,
+          is_na: dbType === 'NACEDORA',
+          observaciones: `Registro visual: ${data.observaciones || ''}`
+        }
+      });
+
+      // 5. Trigger SSE Event to update Admin Dashboard IMMEDIATELY
+      try {
+        const { sendEventToAll } = await import('../services/event.service');
+        sendEventToAll({ 
+          type: 'NEW_REPORT', 
+          message: `Nuevo reporte de ${machineId} (${userName})`, 
+          timestamp: new Date().toISOString(),
+          machineId: machine.id,
+          status: isAlarm ? 'alarm' : 'ok'
+        });
+      } catch (sseErr) {
+        console.warn('[SSE] Error sending notification:', sseErr);
+      }
 
       await prisma.$disconnect();
     } catch (dbError) {

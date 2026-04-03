@@ -25,12 +25,15 @@ export function getApiUrl(path: string): string {
  * This is REQUIRED for session cookies to work across the Vercel → Render proxy.
  */
 export const apiFetch = (url: string, options: RequestInit = {}): Promise<Response> => {
+  const isFormData = options.body instanceof FormData;
+  const headers = {
+    ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
+    ...(options.headers || {}),
+  } as Record<string, string>;
+
   return fetch(url, {
     ...options,
     credentials: 'include',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(options.headers || {}),
-    },
+    headers,
   });
 };

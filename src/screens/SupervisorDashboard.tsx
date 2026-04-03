@@ -929,37 +929,70 @@ export default function SupervisorDashboard() {
                       .map(machine => (
                         <button
                           key={machine.id}
-                          onClick={() => setSelectedMachine(machine)}
-                          className={`relative p-4 rounded-2xl border-2 flex flex-col items-center justify-center gap-1 transition-all hover:scale-105 active:scale-95 overflow-hidden shadow-sm ${machine.status === 'alarm' ? 'border-red-500/50' :
-                              machine.status === 'maintenance' ? `${isDark ? 'border-white/10' : 'border-gray-200'}` :
-                                `${isDark ? 'border-brand-primary/10 hover:border-brand-primary' : 'border-brand-primary/10 hover:border-brand-primary'}`
-                            }`}
-                          style={{ minHeight: '100px' }}
+                          onClick={() => {
+                            if (machine.status === 'alarm') {
+                              setSelectedMachine(machine);
+                            }
+                          }}
+                          className={`relative p-4 rounded-2xl border-2 flex flex-col items-center justify-center gap-1 transition-all ${
+                            machine.status === 'alarm' ? 'hover:scale-105 active:scale-95 cursor-pointer shadow-lg border-red-500/50' : 'cursor-default border-transparent'
+                          } overflow-hidden shadow-sm`}
+                          style={{ minHeight: '120px' }}
                         >
-                          {/* Imagen de máquina real */}
+                          {/* Imagen de máquina real (Capturada por operario) */}
                           <div className="absolute inset-0">
-                            <img
-                              src="/imagen1.png"
-                              alt={machine.name}
-                              className="w-full h-full object-cover"
-                              style={{
-                                filter: machine.status === 'alarm' ? 'brightness(0.8) saturate(1.3) hue-rotate(-10deg)' : machine.status === 'maintenance' ? 'brightness(0.6) grayscale(0.5)' : 'brightness(1) contrast(1.05)',
-                                transform: 'scale(1.02)',
-                                imageRendering: '-webkit-optimize-contrast',
-                              }}
-                            />
-                            <div className="absolute inset-0" style={{
-                              background: machine.status === 'alarm'
-                                ? 'linear-gradient(180deg, rgba(239,68,68,0.1) 0%, rgba(0,0,0,0.05) 30%, rgba(0,0,0,0.3) 100%)'
-                                : machine.status === 'maintenance'
-                                ? 'linear-gradient(180deg, rgba(100,100,100,0.05) 0%, rgba(0,0,0,0.3) 100%)'
-                                : 'linear-gradient(180deg, rgba(0,0,0,0.1) 0%, rgba(0,0,0,0.03) 30%, rgba(0,0,0,0.25) 100%)',
-                            }} />
+                            {machine.photoUrl ? (
+                              <img
+                                src={machine.photoUrl}
+                                alt={machine.name}
+                                className="w-full h-full object-cover"
+                                style={{
+                                  filter: machine.status === 'maintenance' ? 'brightness(0.4) grayscale(0.8)' : 'brightness(0.9) contrast(1.1)',
+                                  imageRendering: 'auto',
+                                }}
+                              />
+                            ) : (
+                              <div className={`w-full h-full flex items-center justify-center ${isDark ? 'bg-white/5' : 'bg-gray-100'}`}>
+                                <ImageIcon size={24} className={isDark ? 'text-white/10' : 'text-gray-300'} />
+                              </div>
+                            )}
+                            
+                            {/* Overlay para legibilidad de textos */}
+                            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
+                            
+                            {/* Borde de estado */}
+                            {machine.status === 'alarm' && (
+                              <div className="absolute inset-0 border-4 border-red-500 animate-pulse pointer-events-none" />
+                            )}
                           </div>
-                          <span className={`relative z-10 font-black text-xs ${machine.status === 'alarm' ? 'text-red-300' : machine.status === 'maintenance' ? 'text-white/30' : isDark ? 'text-white' : 'text-white'}`} style={{ textShadow: '0 2px 6px rgba(0,0,0,0.8)' }}>{machine.name.replace(/(INC|NAC)-/, '')}</span>
-                          <span className={`relative z-10 text-[10px] font-bold ${machine.status === 'alarm' ? 'text-red-400' : 'text-brand-primary'}`} style={{ textShadow: '0 1px 4px rgba(0,0,0,0.7)' }}>{machine.temp}°F</span>
+
+                          <span 
+                            className={`relative z-10 font-black text-sm ${machine.status === 'alarm' ? 'text-red-300 animate-bounce' : 'text-white'}`} 
+                            style={{ textShadow: '0 2px 8px rgba(0,0,0,0.9)' }}
+                          >
+                            {machine.name.replace(/(INC|NAC)-/, '')}
+                          </span>
+                          
+                          <span 
+                            className={`relative z-10 text-[11px] font-black ${machine.status === 'alarm' ? 'text-red-400' : 'text-brand-primary'}`} 
+                            style={{ textShadow: '0 1px 6px rgba(0,0,0,0.8)' }}
+                          >
+                            {machine.temp}°F
+                          </span>
+                          
                           {machine.data && (
-                            <span className="relative z-10 text-[8px] text-white/50 font-mono" style={{ textShadow: '0 1px 3px rgba(0,0,0,0.6)' }}>{machine.data.lastUpdate || machine.lastUpdate}</span>
+                            <span 
+                              className="relative z-10 text-[8px] text-white/70 font-black uppercase tracking-wider" 
+                              style={{ textShadow: '0 1px 4px rgba(0,0,0,0.7)' }}
+                            >
+                              {machine.data.lastUpdate || machine.lastUpdate}
+                            </span>
+                          )}
+
+                          {machine.status === 'alarm' && (
+                            <div className="absolute top-2 right-2 z-20 bg-red-600 text-white p-1 rounded-lg animate-pulse">
+                              <AlertTriangle size={12} />
+                            </div>
                           )}
                         </button>
                       ))}

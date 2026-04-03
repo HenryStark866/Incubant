@@ -6,7 +6,7 @@ import cors from 'cors';
 import multer from 'multer';
 import type { PrismaClient } from '@prisma/client';
 
-import { processMachineReport, requestClosingReport } from './controllers/report.controller';
+import { processMachineReport, requestClosingReport, getHistory } from './controllers/report.controller';
 import { seedShifts } from './controllers/admin.controller';
 import { uploadToSupabase } from './services/supabase_storage.service';
 
@@ -570,7 +570,7 @@ export function createApiApp(): Express {
   // ── Smart Reporting (Gemini + Drive + PDF) ────────────────────────────────
   app.post('/api/reports', requireAuthenticatedUser, upload.single('evidence'), processMachineReport);
   app.get('/api/reports/closing/request', requireAuthenticatedUser, requestClosingReport);
-
+  app.get('/api/reports/history', requireAuthenticatedUser, getHistory);
 
   // ── Session ──────────────────────────────────────────────────────────────
   app.get('/api/session', (req: AuthenticatedRequest, res) => {

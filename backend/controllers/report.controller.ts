@@ -298,6 +298,43 @@ export const requestClosingReport = async (req: AuthenticatedRequest, res: Respo
 
   } catch (error) {
     console.error('[Report Controller] Error en requestClosingReport:', error);
-    return res.status(500).json({ error: 'Error al generar el reporte de cierre.' });
+    return res.status(500).json({ error: 'Fallo al generar el reporte de cierre.' });
+  }
+};
+
+/**
+ * GET /api/reports/history
+ * Obtiene el historial en orden descendente.
+ */
+export const getHistory = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const prisma = await getPrisma();
+
+    // Obtener los logs incluyendo usuario y máquina
+    const logs = await prisma.hourlyLog.findMany({
+      orderBy: { fecha_hora: 'desc' },
+      take: 200,
+      include: {
+        user: { select: { nombre: true, rol: true, turno: true } },
+        machine: true
+      }
+    });
+
+    // Obtener incidentes
+    const incidents = await prisma.incident.findMany({
+      orderBy: { fecha_hora: 'desc' },
+      take: 100,
+      include: {
+        user: { select: { nombre: true, rol: true, turno: true } },
+        machine: true
+      }
+    });
+
+    await prisma.$disconnect();
+
+    return res.status(200).json({ logs, incidents });
+  } catch (error) {
+    console.error('[Report Controller] Error al obtener el historial:', error);
+    return res.status(500).json({ error: 'Error interno obteniendo historial' });
   }
 };

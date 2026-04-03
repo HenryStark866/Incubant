@@ -128,9 +128,14 @@ export const processMachineReport = async (req: AuthenticatedRequest, res: Respo
     try {
       const prisma = await getPrisma();
 
-      const [prefix, numberPart] = machineId.split('-');
-      const machineNumber = parseInt(numberPart);
-      const dbType = prefix === 'inc' ? 'INCUBADORA' : 'NACEDORA';
+      let machineNumber = 1;
+      let dbType: 'INCUBADORA' | 'NACEDORA' = 'INCUBADORA';
+
+      const match = machineId.match(/(inc|nac)-(\d+)/i);
+      if (match) {
+        dbType = match[1].toLowerCase() === 'inc' ? 'INCUBADORA' : 'NACEDORA';
+        machineNumber = parseInt(match[2], 10);
+      }
 
       let machine = await prisma.machine.findFirst({
         where: { tipo: dbType, numero_maquina: machineNumber }

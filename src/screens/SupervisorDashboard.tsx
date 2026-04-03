@@ -939,23 +939,35 @@ export default function SupervisorDashboard() {
                           } overflow-hidden shadow-sm`}
                           style={{ minHeight: '120px' }}
                         >
-                          {/* Imagen de máquina real (Capturada por operario) */}
+                          {/* Imagen de fondo dinámica */}
                           <div className="absolute inset-0">
-                            {machine.photoUrl ? (
-                              <img
-                                src={machine.photoUrl}
-                                alt={machine.name}
-                                className="w-full h-full object-cover"
-                                style={{
-                                  filter: machine.status === 'maintenance' ? 'brightness(0.4) grayscale(0.8)' : 'brightness(0.9) contrast(1.1)',
-                                  imageRendering: 'auto',
-                                }}
-                              />
-                            ) : (
-                              <div className={`w-full h-full flex items-center justify-center ${isDark ? 'bg-white/5' : 'bg-gray-100'}`}>
-                                <ImageIcon size={24} className={isDark ? 'text-white/10' : 'text-gray-300'} />
-                              </div>
-                            )}
+                            {(() => {
+                              let bgImageUrl = '/imagen1.png';
+                              if (machine.status === 'maintenance') {
+                                bgImageUrl = '/imagen2.png';
+                              } else if (machine.photoUrl) {
+                                bgImageUrl = machine.photoUrl;
+                              }
+
+                              return (
+                                <img
+                                  src={bgImageUrl}
+                                  alt={machine.name}
+                                  className="w-full h-full object-cover"
+                                  style={{
+                                    filter: machine.status === 'maintenance' ? 'brightness(0.6) grayscale(0.5)' : 'brightness(0.9) contrast(1.1)',
+                                    transform: machine.status !== 'maintenance' && !machine.photoUrl ? 'scale(1.02)' : 'none',
+                                    imageRendering: 'auto',
+                                  }}
+                                  // Fallback handling just in case imagen2.png is missing temporarily
+                                  onError={(e) => {
+                                    if (bgImageUrl === '/imagen2.png') {
+                                      e.currentTarget.src = '/imagen1.png';
+                                    }
+                                  }}
+                                />
+                              );
+                            })()}
                             
                             {/* Overlay para legibilidad de textos */}
                             <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />

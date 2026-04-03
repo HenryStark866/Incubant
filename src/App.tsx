@@ -206,7 +206,7 @@ export default function App() {
              <div className="absolute inset-0 animate-pulse-glow rounded-full" style={{ background: 'radial-gradient(circle, rgba(247,147,26,0.1) 0%, transparent 70%)' }} />
              
              <div className="relative z-10 w-24 h-24 flex items-center justify-center animate-float">
-                <img src="/LOGO.png" alt="Incubant" className="w-full h-full object-contain drop-shadow-[0_0_20px_rgba(247,147,26,0.5)]" />
+                <img src="/logo.png" alt="Incubant" className="w-full h-full object-contain drop-shadow-[0_0_20px_rgba(247,147,26,0.5)]" />
              </div>
           </div>
           

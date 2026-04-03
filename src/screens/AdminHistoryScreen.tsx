@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Search, Filter, Download, Calendar, Image as ImageIcon, FileText, AlertTriangle, X, RefreshCw } from 'lucide-react';
 import { useThemeStore } from '../store/useThemeStore';
-import { getApiUrl } from '../lib/api';
+import { getApiUrl, apiFetch } from '../lib/api';
 
 export default function AdminHistoryScreen() {
   const isDark = useThemeStore(state => state.theme) === 'dark';
@@ -19,12 +19,7 @@ export default function AdminHistoryScreen() {
     setLoading(true);
     setError(null);
     try {
-      const storedToken = localStorage.getItem('token');
-      const res = await fetch(getApiUrl('/api/reports/history'), {
-        headers: {
-          'Authorization': `Bearer ${storedToken}`
-        }
-      });
+      const res = await apiFetch(getApiUrl('/api/reports/history'));
       if (!res.ok) throw new Error('Error al obtener el historial');
       const data = await res.json();
       setLogs(data.logs || []);

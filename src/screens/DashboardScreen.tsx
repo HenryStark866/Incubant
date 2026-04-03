@@ -3,10 +3,12 @@ import { useMachineStore, MachineType, Machine } from '../store/useMachineStore'
 import { useThemeStore } from '../store/useThemeStore';
 import {
   CheckCircle2, Clock, UploadCloud, Loader2, LogOut, Egg,
-  AlertTriangle, FileText, Camera, Zap, Activity, Cpu, Wifi, WifiOff, Sun, Moon, Monitor
+  AlertTriangle, FileText, Camera, Zap, Activity, Cpu, Wifi, WifiOff, Sun, Moon, Monitor,
+  Menu, Calendar, ClipboardList, Package
 } from 'lucide-react';
 import { getApiUrl, apiFetch } from '../lib/api';
 import ReportUploader from '../components/ReportUploader';
+import OperatorSchedule from './OperatorSchedule';
 
 /* ─────────────────────────────────────────────
    Modal de confirmación futurista
@@ -254,6 +256,8 @@ const MachineCard = ({
    Dashboard principal
 ───────────────────────────────────────────── */
 export default function DashboardScreen({ canAccessSupervisor = false, onSwitchToSupervisor }: { canAccessSupervisor?: boolean; onSwitchToSupervisor?: () => void }) {
+  const [activePage, setActivePage] = useState<'dashboard' | 'schedule' | 'requests' | 'reports'>('dashboard');
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<MachineType>('incubadora');
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncSuccess, setSyncSuccess] = useState(false);
@@ -498,6 +502,47 @@ export default function DashboardScreen({ canAccessSupervisor = false, onSwitchT
     database:  { label: 'Guardando Datos',    icon: Cpu,         pct: 100 },
   };
 
+  if (activePage === 'schedule') {
+    return (
+      <div className="relative h-full overflow-hidden w-full bg-gray-50">
+         <button onClick={() => setActivePage('dashboard')} className="absolute top-12 left-6 z-50 p-2 border border-brand-primary text-brand-primary hover:bg-brand-primary hover:text-white rounded-xl font-black text-xs bg-white transition-all shadow-md active:scale-95">
+           Volver al Tablero
+         </button>
+         <div className="h-full overflow-y-auto">
+           <OperatorSchedule />
+         </div>
+      </div>
+    );
+  }
+
+  if (activePage === 'requests' || activePage === 'reports') {
+    return (
+      <div className={`flex flex-col h-full relative overflow-hidden ${isDark ? '' : 'bg-gray-50'}`} style={isDark ? { background: '#060b18' } : {}}>
+        <div className="p-6 relative z-10 flex flex-col items-center justify-center h-full text-center">
+           {activePage === 'requests' ? (
+             <ClipboardList size={48} className="text-brand-primary mb-6 glow-primary" />
+           ) : (
+             <Camera size={48} className="text-brand-primary mb-6 glow-primary" />
+           )}
+           
+           <h2 className={`text-2xl font-black mb-3 font-mono-display uppercase tracking-widest ${isDark ? 'text-white' : 'text-gray-900'}`}>
+             {activePage === 'requests' ? 'Solicitudes' : 'Reportes Físicos'}
+           </h2>
+           
+           <p className={`text-xs font-mono mb-8 max-w-xs leading-relaxed ${isDark ? 'text-white/40' : 'text-gray-500'}`}>
+             {activePage === 'requests' 
+               ? 'Módulo en construcción. Aquí podrás enviar formatos de permisos o novedades administrativas al supervisor.'
+               : 'Módulo en construcción. Aquí podrás registrar fotografías y daños encontrados en las áreas de la planta ajenas a las máquinas.'}
+           </p>
+
+           <button onClick={() => setActivePage('dashboard')} className="px-8 py-4 bg-brand-primary rounded-2xl text-white font-black text-xs uppercase tracking-widest shadow-[0_0_20px_rgba(247,147,26,0.3)] active:scale-95 transition-all">
+             Volver al Tablero
+           </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className={`flex flex-col h-full relative overflow-hidden ${isDark ? '' : 'bg-gray-50'}`} style={isDark ? { background: '#060b18' } : {}}>
 
@@ -629,10 +674,33 @@ export default function DashboardScreen({ canAccessSupervisor = false, onSwitchT
               className={`p-2 rounded-xl border transition-colors active:scale-95 shrink-0 ${isDark ? 'glass border-white/6 text-white/30 hover:text-brand-primary' : 'bg-white border-gray-200 text-gray-400 hover:text-brand-primary shadow-sm'}`}>
               {isDark ? <Sun size={16} /> : <Moon size={16} />}
             </button>
-            <button onClick={handleLogout}
-              className={`p-2 rounded-xl border transition-colors active:scale-95 shrink-0 ${isDark ? 'glass border-white/6 text-white/30 hover:text-red-400' : 'bg-white border-gray-200 text-gray-400 hover:text-red-400 shadow-sm'}`}>
-              <LogOut size={16} />
-            </button>
+            {/* Menu Deploy */}
+            <div className="relative">
+              <button onClick={() => setIsMenuOpen(!isMenuOpen)}
+                className={`p-2 rounded-xl border transition-colors active:scale-95 shrink-0 ${isDark ? 'glass border-white/6 ' + (isMenuOpen ? 'text-brand-primary border-brand-primary/30' : 'text-white/30 hover:text-brand-primary') : 'bg-white border-gray-200 shadow-sm ' + (isMenuOpen ? 'text-brand-primary' : 'text-gray-400 hover:text-brand-primary')}`}>
+                <Menu size={16} />
+              </button>
+              {isMenuOpen && (
+                <div className={`absolute top-full right-0 mt-3 w-52 rounded-2xl border shadow-2xl z-50 animate-fade-in overflow-hidden ${isDark ? 'glass bg-[#060b18]/95 border-brand-primary/30' : 'bg-white border-brand-primary/20'}`}>
+                  <button onClick={() => { setIsMenuOpen(false); setActivePage('schedule'); }} className={`w-full flex items-center gap-3 px-4 py-3.5 text-left text-[10px] font-black uppercase tracking-widest hover:bg-brand-primary/10 transition-colors ${isDark ? 'text-white/80' : 'text-gray-700'}`}>
+                    <Calendar size={14} className="text-brand-primary shrink-0" />
+                    Mis Horarios
+                  </button>
+                  <button onClick={() => { setIsMenuOpen(false); setActivePage('requests'); }} className={`w-full flex items-center gap-3 px-4 py-3.5 text-left text-[10px] font-black uppercase tracking-widest border-t hover:bg-brand-primary/10 transition-colors ${isDark ? 'border-white/5 text-white/80' : 'border-gray-100 text-gray-700'}`}>
+                    <ClipboardList size={14} className="text-brand-primary shrink-0" />
+                    Solicitudes y Permisos
+                  </button>
+                  <button onClick={() => { setIsMenuOpen(false); setActivePage('reports'); }} className={`w-full flex items-center gap-3 px-4 py-3.5 text-left text-[10px] font-black uppercase tracking-widest border-t hover:bg-brand-primary/10 transition-colors ${isDark ? 'border-white/5 text-white/80' : 'border-gray-100 text-gray-700'}`}>
+                    <Camera size={14} className="text-brand-primary shrink-0" />
+                    Evidencias Adicionales
+                  </button>
+                  <button onClick={handleLogout} className={`w-full flex items-center gap-3 px-4 py-3.5 text-left text-[10px] font-black uppercase tracking-widest border-t hover:bg-red-500/10 transition-colors ${isDark ? 'border-white/5 text-red-400' : 'border-gray-100 text-red-500'}`}>
+                    <LogOut size={14} className={isDark ? 'text-red-400' : 'text-red-500'} shrink-0 />
+                    Cerrar Sesión
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </div>
 

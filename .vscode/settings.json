@@ -1,0 +1,19 @@
+{
+    "workbench.editor.enablePreviewFromQuickOpen": true,
+    "workbench.editor.enablePreviewFromCodeNavigation": true,
+    "workbench.editor.highlightModifiedTabs": true,
+    "workbench.editor.limit.enabled": true,
+    "workbench.editor.limit.excludeDirty": true,
+    "workbench.editor.limit.perEditorGroup": true,
+    "workbench.editor.pinnedTabsOnSeparateRow": true,
+    "workbench.editor.preferHistoryBasedLanguageDetection": true,
+    "workbench.editor.revealIfOpen": true,
+    "workbench.editor.scrollToSwitchTabs": true,
+    "workbench.editor.sharedViewState": true,
+    "workbench.editor.showTabIndex": true,
+    "workbench.editor.wrapTabs": true,
+    "workbench.settings.openDefaultKeybindings": true,
+    "workbench.settings.openDefaultSettings": true,
+    "window.autoDetectColorScheme": true,
+    "accessibility.signalOptions.debouncePositionChanges": true
+}

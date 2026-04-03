@@ -2,11 +2,6 @@ import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
 
 /**
  * Creates a professional PDF summary of the machine report.
- * @param machine - The machine data
- * @param operator - The operator info
- * @param extractedData - The variables from Gemini or Manual override
- * @param photoBuffer - The photo taken of the dashboard (optional)
- * @returns Buffer containing the rendered PDF
  */
 export async function generateReportPDF(
   machine: any,
@@ -21,92 +16,165 @@ export async function generateReportPDF(
 
   const { width, height } = page.getSize();
   
-  // Header Box
+  // Header
   page.drawRectangle({
     x: 0,
     y: height - 80,
     width,
     height: 80,
-    color: rgb(0.96, 0.65, 0.13), // Incubant primary orange
+    color: rgb(0.96, 0.58, 0.1), // Incubant primary orange
   });
 
-  page.drawText('INCUBANT INTEGRAL - REPORTE DE ESTADO', {
-    x: 40,
+  page.drawText('INCUBANT MONITOR - REPORTE DE MÁQUINA', {
+    x: 30,
     y: height - 45,
     size: 20,
     font: boldFont,
     color: rgb(1, 1, 1),
   });
 
-  // Metadata Section
-  page.drawText('Detalles Operativos', { x: 40, y: height - 120, size: 14, font: boldFont });
-  const metaLines = [
-    `Fecha Emitida: ${new Date().toLocaleString('es-CO')}`,
-    `Máquina Evaluada: ${machine?.name || machine?.id || 'Desconocida'}`,
-    `Tipo/Rol: ${machine?.type?.toUpperCase() || 'INDUSTRIAL'}`,
-    `Operario: ${operator?.name || 'Sistema'}`,
-    `Turno Base: ${operator?.shift || 'Desconocido'}`
-  ];
+  // Info Section
+  const yStart = height - 120;
+  page.drawText(`Operario: ${operator.nombre || 'Desconocido'}`, { x: 30, y: yStart, size: 12, font });
+  page.drawText(`Máquina: ${machine.tipo || 'INC'} #${machine.numero_maquina}`, { x: 30, y: yStart - 20, size: 12, font });
+  page.drawText(`Fecha: ${new Date().toLocaleString()}`, { x: 30, y: yStart - 40, size: 12, font });
 
-  metaLines.forEach((line, i) => {
-    page.drawText(line, { x: 40, y: height - 145 - (i * 20), size: 10, font });
-  });
+  // Data Section
+  page.drawText('DATOS REGISTRADOS:', { x: 30, y: yStart - 80, size: 14, font: boldFont });
+  page.drawText(`Temperatura Principal: ${extractedData.temperature}°C`, { x: 50, y: yStart - 105, size: 12, font });
+  page.drawText(`Humedad/CO2: ${extractedData.humidity}%`, { x: 50, y: yStart - 125, size: 12, font });
+  page.drawText(`Estado: ${extractedData.processStatus || 'NORMAL'}`, { x: 50, y: yStart - 145, size: 12, font });
 
-  // Extracted Data Section
-  page.drawText('Parámetros Analizados', { x: 40, y: height - 270, size: 14, font: boldFont });
-  
-  const dataLines = [
-    `Temperatura (°C/°F): ${extractedData?.temperature || 'N/A'}`,
-    `Humedad Relativa (%): ${extractedData?.humidity || 'N/A'}`,
-    `Estado Diagnóstico: ${extractedData?.processStatus || 'N/A'}`,
-  ];
-  
-  dataLines.forEach((line, i) => {
-    page.drawText(line, { x: 40, y: height - 295 - (i * 20), size: 11, font });
-  });
-
-  // Evidence Photo
+  // Evidence Image
   if (photoBuffer) {
-    page.drawText('Evidencia Visual: Panel / Máquina', { x: 40, y: height - 380, size: 14, font: boldFont });
     try {
-      // Intentar incrustar como JPG primero (es lo más común desde móviles)
-      // Si falla, se podría intentar PNG catch
-      let image;
-      try {
-        image = await pdfDoc.embedJpg(photoBuffer);
-      } catch {
-        image = await pdfDoc.embedPng(photoBuffer);
-      }
-      
-      const imgDims = image.scale(0.4);
-      const imgX = (width / 2) - (imgDims.width / 2);
-      
-      // Rectángulo gris de fondo
-      page.drawRectangle({
-         x: imgX - 5, y: height - 400 - imgDims.height - 5,
-         width: imgDims.width + 10, height: imgDims.height + 10,
-         color: rgb(0.9, 0.9, 0.9)
-      });
-      
+      const image = await pdfDoc.embedJpg(photoBuffer);
+      const dims = image.scale(0.5);
       page.drawImage(image, {
-        x: imgX,
-        y: height - 400 - imgDims.height,
-        width: imgDims.width,
-        height: imgDims.height,
+        x: (width - dims.width) / 2,
+        y: 100,
+        width: dims.width,
+        height: dims.height,
       });
-
+      page.drawText('EVIDENCIA FOTOGRÁFICA:', { x: 30, y: dims.height + 120, size: 12, font: boldFont });
     } catch (e) {
-      page.drawText('(La evidencia visual no pudo ser procesada en el PDF)', {
-        x: 40, y: height - 400, size: 10, font, color: rgb(1, 0, 0)
-      });
+      console.warn('[PDF Service] Error injecting photo:', e);
     }
   }
 
-  // Footer
-  page.drawText('Documento generado digitalmente. Sistema Incubant Monitor v0.1.0', {
-    x: 40, y: 30, size: 8, font, color: rgb(0.5, 0.5, 0.5)
+  page.drawText('Generado por Incubant Zero-Touch AI Analysis', {
+    x: 30,
+    y: 30,
+    size: 10,
+    font,
+    color: rgb(0.5, 0.5, 0.5),
   });
 
-  const pdfBytes = await pdfDoc.save();
-  return Buffer.from(pdfBytes);
+  return Buffer.from(await pdfDoc.save());
+}
+
+/**
+ * Generates a summary PDF (Shift Closing Report) with a table of logs.
+ */
+export async function generateSummaryPDF(
+  operatorName: string,
+  shiftLabel: string,
+  logs: any[]
+) {
+  const pdfDoc = await PDFDocument.create();
+  const page = pdfDoc.addPage([841.89, 595.28]); // A4 Landscape
+  const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+  const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+  const { width, height } = page.getSize();
+
+  // Color theme
+  const orange = rgb(0.96, 0.58, 0.1);
+
+  // Header Title
+  page.drawText('REPORTE DE CIERRE DE TURNO - INCUBANT', {
+    x: 40,
+    y: height - 60,
+    size: 18,
+    font: boldFont,
+    color: orange,
+  });
+
+  // Footer & Metadata
+  page.drawText(`Operario: ${operatorName} | Turno: ${shiftLabel}`, { x: 40, y: height - 90, size: 11, font });
+  page.drawText(`Fecha: ${new Date().toLocaleString()}`, { x: 40, y: height - 105, size: 11, font });
+  page.drawText(`Total Registros: ${logs.length}`, { x: 40, y: height - 120, size: 11, font });
+
+  // Table Headers
+  const tableTop = height - 160;
+  const colX = [40, 110, 200, 300, 400, 500, 600];
+  const headers = ['HORA', 'MÁQUINA', 'T. OVO (F)', 'T. AIRE (F)', 'HUM/CO2', 'ESTADO', 'OBS'];
+
+  page.drawRectangle({
+    x: 35,
+    y: tableTop - 5,
+    width: width - 70,
+    height: 25,
+    color: orange,
+  });
+
+  headers.forEach((h, i) => {
+    page.drawText(h, {
+      x: colX[i],
+      y: tableTop,
+      size: 10,
+      font: boldFont,
+      color: rgb(1, 1, 1),
+    });
+  });
+
+  // Table Data Rows
+  let curY = tableTop - 30;
+  logs.forEach((log, idx) => {
+    if (idx < 15) { // Para evitar desborde en una sola página (MVP)
+      const rowColor = idx % 2 === 0 ? rgb(1, 1, 1) : rgb(0.98, 0.98, 0.98);
+      page.drawRectangle({
+        x: 35,
+        y: curY - 5,
+        width: width - 70,
+        height: 20,
+        color: rowColor,
+      });
+
+      const time = new Date(log.fecha_hora).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      const machineName = `${log.machine.tipo === 'INCUBADORA' ? 'INC' : 'NAC'}-${log.machine.numero_maquina.toString().padStart(2, '0')}`;
+      
+      const rowData = [
+        time,
+        machineName,
+        log.temp_principal_actual.toFixed(1),
+        log.temp_secundaria_actual.toFixed(1),
+        log.co2_actual.toFixed(1),
+        log.is_na ? 'APAGADA' : 'OK',
+        (log.observaciones || 'Sin novedad').substring(0, 30)
+      ];
+
+      rowData.forEach((val, i) => {
+        page.drawText(String(val), {
+          x: colX[i],
+          y: curY,
+          size: 9,
+          font,
+          color: rgb(0.2, 0.2, 0.2),
+        });
+      });
+
+      curY -= 20;
+    }
+  });
+
+  // Footer branding
+  page.drawText('Incubant Zero-Touch Reporting Platform - Antioqueña de Incubación S.A.S.', {
+    x: width / 2 - 150,
+    y: 30,
+    size: 8,
+    font,
+    color: rgb(0.6, 0.6, 0.6),
+  });
+
+  return Buffer.from(await pdfDoc.save());
 }

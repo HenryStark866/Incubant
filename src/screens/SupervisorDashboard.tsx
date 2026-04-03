@@ -9,12 +9,11 @@ import { useThemeStore } from '../store/useThemeStore';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
 } from 'recharts';
-import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
 import { useMachineStore } from '../store/useMachineStore';
 import { getApiUrl, apiFetch } from '../lib/api';
 
 import ShiftManager from '../components/Admin/ShiftManager';
+import AdminHistoryScreen from './AdminHistoryScreen';
 
 // Helper: status badge for parameter comparison
 function statusBadge(real: any, sp: any) {
@@ -45,7 +44,7 @@ function CheckItem({ label, value, icon, alarm }: { label: string; value: string
 }
 
 export default function SupervisorDashboard() {
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'personal' | 'horarios' | 'settings'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'history' | 'personal' | 'horarios' | 'settings'>('dashboard');
   const [machineViewTab, setMachineViewTab] = useState<'incubadora' | 'nacedora'>('incubadora');
   const [selectedMachine, setSelectedMachine] = useState<any | null>(null);
   const [chartFilter, setChartFilter] = useState('Ver: Planta Completa');
@@ -145,11 +144,6 @@ export default function SupervisorDashboard() {
   const handleLogout = () => {
     logout();
     apiFetch(getApiUrl('/api/logout'), { method: 'POST' }).catch(() => {});
-  };
-
-  const handleOpenEvidences = () => {
-    // Abrir la carpeta de evidencias de Drive directamente
-    window.open('https://drive.google.com/drive/folders/1LSI9hpfQiYD0w0U79Noh6tI1BDgnHwqn?usp=sharing', '_blank');
   };
 
   const handleResetLocalData = () => {
@@ -432,152 +426,6 @@ export default function SupervisorDashboard() {
     ? Math.round((machinesData.filter(m => m.status === 'ok').length / machinesData.length) * 100)
     : 0;
 
-  const handleDownloadReport = async () => {
-    try {
-      const doc = new jsPDF();
-      const timestamp = new Date().toLocaleString();
-
-      // Header y Logo corporativo
-      doc.setFillColor(245, 166, 35); // Naranja Incubant
-      doc.rect(0, 0, 210, 40, 'F');
-
-      doc.setFontSize(24);
-      doc.setTextColor(255, 255, 255);
-      doc.setFont("helvetica", "bold");
-      doc.text('INCUBANT MONITOR', 14, 20);
-
-      doc.setFontSize(10);
-      doc.text('V0.1.0 "Incubant Integral" | MINUTA DE TURNO', 14, 30);
-
-      doc.setFontSize(10);
-      doc.setTextColor(50, 50, 50);
-      doc.setFont("helvetica", "normal");
-      doc.text(`Fecha y Hora de Cierre: ${timestamp}`, 14, 50);
-      doc.text(`Supervisor Responsable: ${currentUser?.name || 'Sistema'}`, 14, 55);
-      doc.text(`Turno Operativo: ${summaryData.currentShift}`, 14, 60);
-
-      // Preparar datos para las Incubadoras
-      const tableDataIncubadoras = machinesData
-        .filter(m => m.type === 'incubadora')
-        .map(m => {
-          const d = m.data;
-          return [
-            m.name.replace('INC-', ''),
-            m.status === 'alarm' ? 'ALARMA' : 'OK',
-            d?.tempOvoscan || m.temp || '--',
-            d?.tempAire || '--',
-            d?.humedadRelativa || '--',
-            d?.co2 || '--',
-            d?.volteoNumero || '--',
-            d?.ventiladorPrincipal || '--'
-          ];
-        });
-
-      doc.setFontSize(14);
-      doc.setTextColor(245, 166, 35);
-      doc.setFont("helvetica", "bold");
-      doc.text('DATOS TÉCNICOS: INCUBADORAS', 14, 75);
-
-      autoTable(doc, {
-        startY: 80,
-        head: [['Máquina', 'Estado', 'T.Ovo', 'T.Aire', 'Hum %', 'CO2', 'V/N°', 'Vent']],
-        body: tableDataIncubadoras,
-        theme: 'striped',
-        headStyles: { fillColor: [245, 166, 35], textColor: 255, fontStyle: 'bold' },
-        styles: { fontSize: 8 }
-      });
-
-      // Preparar datos para las Nacedoras
-      const lastY = (doc as any).lastAutoTable.finalY + 15;
-      const tableDataNacedoras = machinesData
-        .filter(m => m.type === 'nacedora')
-        .map(m => {
-          const d = m.data;
-          return [
-            m.name.replace('NAC-', ''),
-            m.status === 'alarm' ? 'ALARMA' : 'OK',
-            d?.temperatura || m.temp || '--',
-            d?.humedadRelativa || '--',
-            d?.co2 || '--',
-            d?.ventiladorPrincipal || '--'
-          ];
-        });
-
-      doc.text('DATOS TÉCNICOS: NACEDORAS', 14, lastY);
-      autoTable(doc, {
-        startY: lastY + 5,
-                        head: [['Máquina', 'Estado', 'Temp °F', 'Hum %', 'CO2', 'Vent']],
-        body: tableDataNacedoras,
-        theme: 'striped',
-        headStyles: { fillColor: [100, 100, 100], textColor: 255, fontStyle: 'bold' },
-        styles: { fontSize: 8 }
-      });
-
-      // Seccion de Alarmas e Incidentes (Minuta Integrada)
-      const incidentY = (doc as any).lastAutoTable.finalY + 15;
-      doc.setTextColor(245, 166, 35);
-      doc.text('BITÁCORA DE INCIDENTES Y ALARMAS', 14, incidentY);
-
-      try {
-        const incRes = await apiFetch(getApiUrl('/api/dashboard/incidents?limit=15'));
-        const incidents = await incRes.json();
-
-        if (incidents.length > 0) {
-          const body = incidents.map((inc: any) => [
-            new Date(inc.fecha_hora).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-            inc.titulo,
-            inc.descripcion
-          ]);
-          autoTable(doc, {
-            startY: incidentY + 5,
-            head: [['Hora', 'Incidente', 'Descripción']],
-            body: body,
-            theme: 'grid',
-            headStyles: { fillColor: [239, 68, 68] },
-            styles: { fontSize: 7 }
-          });
-        } else {
-          doc.setFontSize(9);
-          doc.setTextColor(150, 150, 150);
-          doc.text('No se registraron alarmas manuales o incidentes críticos en este turno.', 14, incidentY + 10);
-        }
-      } catch (err) {
-        doc.text('Fallo al conectar con la bitácora de incidentes.', 14, incidentY + 10);
-      }
-
-      // Footer con Enlace a Evidencias
-      const footerY = 285;
-      doc.setFontSize(9);
-      doc.setTextColor(100, 100, 100);
-      doc.text('Este documento es una copia electrónica generada automáticamente por Incubant Monitor v0.1.0', 14, footerY - 10);
-
-      doc.setTextColor(0, 0, 255);
-      doc.textWithLink('>>> VER EVIDENCIAS FOTOGRÁFICAS EN LA NUBE <<<', 14, footerY, { url: window.location.origin });
-
-      // Upload to Drive before downloading locally
-      try {
-        const pdfBlob = doc.output('blob');
-        const reader = new FileReader();
-        reader.readAsDataURL(pdfBlob);
-        const base64 = await new Promise<string>((resolve) => {
-          reader.onloadend = () => resolve(reader.result as string);
-        });
-        await apiFetch(getApiUrl('/api/upload-pdf-drive'), {
-          method: 'POST',
-          body: JSON.stringify({ pdfBase64: base64 })
-        });
-        console.log('[Supervisor] Minuta PDF uploaded to Drive');
-      } catch (err) {
-        console.error('[Supervisor] Error uploading minuta to Drive:', err);
-      }
-
-      doc.save(`Minuta_Incubant_${new Date().toISOString().split('T')[0]}_Turno.pdf`);
-    } catch (error) {
-      console.error('Error al generar PDF:', error);
-      alert('Error al compilar el reporte integral.');
-    }
-  };
-
   if (dbError) {
     return (
       <div className="flex h-screen bg-gray-50 text-red-600 items-center justify-center p-8 flex-col text-center gap-4">
@@ -684,39 +532,22 @@ export default function SupervisorDashboard() {
             <span className="font-bold tracking-tight">Horarios</span>
           </button>
 
-          {/* SECCIÓN DE ALMACENAMIENTO CLOUD */}
+          {/* SECCIÓN DE HISTORIAL Y EVIDENCIAS */}
           <div className="pt-4 mt-4 border-t border-gray-100 flex flex-col gap-2">
-            <p className="px-2 text-[10px] text-brand-gray font-black uppercase tracking-[0.2em] opacity-60 mb-2">Bóveda de Evidencia</p>
-
-            <a
-              href="https://drive.google.com/drive/folders/1LSI9hpfQiYD0w0U79Noh6tI1BDgnHwqn?usp=sharing"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="w-full flex items-center gap-4 px-5 py-3 rounded-2xl text-brand-gray hover:bg-brand-primary/10 hover:text-brand-primary transition-all font-bold text-xs group"
+            <p className={`px-2 text-[10px] font-black uppercase tracking-[0.2em] opacity-60 mb-2 ${isDark ? 'text-white/40' : 'text-brand-gray'}`}>
+              Bóveda de Evidencia
+            </p>
+            <button
+              onClick={() => setActiveTab('history')}
+              className={`w-full flex items-center gap-4 px-5 py-4 rounded-2xl transition-all ${
+                activeTab === 'history' 
+                  ? 'bg-brand-primary text-white shadow-lg shadow-brand-primary/30 active:scale-95' 
+                  : `${isDark ? 'hover:bg-white/5 text-white/50' : 'hover:bg-gray-50 text-brand-gray'} font-semibold`
+              }`}
             >
-              <Camera size={18} className="group-hover:scale-110 transition-transform" />
-              <span>Fotos Planta</span>
-            </a>
-
-            <a
-              href="https://drive.google.com/drive/folders/15NhdznwFJycDOFsQs9dZwTS6vR_srfXi?usp=sharing"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="w-full flex items-center gap-4 px-5 py-3 rounded-2xl text-brand-gray hover:bg-brand-primary/10 hover:text-brand-primary transition-all font-bold text-xs group"
-            >
-              <FileText size={18} className="group-hover:scale-110 transition-transform" />
-              <span>Informes Por Hora</span>
-            </a>
-
-            <a
-              href="https://drive.google.com/drive/folders/1tI5ROHJ_RxeSWE2Q38BXxAVk82TYrdtG?usp=sharing"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="w-full flex items-center gap-4 px-5 py-3 rounded-2xl text-brand-gray hover:bg-brand-primary/10 hover:text-brand-primary transition-all font-bold text-xs group"
-            >
-              <FolderOpen size={18} className="group-hover:scale-110 transition-transform" />
-              <span>Cierres de Turno</span>
-            </a>
+              <FolderOpen size={20} />
+              <span className="font-bold tracking-tight">Historial</span>
+            </button>
           </div>
         </nav>
 
@@ -947,24 +778,6 @@ export default function SupervisorDashboard() {
 
               {/* All actions in one row */}
               <div className="flex items-center gap-1.5 flex-wrap justify-end">
-                {/* Evidencias */}
-                <button
-                  onClick={handleOpenEvidences}
-                  className="bg-blue-600 hover:bg-blue-700 text-white px-2.5 py-1.5 rounded-lg flex items-center gap-1.5 text-[10px] font-black transition-all shadow-sm active:scale-95 whitespace-nowrap"
-                >
-                  <ImageIcon size={12} />
-                  <span className="hidden sm:inline">Evidencias</span>
-                </button>
-
-                {/* Reporte PDF */}
-                <button
-                  onClick={handleDownloadReport}
-                  className="bg-brand-primary hover:bg-[#E6951F] text-white px-2.5 py-1.5 rounded-lg flex items-center gap-1.5 text-[10px] font-black transition-all shadow-sm active:scale-95 whitespace-nowrap"
-                >
-                  <Download size={12} />
-                  <span className="hidden sm:inline">PDF</span>
-                </button>
-
                 {/* Online/Offline */}
                 <div className={`rounded-lg px-2 py-1.5 flex items-center gap-1.5 ${isOnline ? 'bg-green-50 border border-green-100' : 'bg-red-50 border border-red-100'}`}>
                   {isOnline ? <Wifi className="text-green-500" size={12} /> : <WifiOff className="text-red-500" size={12} />}
@@ -1384,6 +1197,8 @@ export default function SupervisorDashboard() {
                 </div>
               </section>
             </div>
+          ) : activeTab === 'history' ? (
+            <AdminHistoryScreen />
           ) : activeTab === 'horarios' ? (
             <ShiftManager />
           ) : activeTab === 'personal' ? (

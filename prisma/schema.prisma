@@ -33,6 +33,8 @@ model Machine {
   logs           HourlyLog[]
   incidents      Incident[]
   reports        Report[]
+
+  @@unique([tipo, numero_maquina])
 }
 
 model Report {

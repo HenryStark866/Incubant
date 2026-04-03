@@ -6,7 +6,7 @@ import cors from 'cors';
 import multer from 'multer';
 import type { PrismaClient } from '@prisma/client';
 
-import { processMachineReport, processClosingReport } from './controllers/report.controller';
+import { processMachineReport, requestClosingReport } from './controllers/report.controller';
 import { seedShifts } from './controllers/admin.controller';
 import { uploadToSupabase } from './services/supabase_storage.service';
 
@@ -468,27 +468,32 @@ async function seedMachines() {
     let created = 0;
     for (let i = 1; i <= 24; i++) {
       await prisma.machine.upsert({
-        where: {
-          tipo_numero_maquina: { tipo: 'INCUBADORA', numero_maquina: i }
-        },
+        where: { id: `fixed-inc-${i}` }, // Using a stable ID or findFirst
         update: {},
         create: {
+          id: `fixed-inc-${i}`,
           tipo: 'INCUBADORA',
           numero_maquina: i,
         },
+      }).catch(async () => {
+        // Fallback if ID strategy fails, use findFirst + create
+        const exists = await prisma.machine.findFirst({ where: { tipo: 'INCUBADORA', numero_maquina: i } });
+        if (!exists) await prisma.machine.create({ data: { tipo: 'INCUBADORA', numero_maquina: i } });
       });
       created++;
     }
     for (let i = 1; i <= 12; i++) {
       await prisma.machine.upsert({
-        where: {
-          tipo_numero_maquina: { tipo: 'NACEDORA', numero_maquina: i }
-        },
+        where: { id: `fixed-nac-${i}` },
         update: {},
         create: {
+          id: `fixed-nac-${i}`,
           tipo: 'NACEDORA',
           numero_maquina: i,
         },
+      }).catch(async () => {
+        const exists = await prisma.machine.findFirst({ where: { tipo: 'NACEDORA', numero_maquina: i } });
+        if (!exists) await prisma.machine.create({ data: { tipo: 'NACEDORA', numero_maquina: i } });
       });
       created++;
     }
@@ -563,7 +568,8 @@ export function createApiApp(): Express {
 
   // ── Smart Reporting (Gemini + Drive + PDF) ────────────────────────────────
   app.post('/api/reports', requireAuthenticatedUser, upload.single('evidence'), processMachineReport);
-  app.post('/api/reports/closing', requireAuthenticatedUser, upload.single('evidence'), processClosingReport);
+  app.get('/api/reports/closing/request', requireAuthenticatedUser, requestClosingReport);
+
 
   // ── Session ──────────────────────────────────────────────────────────────
   app.get('/api/session', (req: AuthenticatedRequest, res) => {
@@ -744,7 +750,7 @@ export function createApiApp(): Express {
   // Recibe fotos en base64 + datos, sube a Supabase Storage
   app.post('/api/sync-hourly-drive', requireAuthenticatedUser, async (req: AuthenticatedRequest, res) => {
     try {
-      const { machines } = req.body as { machines?: SubmittedMachine[] };
+      const { machines, novelty } = req.body as { machines?: SubmittedMachine[], novelty?: { hasNovelty: boolean, text: string } };
       const userName = req.user?.name || 'Operario';
 
       console.log(`[Sync Storage] Recibido: ${machines?.length || 0} máquinas, usuario: ${userName}`);
@@ -831,6 +837,19 @@ export function createApiApp(): Express {
         }));
 
         await prisma.hourlyLog.createMany({ data: logsToInsert });
+
+        // Guardar "minuta" o novedad
+        if (novelty) {
+          await prisma.incident.create({
+            data: {
+              user_id: databaseUser.id,
+              titulo: novelty.hasNovelty ? 'Novedad Reportada (Minuta)' : 'Reporte Sin Novedades (Minuta)',
+              descripcion: novelty.text,
+              tipo: novelty.hasNovelty ? 'NOVELTY' : 'MINUTA',
+            }
+          });
+        }
+
         sendEventToAll({ type: 'NEW_REPORT', message: 'Nuevo reporte sincronizado', timestamp: new Date().toISOString() });
       } catch (dbError) {
         console.error('[Sync Storage] Error BD:', dbError);
@@ -846,35 +865,6 @@ export function createApiApp(): Express {
     }
   });
 
-  // ── Upload PDF to Storage ────────────────────────────────────────────────
-  app.post('/api/upload-pdf-drive', requireAuthenticatedUser, async (req: AuthenticatedRequest, res) => {
-    try {
-      const { pdfBase64 } = req.body as { pdfBase64?: string };
-      const userName = req.user?.name || 'Operario';
-
-      if (!pdfBase64) {
-        return res.status(400).json({ error: 'No se proporcionó PDF' });
-      }
-
-      const base64Data = pdfBase64.replace(/^data:application\/pdf;base64,/, '');
-      const buffer = Buffer.from(base64Data, 'base64');
-
-      const uploadResult = await uploadToSupabase(
-        buffer, userName, 'reports', 'application/pdf'
-      );
-
-      console.log(`[Storage PDF] PDF subido: ${uploadResult.fileName}`);
-
-      return res.status(200).json({
-        message: 'PDF subido a Storage',
-        fileName: uploadResult.fileName,
-        publicUrl: uploadResult.publicUrl,
-      });
-    } catch (error) {
-      console.error('[Storage PDF] Error:', error);
-      return res.status(500).json({ error: 'Error subiendo PDF a Storage' });
-    }
-  });
 
   // ── Seed April 1-15 Schedule ─────────────────────────────────────────────
   app.post('/api/admin/seed-april-schedule', requireRoles(['JEFE', 'SUPERVISOR']), async (_req, res) => {
@@ -1815,6 +1805,36 @@ export function createApiApp(): Express {
   app.post('/api/seed', requireRoles(['JEFE']), async (_req, res) => {
     await seedPredefinedUsers();
     return res.json({ message: `${predefinedUsers.length} usuarios sincronizados.` });
+  });
+
+  // ── Admin History Endpoint ───────────────────────────────────────────────
+  app.get('/api/reports/history', requireAuthenticatedUser, async (req, res) => {
+    try {
+      const prisma = await getPrismaClient();
+      
+      const logs = await prisma.hourlyLog.findMany({
+        orderBy: { fecha_hora: 'desc' },
+        take: 200,
+        include: {
+          user: { select: { nombre: true, rol: true, turno: true } },
+          machine: true
+        }
+      });
+      
+      const incidents = await prisma.incident.findMany({
+        orderBy: { fecha_hora: 'desc' },
+        take: 50,
+        include: {
+          user: { select: { nombre: true, rol: true, turno: true } },
+          machine: true
+        }
+      });
+      
+      return res.json({ logs, incidents });
+    } catch (err: any) {
+      console.error('[Admin History] Error details:', err?.message || err);
+      return res.status(500).json({ error: 'Error cargando historial', details: err?.message });
+    }
   });
 
   // ── Finalization ─────────────────────────────────────────────────────────

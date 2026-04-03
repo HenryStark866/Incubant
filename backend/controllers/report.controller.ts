@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { analyzeIncubatorImage } from '../services/vision.service';
-import { generateReportPDF } from '../services/pdf.service';
+import { generateReportPDF, generateSummaryPDF } from '../services/pdf.service';
 import type { PrismaClient } from '@prisma/client';
 
 async function getPrisma(): Promise<PrismaClient> {
@@ -10,6 +10,7 @@ async function getPrisma(): Promise<PrismaClient> {
 
 type AuthenticatedRequest = Request & {
   user?: { id: string; name: string; role: string; shift?: string };
+  file?: Express.Multer.File;
 };
 
 /**
@@ -20,6 +21,7 @@ function getBogotaDate(): Date {
   const utc = now.getTime() + now.getTimezoneOffset() * 60000;
   return new Date(utc - 5 * 60 * 60 * 1000);
 }
+
 
 /**
  * Limpia nombre de usuario para archivo: minúsculas, sin espacios, sin caracteres especiales
@@ -58,8 +60,7 @@ function formatTimeFile(date: Date): string {
  * 1. Recibe imagen del operario
  * 2. Analiza con Gemini Vision
  * 3. Sube foto → carpeta Fotos (fecha-hora-maquina-operador.jpg)
- * 4. Genera PDF → carpeta Reportes por Hora (fecha-hora-maquina-operador.pdf)
- * 5. Guarda Report en Supabase
+ * 4. Guarda Report en Supabase
  */
 export const processMachineReport = async (req: AuthenticatedRequest, res: Response) => {
   try {
@@ -122,29 +123,6 @@ export const processMachineReport = async (req: AuthenticatedRequest, res: Respo
       console.error('[Storage] ERROR subiendo foto:', storageError);
     }
 
-    // 3. Generar PDF → Subir a Supabase Storage
-    let pdfUrl = '';
-    let storagePdfError = '';
-    try {
-      const pdfBuffer = await generateReportPDF(
-        { id: machineId, name: `Máquina ${machineId}` },
-        { name: userName, shift: userShift },
-        finalData,
-        file.buffer
-      );
-
-      // Subir PDF a Supabase Storage
-      const { uploadToSupabase } = await import('../services/supabase_storage.service');
-      const pdfResult = await uploadToSupabase(
-        pdfBuffer, userName, 'reports', 'application/pdf'
-      );
-      pdfUrl = pdfResult.publicUrl;
-      console.log(`[Storage] PDF reporte por hora subido OK: ${pdfResult.fileName}`);
-    } catch (pdfError) {
-      storagePdfError = `Storage PDF: ${pdfError instanceof Error ? pdfError.message : 'Error desconocido'}`;
-      console.error('[Storage] ERROR generando/subiendo PDF:', pdfError);
-    }
-
     // 4. Guardar en la base de datos
     let savedReport = null;
     try {
@@ -193,7 +171,7 @@ export const processMachineReport = async (req: AuthenticatedRequest, res: Respo
           processStatus: String(isAlarm ? 'ALARMA' : 'NORMAL'),
 
           imageUrl,
-          pdfUrl,
+          pdfUrl: '',
 
           temperature: Number(data.tempOvoscanReal || data.tempSynchroReal) || 0,
           humidity: Number(data.humidityReal) || 0,
@@ -213,9 +191,7 @@ export const processMachineReport = async (req: AuthenticatedRequest, res: Respo
         isAlarm: savedReport?.isAlarm || false,
         isClosingReport: false,
         imageUrl,
-        pdfUrl,
-        savedToDb: !!savedReport,
-        warnings: [storagePhotoError, storagePdfError].filter(Boolean),
+        warnings: [storagePhotoError].filter(Boolean),
       }
     });
 
@@ -226,89 +202,76 @@ export const processMachineReport = async (req: AuthenticatedRequest, res: Respo
 };
 
 /**
- * POST /api/reports/closing
- * Reporte de cierre de turno.
- * 1. Recibe PDF generado desde el frontend
- * 2. Sube PDF → Carpeta Cierres de Turno (fecha-hora-cierre-operador.pdf)
- * 3. Guarda Report en Supabase con isClosingReport=true
+ * GET /api/reports/closing/request
+ * Genera el reporte de cierre en el servidor basado en los logs del turno actual.
  */
-export const processClosingReport = async (req: AuthenticatedRequest, res: Response) => {
+export const requestClosingReport = async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const file = req.file;
     const userId = req.user?.id;
     const userName = req.user?.name || 'Operario';
-    const userShift = req.user?.shift || '';
+    const userShift = req.user?.shift || 'Turno';
 
     if (!userId) {
-      return res.status(400).json({ error: 'Sesión activa requerida.' });
+      return res.status(401).json({ error: 'Sesión no válida.' });
     }
 
-    if (!file) {
-      return res.status(400).json({ error: 'No se adjuntó PDF de cierre.' });
-    }
+    const prisma = await getPrisma();
+    
+    // 1. Obtener logs del turno actual (hoy)
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
 
-    const bogotaDate = getBogotaDate();
-    const dateFolder = formatDateFolder(bogotaDate);
-    const timeStr = formatTimeFile(bogotaDate);
-    const cleanName = cleanUserName(userName);
-
-    // Subir PDF → Supabase Storage
-    let pdfUrl = '';
-    try {
-      const { uploadToSupabase } = await import('../services/supabase_storage.service');
-      const pdfResult = await uploadToSupabase(
-        file.buffer, userName, 'closing', 'application/pdf'
-      );
-      pdfUrl = pdfResult.publicUrl;
-      console.log(`[Storage] PDF cierre de turno subido OK: ${pdfResult.fileName}`);
-    } catch (storageError) {
-      console.error('[Storage] ERROR subiendo cierre de turno:', storageError);
-    }
-
-    // Guardar en BD
-    let savedReport = null;
-    try {
-      const prisma = await getPrisma();
-
-      savedReport = await prisma.report.create({
-        data: {
-          user_id: userId,
-          machine_id: '', // Cierre de turno no está ligado a una máquina específica
-          isClosingReport: true,
-          isAlarm: false,
-          processStatus: 'CIERRE_TURNO',
-          observaciones: `Cierre de turno - ${userShift} - ${userName}`,
-          pdfUrl,
-          temperature: 0,
-          humidity: 0,
-          tempPrincipalReal: 0,
-          tempPrincipalSP: 0,
-          tempAireReal: 0,
-          tempAireSP: 0,
-          humidityReal: 0,
-          humiditySP: 0,
-          co2Real: 0,
-          co2SP: 0,
+    const logs = await prisma.hourlyLog.findMany({
+      where: {
+        user_id: userId,
+        fecha_hora: {
+          gte: today,
+          lt: tomorrow
         }
-      });
-
-      await prisma.$disconnect();
-    } catch (dbError) {
-      console.error('[Report Controller] Error guardando cierre en BD:', dbError);
-    }
-
-    return res.status(201).json({
-      success: true,
-      message: 'Cierre de turno registrado exitosamente.',
-      report: {
-        isClosingReport: true,
-        pdfUrl,
-        savedToDb: !!savedReport,
+      },
+      include: {
+        machine: true
+      },
+      orderBy: {
+        fecha_hora: 'asc'
       }
     });
 
+    if (logs.length === 0) {
+      return res.status(200).json({ message: 'No hay registros para este turno. No se generará PDF.' });
+    }
+
+    // 2. Generar PDF Profesional (Landscape)
+    const pdfBuffer = await generateSummaryPDF(userName, userShift, logs);
+
+    // 3. Subir a Supabase Storage (Carpeta "reports")
+    const { uploadToSupabase } = await import('../services/supabase_storage.service');
+    
+    const result = await uploadToSupabase(pdfBuffer, userName, 'reports', 'application/pdf');
+
+    // 4. Registrar el reporte en la DB
+    await prisma.report.create({
+      data: {
+        user_id: userId,
+        machine_id: logs[0].machine_id, // Referencia una máquina del turno
+        pdfUrl: result.publicUrl,
+        isClosingReport: true,
+        observaciones: `Reporte de cierre generado automáticamente para ${userName}.`,
+      }
+    });
+
+    await prisma.$disconnect();
+
+    return res.status(200).json({
+      success: true,
+      message: 'Reporte de cierre generado y guardado en la nube.',
+      url: result.publicUrl
+    });
+
   } catch (error) {
-    console.error('[Report Controller] Error en cierre de turno:', error);
-    return res.status(500).json({ error: 'Error interno al procesar cierre de turno.' });
+    console.error('[Report Controller] Error en requestClosingReport:', error);
+    return res.status(500).json({ error: 'Error al generar el reporte de cierre.' });
   }
 };

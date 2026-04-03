@@ -5,60 +5,93 @@ import {
   CheckCircle2, Clock, UploadCloud, Loader2, LogOut, Egg,
   AlertTriangle, FileText, Camera, Zap, Activity, Cpu, Wifi, WifiOff, Sun, Moon, Monitor
 } from 'lucide-react';
-import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
 import { getApiUrl, apiFetch } from '../lib/api';
 import ReportUploader from '../components/ReportUploader';
 
 /* ─────────────────────────────────────────────
    Modal de confirmación futurista
 ───────────────────────────────────────────── */
-const ConfirmationModal = ({
+const SyncModal = ({
   isOpen, onClose, onConfirm, pendingCount, pendingMachines = []
 }: {
-  isOpen: boolean; onClose: () => void; onConfirm: () => void;
+  isOpen: boolean; onClose: () => void; onConfirm: (hasNovelty: boolean, noveltyText: string) => void;
   pendingCount: number; pendingMachines?: Machine[];
 }) => {
+  const [hasNovelty, setHasNovelty] = React.useState<boolean | null>(null);
+  const [noveltyText, setNoveltyText] = React.useState('');
+
   if (!isOpen) return null;
+
   return (
     <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-xl flex items-end justify-center p-4 animate-fade-in">
-      <div className="glass-light rounded-3xl w-full max-w-md overflow-hidden border border-brand-primary/20 animate-slide-up">
-        {/* Línea superior decorativa */}
+      <div className="glass-light rounded-3xl w-full max-w-md overflow-hidden border border-brand-primary/20 animate-slide-up bg-slate-900">
         <div className="h-0.5 w-full" style={{ background: 'linear-gradient(90deg, transparent, #f7931a, #ffb800, transparent)' }} />
         <div className="p-6">
           <div className="w-16 h-16 rounded-2xl flex items-center justify-center mb-5 mx-auto hud-corners"
             style={{ background: 'rgba(247,147,26,0.12)', border: '1px solid rgba(247,147,26,0.3)' }}>
             <AlertTriangle size={28} className="text-brand-primary animate-pulse-glow" />
           </div>
-          <h2 className="text-xl font-black text-gray-900 text-center mb-2 font-mono-display tracking-wider">
-            ¿Enviar Incompleto?
+          <h2 className="text-xl font-black text-white text-center mb-2 font-mono-display tracking-wider">
+            ¿Hay alguna novedad en la planta?
           </h2>
-          <p className="text-gray-500 text-center text-xs font-medium mb-5 leading-relaxed">
-            Faltan <span className="text-brand-primary font-black">{pendingCount} máquinas</span> por registrar.
-            Se marcarán como <span className="text-red-500 font-black">APAGADA</span> automáticamente.
-          </p>
-          {pendingMachines.length > 0 && (
-            <div className="bg-gray-50 rounded-2xl p-3 mb-5 border border-gray-200">
-              <p className="text-[8px] font-black text-gray-400 uppercase tracking-widest mb-2">Pendientes:</p>
-              <div className="flex flex-wrap gap-1.5">
-                {pendingMachines.map(m => (
-                  <span key={m.id} className="px-2.5 py-1 bg-gray-100 rounded-lg text-[10px] font-black text-brand-primary/70 border border-brand-primary/20 font-mono-display">
-                    #{String(m.number).padStart(2, '0')}
-                  </span>
-                ))}
+          
+          {pendingCount > 0 && (
+            <p className="text-gray-400 text-center text-xs font-medium mb-5 leading-relaxed">
+              Faltan <span className="text-brand-primary font-black">{pendingCount} máquinas</span> por registrar.
+              Se enviarán como <span className="text-red-500 font-black">APAGADAS</span>.
+            </p>
+          )}
+
+          {hasNovelty === null ? (
+            <div className="flex flex-col gap-2.5 mt-6">
+              <button onClick={() => setHasNovelty(false)}
+                className="w-full py-4 rounded-2xl font-black text-xs uppercase tracking-widest text-white transition-all active:scale-95 bg-green-500 hover:bg-green-600 shadow-[0_0_15px_rgba(34,197,94,0.3)]">
+                NO, TODO ESTÁ NORMAL
+              </button>
+              <button onClick={() => setHasNovelty(true)}
+                className="w-full py-4 bg-red-500/10 rounded-2xl font-black text-xs uppercase tracking-widest text-red-500 active:scale-95 transition-all border border-red-500/30 hover:bg-red-500/20">
+                SÍ, REPORTAR NOVEDAD
+              </button>
+              <button onClick={onClose}
+                className="w-full mt-2 py-3 bg-transparent rounded-2xl font-bold text-[10px] uppercase tracking-widest text-gray-500 active:scale-95 transition-all">
+                Cancelar
+              </button>
+            </div>
+          ) : hasNovelty ? (
+            <div className="flex flex-col gap-3 mt-4 animate-fade-in">
+              <textarea 
+                value={noveltyText}
+                onChange={e => setNoveltyText(e.target.value)}
+                placeholder="Describe brevemente la novedad..."
+                className="w-full h-24 bg-black/50 border border-brand-primary/30 rounded-xl p-3 text-white text-xs font-mono resize-none focus:outline-none focus:border-brand-primary"
+              />
+              <div className="flex gap-2">
+                <button onClick={() => setHasNovelty(null)}
+                  className="flex-1 py-3 bg-gray-800 rounded-xl font-black text-[10px] uppercase text-gray-400 active:scale-95 border border-gray-700">
+                  Volver
+                </button>
+                <button onClick={() => onConfirm(true, noveltyText)}
+                  disabled={!noveltyText.trim()}
+                  className="flex-1 py-3 bg-brand-primary rounded-xl font-black text-[10px] uppercase text-white active:scale-95 disabled:opacity-50">
+                  Confirmar y Enviar
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-3 mt-4 animate-fade-in text-center">
+              <span className="text-green-400 text-xs font-mono mb-2">Se generará reporte sin novedades.</span>
+              <div className="flex gap-2">
+                <button onClick={() => setHasNovelty(null)}
+                  className="flex-1 py-3 bg-gray-800 rounded-xl font-black text-[10px] uppercase text-gray-400 active:scale-95 border border-gray-700">
+                  Volver
+                </button>
+                <button onClick={() => onConfirm(false, 'Sin novedades en la planta.')}
+                  className="flex-1 py-3 bg-green-500 rounded-xl font-black text-[10px] uppercase text-white active:scale-95 shadow-[0_0_15px_rgba(34,197,94,0.4)]">
+                  Confirmar y Enviar
+                </button>
               </div>
             </div>
           )}
-          <div className="flex flex-col gap-2.5">
-            <button onClick={onConfirm}
-              className="w-full py-4 rounded-2xl font-black text-xs uppercase tracking-widest text-white transition-all active:scale-95 btn-brand">
-              Sí, Enviar Reporte
-            </button>
-            <button onClick={onClose}
-              className="w-full py-4 bg-gray-100 rounded-2xl font-black text-xs uppercase tracking-widest text-gray-500 active:scale-95 transition-all border border-gray-200">
-              Cancelar
-            </button>
-          </div>
         </div>
       </div>
     </div>
@@ -225,7 +258,7 @@ export default function DashboardScreen({ canAccessSupervisor = false, onSwitchT
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncSuccess, setSyncSuccess] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
-  const [syncPhase, setSyncPhase] = useState<'uploading' | 'database' | 'pdf'>('uploading');
+  const [syncPhase, setSyncPhase] = useState<'uploading' | 'database'>('uploading');
   const [reportUploaderMachine, setReportUploaderMachine] = useState<Machine | null>(null);
   const [systemTime, setSystemTime] = useState('');
   const [isOnline, setIsOnline] = useState(navigator.onLine);
@@ -335,60 +368,21 @@ export default function DashboardScreen({ canAccessSupervisor = false, onSwitchT
   const progress = machines.length > 0 ? Math.round((completedCount / machines.length) * 100) : 0;
 
   const handleLogout = async () => {
-    if (!window.confirm('¿Cerrar turno? Se generará y guardará tu Reporte de Cierre.')) return;
+    if (!window.confirm('¿Cerrar turno? Se generará y guardará tu Reporte de Cierre automáticamente.')) return;
     try {
-      setIsSyncing(true); setSyncPhase('pdf');
-      const res = await apiFetch(getApiUrl('/api/my-shift-report'));
-      if (res.ok) {
-        const logs = await res.json();
-        if (logs.length > 0) {
-          const doc = new jsPDF('landscape');
-          doc.setFontSize(16); doc.setTextColor(245, 166, 35);
-          doc.text('INCUBANT - REPORTE CIERRE DE TURNO', 14, 15);
-          doc.setFontSize(10); doc.setTextColor(40, 40, 40);
-          doc.text(`Operario: ${currentUser?.name} | Turno: ${currentUser?.shift || 'Turno 1'}`, 14, 22);
-          doc.text(`Fecha: ${new Date().toLocaleString()}`, 14, 27);
-          doc.text(`Total registros: ${logs.length}`, 14, 32);
-          const tableData = logs.map((log: any) => [
-            new Date(log.fecha_hora).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-            `${log.machine.tipo === 'INCUBADORA' ? 'INC' : 'NAC'}-${log.machine.numero_maquina.toString().padStart(2, '0')}`,
-            log.temp_principal_actual?.toFixed(1),
-            log.temp_secundaria_actual?.toFixed(1),
-            log.co2_actual?.toFixed(1),
-            log.observaciones || 'OK'
-          ]);
-          autoTable(doc, {
-            startY: 38,
-            head: [['Hora', 'Máquina', 'T. Ovoscan (F)', 'T. Aire (F)', 'Hum/CO2', 'Observaciones']],
-            body: tableData,
-            styles: { fontSize: 8, cellPadding: 3 },
-            headStyles: { fillColor: [245, 166, 35], textColor: 255, fontStyle: 'bold' },
-            alternateRowStyles: { fillColor: [250, 250, 250] },
-          });
-          const pdfBlob = doc.output('blob');
-          doc.save(`Cierre_Turno_${currentUser?.name?.replace(/\s+/g, '_')}.pdf`);
-
-          // Upload to backend → Drive folder "Cierres de Turno"
-          const formData = new FormData();
-          formData.append('evidence', pdfBlob, 'closing_report.pdf');
-          const closingRes = await apiFetch(getApiUrl('/api/reports/closing'), {
-            method: 'POST',
-            body: formData,
-          });
-          if (closingRes.ok) {
-            console.log('[Cierre] PDF subido a Drive exitosamente');
-          } else {
-            console.warn('[Cierre] Error subiendo PDF, pero se descargó localmente');
-          }
-        } else {
-          alert('Sin registros en el turno. Se cerrará directamente.');
-        }
+      setIsSyncing(true);
+      // Solicitar generación de reporte al servidor (Zero-Touch)
+      const res = await apiFetch(getApiUrl('/api/reports/closing/request'));
+      if (!res.ok) {
+        console.warn('[Cierre] Error en el servidor al generar reporte');
       }
+      // Logout
       await apiFetch(getApiUrl('/api/logout'), { method: 'POST' });
     } catch (e) {
       console.error('Error cerrando sesión:', e);
     } finally {
-      setIsSyncing(false); logout();
+      setIsSyncing(false); 
+      logout();
     }
   };
 
@@ -400,81 +394,16 @@ export default function DashboardScreen({ canAccessSupervisor = false, onSwitchT
     e.stopPropagation(); setReportUploaderMachine(machine);
   };
 
-  const generatePDF = async (syncedMachines: Machine[]): Promise<Blob> => {
-    const doc = new jsPDF();
-    const primaryColor: [number, number, number] = [245, 166, 35];
-    doc.setFontSize(22); doc.setTextColor(...primaryColor); doc.setFont('helvetica', 'bold');
-    doc.text('INCUBANT MONITOR', 14, 20);
-    doc.setFontSize(12); doc.setTextColor(50, 50, 50);
-    doc.text('REPORTE DIARIO DE OPERACIÓN', 14, 28);
-    doc.setFontSize(10); doc.setTextColor(100, 100, 100); doc.setFont('helvetica', 'normal');
-    doc.text(`Fecha: ${new Date().toLocaleDateString()} | Hora: ${new Date().toLocaleTimeString()}`, 14, 35);
-    doc.text(`Operario: ${currentUser?.name || 'Sistema'}`, 14, 40);
-    const incs = syncedMachines.filter(m => m.type === 'incubadora');
-    const incData = incs.map(m => {
-      const d = m.data;
-      const time = d?.tiempoIncubacion ? `${d.tiempoIncubacion.dias}d ${d.tiempoIncubacion.horas}h ${d.tiempoIncubacion.minutos || '0'}m` : '--';
-      return [m.number, m.status === 'completed' ? 'OK' : 'APAGADA', time,
-        d?.tempOvoscanReal || '--', d?.tempOvoscanSP || '--',
-        d?.tempAireReal || '--', d?.tempAireSP || '--',
-        d?.humedadReal || '--', d?.co2Real || '--',
-        d?.volteoNumero || '--', d?.volteoPosicion || '--',
-        d?.alarma || 'No', d?.ventiladorPrincipal || '--',
-        m.photoUrl ? 'VER FOTO' : '--', d?.observaciones || ''];
-    });
-    doc.setFontSize(14); doc.setTextColor(0, 0, 0); doc.setFont('helvetica', 'bold');
-    doc.text('CONTROL INCUBADORAS', 14, 55);
-    autoTable(doc, {
-      startY: 60,
-      head: [['N°', 'Est.', 'Tiempo', 'Real', 'SP', 'Aire', 'ASP', 'Hum%', 'CO2', 'V/N', 'V/P', 'Alm', 'Vent', 'Evid.', 'Obs']],
-      body: incData, theme: 'grid',
-      headStyles: { fillColor: [245, 166, 35] as [number, number, number], textColor: 255, fontSize: 8 },
-      styles: { fontSize: 7 },
-    });
-    const nacs = syncedMachines.filter(m => m.type === 'nacedora');
-    const nacData = nacs.map(m => {
-      const d = m.data;
-      const time = d?.tiempoIncubacion ? `${d.tiempoIncubacion.dias}d ${d.tiempoIncubacion.horas}h ${d.tiempoIncubacion.minutos || '0'}m` : '--';
-      return [m.number, m.status === 'completed' ? 'OK' : 'APAGADA', time,
-        d?.tempSynchroReal || '--', d?.tempSynchroSP || '--',
-        d?.humedadReal || '--', d?.co2Real || '--',
-        d?.ventiladorPrincipal || '--', m.photoUrl ? 'VER FOTO' : '--', d?.observaciones || ''];
-    });
-    const currentY = (doc as any).lastAutoTable.finalY + 15;
-    doc.text('CONTROL NACEDORAS', 14, currentY);
-    autoTable(doc, {
-      startY: currentY + 5,
-      head: [['N°', 'Est.', 'Tiempo', 'Temp', 'SP', 'Hum%', 'CO2', 'Vent', 'Evid.', 'Obs']],
-      body: nacData, theme: 'grid',
-      headStyles: { fillColor: [80, 80, 80] as [number, number, number], textColor: 255, fontSize: 8 },
-      styles: { fontSize: 8 },
-    });
-    return doc.output('blob');
-  };
-
-  const uploadPDFToDrive = async (pdfBlob: Blob) => {
-    try {
-      const reader = new FileReader();
-      reader.readAsDataURL(pdfBlob);
-      const base64 = await new Promise<string>((resolve) => {
-        reader.onloadend = () => resolve(reader.result as string);
-      });
-      await apiFetch(getApiUrl('/api/upload-pdf-drive'), {
-        method: 'POST',
-        body: JSON.stringify({ pdfBase64: base64 })
-      });
-    } catch (err) { console.error('PDF Drive upload error:', err); }
-  };
 
   const handleSyncAttempt = () => {
     if (!isOnline) {
       alert('Sin conexión. Los datos se guardan localmente y se sincronizarán cuando haya conexión.');
       // Still allow sync - data is saved locally and will sync when online
     }
-    allCompleted ? executeSync() : setShowConfirm(true);
+    setShowConfirm(true);
   };
 
-  const executeSync = async () => {
+  const executeSync = async (hasNovelty: boolean, noveltyText: string) => {
     setShowConfirm(false); setIsSyncing(true); setSyncPhase('uploading');
     try {
       const preparedMachines = machines.map(m => {
@@ -495,39 +424,35 @@ export default function DashboardScreen({ canAccessSupervisor = false, onSwitchT
 
       setSyncPhase('database');
 
+      const payload = {
+        machines: preparedMachines,
+        novelty: { hasNovelty, text: noveltyText }
+      };
+
       // Queue data locally if offline
       if (!isOnline) {
         const pendingSync = JSON.parse(localStorage.getItem('incubant-pending-sync') || '[]');
         pendingSync.push({
           userId: currentUser?.id,
-          machines: preparedMachines,
+          payload,
           timestamp: new Date().toISOString()
         });
         localStorage.setItem('incubant-pending-sync', JSON.stringify(pendingSync));
-        setSyncPhase('pdf');
-        await generatePDF(preparedMachines);
         setSyncSuccess(true);
         setTimeout(() => { setSyncSuccess(false); resetHourlyStatus(); }, 2000);
         return;
       }
 
-      // Upload photos + data to Drive via backend
+      // Upload photos + data to Supabase via backend
       const response = await apiFetch(getApiUrl('/api/sync-hourly-drive'), {
         method: 'POST',
-        body: JSON.stringify({ machines: preparedMachines })
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
       });
-      if (!response.ok) throw new Error('Error guardando en servidor');
+      if (!response.ok) throw new Error('Error guardando en el servidor backend');
 
-      setSyncPhase('pdf');
-      const pdfBlob = await generatePDF(preparedMachines);
-      // Download locally
-      const url = URL.createObjectURL(pdfBlob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `Reporte_Incubant_${new Date().toISOString().split('T')[0]}.pdf`;
-      a.click();
-      URL.revokeObjectURL(url);
-      await uploadPDFToDrive(pdfBlob);
       setSyncSuccess(true);
       setTimeout(() => { setSyncSuccess(false); resetHourlyStatus(); }, 2000);
 
@@ -569,9 +494,8 @@ export default function DashboardScreen({ canAccessSupervisor = false, onSwitchT
 
   /* ── Overlay de sincronización futurista ── */
   const syncPhaseInfo = {
-    uploading: { label: 'Subiendo Evidencia', icon: UploadCloud, pct: 33 },
-    database:  { label: 'Guardando Datos',    icon: Cpu,         pct: 66 },
-    pdf:       { label: 'Generando Reporte',  icon: FileText,    pct: 90 },
+    uploading: { label: 'Subiendo Evidencia', icon: UploadCloud, pct: 50 },
+    database:  { label: 'Guardando Datos',    icon: Cpu,         pct: 100 },
   };
 
   return (
@@ -643,7 +567,7 @@ export default function DashboardScreen({ canAccessSupervisor = false, onSwitchT
         </div>
       )}
 
-      <ConfirmationModal
+      <SyncModal
         isOpen={showConfirm} onClose={() => setShowConfirm(false)}
         onConfirm={executeSync} pendingCount={pendingCount} pendingMachines={pendingMachines}
       />

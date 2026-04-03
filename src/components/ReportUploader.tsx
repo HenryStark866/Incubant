@@ -2,6 +2,7 @@ import React, { useState, useRef } from 'react';
 import { Camera, Upload, CheckCircle2, AlertTriangle, Loader2, X, FileText, Thermometer, Droplets } from 'lucide-react';
 import { apiFetch, getApiUrl } from '../lib/api';
 import { useMachineStore } from '../store/useMachineStore';
+import imageCompression from 'browser-image-compression';
 
 interface ReportResult {
   temperature: string;
@@ -41,21 +42,42 @@ export default function ReportUploader({ machineId, machineName, reportData, onS
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const currentUser = useMachineStore(state => state.currentUser);
 
-  const handleFileSelected = (file: File) => {
+  const handleFileSelected = async (file: File) => {
     if (!file.type.startsWith('image/')) {
       setErrorMsg('Por favor selecciona un archivo de imagen válido.');
       setUploadState('error');
       return;
     }
-    setSelectedFile(file);
-    setPreviewUrl(URL.createObjectURL(file));
-    setUploadState('pending');
-    setErrorMsg('');
+
+    try {
+      setUploadState('analyzing'); // Usamos este estado para mostrar progreso de compresión
+      
+      const options = {
+        maxSizeMB: 0.8, // Menos de 1MB
+        maxWidthOrHeight: 1280,
+        useWebWorker: true,
+      };
+
+      console.log(`[Compression] Original size: ${file.size / 1024 / 1024} MB`);
+      const compressedFile = await imageCompression(file, options);
+      console.log(`[Compression] New size: ${compressedFile.size / 1024 / 1024} MB`);
+
+      setSelectedFile(compressedFile);
+      setPreviewUrl(URL.createObjectURL(compressedFile));
+      setUploadState('pending');
+      setErrorMsg('');
+    } catch (err) {
+      console.error('[Compression] Error:', err);
+      // Fallback a la imagen original si falla la compresión
+      setSelectedFile(file);
+      setPreviewUrl(URL.createObjectURL(file));
+      setUploadState('pending');
+    }
   };
 
   const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) handleFileSelected(file);
+    if (file) void handleFileSelected(file);
   };
 
   const handleSubmit = async () => {

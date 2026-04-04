@@ -794,10 +794,11 @@ export default function SupervisorDashboard() {
                   {isDark ? <Sun size={12} /> : <Moon size={12} />}
                 </button>
 
-                {/* Report count */}
-                <div className="bg-green-50 border border-green-100 rounded-lg px-2 py-1.5 flex items-center gap-1.5">
+                {/* Report count badge */}
+                <div className="bg-green-50 border border-green-100 rounded-lg px-2 py-1.5 flex items-center gap-1.5" title="Reportes horarios del turno actual">
                   <CheckCircle2 className="text-green-500" size={12} />
                   <span className="text-[10px] font-black text-green-700 leading-none">{reportCount}</span>
+                  <span className="text-[8px] font-bold text-green-500 leading-none hidden sm:inline">HRS</span>
                 </div>
 
                 {/* Alarms */}
@@ -867,14 +868,20 @@ export default function SupervisorDashboard() {
                   </div>
                 </div>
 
-                  {/* Cierres de turno */}
+                  {/* Reportes horarios + cierres */}
                 <div>
                   <p className={`text-[7px] uppercase font-black tracking-wider leading-none mb-0.5 ${isDark ? 'text-white/30' : 'text-brand-gray'}`}>Reportes turno</p>
-                  <div className="flex items-center gap-1.5">
-                    <span className={`text-lg font-black leading-none ${isDark ? 'text-brand-primary' : 'text-brand-primary'}`}>{shiftClosingCount}</span>
-                    <span className={`text-[8px] font-medium leading-none ${isDark ? 'text-white/40' : 'text-brand-gray'}`}>
-                      {shiftClosingCount === 1 ? 'reporte' : 'reportes'}
-                    </span>
+                  <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1">
+                      <span className={`text-lg font-black leading-none ${isDark ? 'text-brand-primary' : 'text-brand-primary'}`}>{reportCount}</span>
+                      <span className={`text-[7px] font-bold leading-none ${isDark ? 'text-white/40' : 'text-brand-gray'}`}>horarios</span>
+                    </div>
+                    {shiftClosingCount > 0 && (
+                      <div className="flex items-center gap-0.5 px-1.5 py-0.5 bg-brand-primary/10 rounded border border-brand-primary/20">
+                        <span className="text-[8px] font-black text-brand-primary leading-none">{shiftClosingCount}</span>
+                        <span className="text-[7px] font-bold text-brand-primary/60 leading-none">cierre</span>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>

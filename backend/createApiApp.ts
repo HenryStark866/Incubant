@@ -984,7 +984,11 @@ export function createApiApp(): Express {
   app.get('/api/dashboard/summary', requireRoles(SUPERVISOR_ROLES), async (_req, res) => {
     try {
       const prisma = await getPrismaClient();
-      const reportCount = await prisma.hourlyLog.count();
+      // Count hourly reports for the current shift (last 8 hours)
+      const eightHoursAgo = new Date(Date.now() - 8 * 60 * 60 * 1000);
+      const reportCount = await prisma.hourlyLog.count({
+        where: { fecha_hora: { gte: eightHoursAgo } }
+      });
       const lastLog = await prisma.hourlyLog.findFirst({
         orderBy: { fecha_hora: 'desc' },
         select: { fecha_hora: true }
@@ -1047,13 +1051,15 @@ export function createApiApp(): Express {
       const onlineNames = onlineUsers.map(u => u.nombre.split(' ')[0]);
       const displayNames = onlineNames.length > 0 ? onlineNames.join(', ') : 'N/A';
 
-      // Contar reportes de cierre de turno
+      // Contar reportes de cierre de turno (del día actual)
+      const todayStart = new Date();
+      todayStart.setHours(0, 0, 0, 0);
       let shiftClosingCount = 0;
       try {
         shiftClosingCount = await prisma.report.count({
           where: {
             isClosingReport: true,
-            fecha_hora: { gte: fifteenMinsAgo }
+            fecha_hora: { gte: todayStart }
           }
         });
       } catch {

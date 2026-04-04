@@ -148,6 +148,25 @@ export const processMachineReport = async (req: AuthenticatedRequest, res: Respo
         calcDiff(tempAireReal, tempAireSP)           >= 1.5 ||
         calcDiff(humedadReal, humedadSP)             >= 1.5;
 
+      // Generar PDF individual del reporte
+      let pdfUrl = '';
+      try {
+        const pdfBuffer = await generateSummaryPDF(userName, 'Individual', [{
+          fecha_hora: new Date(),
+          temp_principal_actual: tempPrincipalReal,
+          temp_secundaria_actual: tempAireReal,
+          co2_actual: co2Real,
+          is_na: dbType === 'NACEDORA',
+          observaciones: d.observaciones || '',
+          machine: { tipo: dbType, numero_maquina: machineNumber },
+        }]);
+        const { uploadToSupabase } = await import('../services/supabase_storage.service');
+        const pdfResult = await uploadToSupabase(pdfBuffer, userName, 'reports', 'application/pdf');
+        pdfUrl = pdfResult.publicUrl;
+      } catch (pdfError) {
+        console.warn('[Report] Error generando PDF individual:', pdfError);
+      }
+
       // Report (para historial de evidencias)
       savedReport = await prisma.report.create({
         data: {
@@ -166,7 +185,7 @@ export const processMachineReport = async (req: AuthenticatedRequest, res: Respo
           observaciones:    String(d.observaciones || ''),
           processStatus:    isAlarm ? 'ALARMA' : 'NORMAL',
           imageUrl,
-          pdfUrl:           '',
+          pdfUrl,
           temperature:      tempPrincipalReal,
           humidity:         humedadReal,
         },
@@ -207,6 +226,11 @@ export const processMachineReport = async (req: AuthenticatedRequest, res: Respo
 
     } catch (dbError) {
       console.error('[Report] Error guardando en BD:', dbError);
+      return res.status(500).json({
+        success: false,
+        message: 'Error guardando el reporte en la base de datos.',
+        error: dbError instanceof Error ? dbError.message : 'Error desconocido',
+      });
     }
 
     return res.status(201).json({

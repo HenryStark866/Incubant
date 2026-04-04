@@ -1052,33 +1052,6 @@ export function createApiApp(): Express {
     }
   });
 
-  // ── Admin History Endpoint ─────────────────────────────────────────────────
-  app.get('/api/reports/history', requireAuthenticatedUser, async (req, res) => {
-    try {
-      const prisma = await getPrismaClient();
-      const logs = await prisma.hourlyLog.findMany({
-        orderBy: { fecha_hora: 'desc' },
-        take: 150,
-        include: {
-          user: { select: { nombre: true, rol: true, turno: true } },
-          machine: true
-        }
-      });
-      const incidents = await prisma.incident.findMany({
-        orderBy: { fecha_hora: 'desc' },
-        take: 50,
-        include: {
-          user: { select: { nombre: true, rol: true, turno: true } },
-          machine: true
-        }
-      });
-      return res.json({ logs, incidents });
-    } catch (err: any) {
-      console.error('[Admin History] Error:', err);
-      return res.status(500).json({ error: 'Error cargando historial' });
-    }
-  });
-
   // ── Dashboard: Summary ───────────────────────────────────────────────────
   app.get('/api/dashboard/summary', requireRoles(SUPERVISOR_ROLES), async (_req, res) => {
     try {

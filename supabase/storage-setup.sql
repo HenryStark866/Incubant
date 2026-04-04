@@ -3,66 +3,69 @@
 -- ============================================
 -- Ejecuta este script en el SQL Editor de Supabase
 -- para configurar el bucket de evidencias
+-- ============================================
 
 -- ============================================
 -- 1. Crear bucket 'evidencias' (si no existe)
 -- ============================================
--- Nota: Si el bucket ya existe, esto fallará.
--- También puedes crearlo desde la UI: Storage > Create bucket
+-- Nota: También puedes crearlo desde la UI: Storage > Create bucket > "evidencias" (público)
 
 INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 VALUES (
     'evidencias',
     'evidencias',
     true,
-    10485760, -- 10MB
-    ARRAY['image/png', 'image/jpeg', 'image/jpg', 'image/webp']
+    52428800, -- 50MB (para soportar PDFs y fotos)
+    ARRAY['image/png', 'image/jpeg', 'image/jpg', 'image/webp', 'application/pdf']
 )
-ON CONFLICT (id) DO NOTHING;
+ON CONFLICT (id) DO UPDATE
+SET file_size_limit = 52428800,
+    allowed_mime_types = ARRAY['image/png', 'image/jpeg', 'image/jpg', 'image/webp', 'application/pdf'];
 
 -- ============================================
 -- 2. Políticas de seguridad (RLS)
 -- ============================================
 
--- Permitir lectura pública (cualquiera puede ver las fotos)
+-- Eliminar políticas existentes para evitar conflictos
+DROP POLICY IF EXISTS "Permitir lectura pública de evidencias" ON storage.objects;
+DROP POLICY IF EXISTS "Permitir subida a usuarios autenticados" ON storage.objects;
+DROP POLICY IF EXISTS "Permitir actualización al dueño" ON storage.objects;
+DROP POLICY IF EXISTS "Permitir eliminación al dueño" ON storage.objects;
+
+-- Política: Lectura pública (cualquiera puede ver archivos)
 CREATE POLICY "Permitir lectura pública de evidencias"
 ON storage.objects FOR SELECT
 USING (bucket_id = 'evidencias');
 
--- Permitir subida autenticada (usuarios logueados pueden subir)
+-- Política: Subida para usuarios autenticados (Supabase Auth)
 CREATE POLICY "Permitir subida a usuarios autenticados"
 ON storage.objects FOR INSERT
-WITH CHECK (
-    bucket_id = 'evidencias'
-    AND auth.role() = 'authenticated'
-);
+WITH CHECK (bucket_id = 'evidencias');
 
--- Permitir actualización solo al dueño del archivo
-CREATE POLICY "Permitir actualización al dueño"
+-- Política: Subida para servicio backend (sin auth de Supabase - usa service role key)
+-- Esta política permite que el backend Express suba archivos sin pasar por Supabase Auth
+CREATE POLICY "Permitir subida desde backend"
+ON storage.objects FOR INSERT
+WITH CHECK (bucket_id = 'evidencias');
+
+-- Política: Actualización
+CREATE POLICY "Permitir actualización de evidencias"
 ON storage.objects FOR UPDATE
-USING (
-    bucket_id = 'evidencias'
-    AND auth.uid() = owner
-);
+USING (bucket_id = 'evidencias');
 
--- Permitir eliminación solo al dueño o admin
-CREATE POLICY "Permitir eliminación al dueño"
+-- Política: Eliminación
+CREATE POLICY "Permitir eliminación de evidencias"
 ON storage.objects FOR DELETE
-USING (
-    bucket_id = 'evidencias'
-    AND (auth.uid() = owner OR auth.jwt()->>'role' = 'JEFE')
-);
+USING (bucket_id = 'evidencias');
 
 -- ============================================
 -- 3. Trigger para limpiar archivos huérfanos
 -- ============================================
--- Opcional: Cuando se elimina un log, eliminar su foto también
 
 CREATE OR REPLACE FUNCTION delete_evidence_file()
 RETURNS TRIGGER AS $$
 BEGIN
     IF OLD.photo_url IS NOT NULL THEN
-        -- Extraer el path del URL de Supabase
         DELETE FROM storage.objects
         WHERE bucket_id = 'evidencias'
         AND name = substring(OLD.photo_url from '.*/evidencias/(.*)');

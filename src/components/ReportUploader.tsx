@@ -98,14 +98,16 @@ export default function ReportUploader({ machineId, machineName, reportData, onS
       const response = await apiFetch(getApiUrl('/api/reports'), {
         method: 'POST',
         body: formData,
-        // No establecer Content-Type — el navegador lo incluye automáticamente con el boundary
-        headers: {},
       });
 
       const data = await response.json();
 
       if (!response.ok) {
         throw new Error(data.error || 'Error desconocido del servidor');
+      }
+
+      if (data.report?.warnings?.length > 0) {
+        console.warn('[ReportUploader] Warnings del servidor:', data.report.warnings);
       }
 
       setResult(data.report);

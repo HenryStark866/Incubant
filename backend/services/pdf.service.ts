@@ -45,10 +45,16 @@ export async function generateReportPDF(
   page.drawText(`Humedad/CO2: ${extractedData.humidity}%`, { x: 50, y: yStart - 125, size: 12, font });
   page.drawText(`Estado: ${extractedData.processStatus || 'NORMAL'}`, { x: 50, y: yStart - 145, size: 12, font });
 
-  // Evidence Image
+  // Evidence Image (support both JPG and PNG)
   if (photoBuffer) {
     try {
-      const image = await pdfDoc.embedJpg(photoBuffer);
+      let image;
+      const isPng = photoBuffer[0] === 0x89 && photoBuffer[1] === 0x50 && photoBuffer[2] === 0x4E && photoBuffer[3] === 0x47;
+      if (isPng) {
+        image = await pdfDoc.embedPng(photoBuffer);
+      } else {
+        image = await pdfDoc.embedJpg(photoBuffer);
+      }
       const dims = image.scale(0.5);
       page.drawImage(image, {
         x: (width - dims.width) / 2,

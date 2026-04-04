@@ -130,6 +130,8 @@ export const useMachineStore = create<MachineState>()(
           number: m.number,
           status: m.status,
           lastChecked: m.lastChecked,
+          data: m.data,
+          photoUrl: m.photoUrl,
         })),
         currentUser: state.currentUser,
       }),

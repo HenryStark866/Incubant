@@ -59,12 +59,16 @@ function EvidenceViewer({
         />
       ) : (
         <div
-          className="flex flex-col items-center justify-center gap-4 bg-white/5 rounded-2xl p-12"
+          className="flex flex-col items-center justify-center bg-white/5 rounded-2xl"
           onClick={e => e.stopPropagation()}
+          style={{ width: 'min(90vw, 600px)', height: '72vh' }}
         >
-          <FileText size={64} className="text-brand-primary" />
-          <p className="text-white font-black text-lg">Reporte PDF</p>
-          <p className="text-white/50 text-sm">{item.machine}</p>
+          <iframe
+            src={item.url}
+            className="w-full h-full rounded-xl"
+            style={{ border: 'none', background: 'white' }}
+            title="PDF Viewer"
+          />
         </div>
       )}
 
@@ -312,14 +316,17 @@ export default function MisEvidenciasScreen({ onBack }: { onBack?: () => void })
                   </div>
                 ) : (
                   <div
-                    className={`aspect-square flex flex-col items-center justify-center gap-2 ${
-                      isDark ? 'bg-brand-primary/5' : 'bg-brand-primary/5'
-                    }`}
+                    className="aspect-square flex flex-col items-center justify-center gap-2 bg-white relative"
                   >
-                    <FileText size={40} className="text-brand-primary opacity-60" />
-                    <span className="text-[9px] font-black text-brand-primary uppercase tracking-wider">
-                      PDF
-                    </span>
+                    <iframe
+                      src={item.url}
+                      className="w-full h-full"
+                      style={{ border: 'none' }}
+                      title={`PDF ${item.machine}`}
+                    />
+                    <div className="absolute bottom-0 left-0 right-0 bg-black/60 backdrop-blur text-white text-[9px] font-black px-2 py-0.5 text-center">
+                      {item.machine}
+                    </div>
                   </div>
                 )}
 

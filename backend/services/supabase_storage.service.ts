@@ -5,6 +5,10 @@ dotenv.config();
 const SUPABASE_URL = process.env.VITE_SUPABASE_URL || '';
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY || '';
 
+if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+  console.error('[Storage] FALTAN credenciales de Supabase. VITE_SUPABASE_URL y SUPABASE_SERVICE_ROLE_KEY (o VITE_SUPABASE_ANON_KEY) son requeridas.');
+}
+
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -44,7 +48,7 @@ export function normalizeMachineFolder(machineId: string): string {
 /**
  * Sube un archivo a Supabase Storage.
  *
- * Estructura de rutas en el bucket `incubant-storage`:
+ * Estructura de rutas en el bucket `evidencias`:
  *
  * FOTOS DE MÁQUINA (machineId proporcionado):
  *   photos/INC-01/2026-04-04/08-30-00_luiscortes.jpg
@@ -83,7 +87,7 @@ export async function uploadToSupabase(
     storagePath = `${folder}/${dateSegment}/${fileSegment}`;
   }
 
-  const bucketName = 'incubant-storage';
+  const bucketName = 'evidencias';
   console.log(`[Storage] Subiendo → ${bucketName}/${storagePath}`);
 
   const { data, error } = await supabase.storage
@@ -119,7 +123,7 @@ export async function listMachinePhotos(
 ): Promise<{ name: string; publicUrl: string; createdAt: string }[]> {
   const machineFolder = normalizeMachineFolder(machineId);
   const prefix = `photos/${machineFolder}/`;
-  const bucketName = 'incubant-storage';
+  const bucketName = 'evidencias';
 
   // List all date-subfolders
   const { data: folders, error: foldersError } = await supabase.storage

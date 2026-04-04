@@ -588,9 +588,10 @@ export function createApiApp(): Express {
   });
 
   // ── Smart Reporting (Gemini + Drive + PDF) ────────────────────────────────
+  // NOTA: /api/reports/history se registra SOLO AQUÍ abajo (línea ~1847) con la implementación
+  // inline. No duplicar rutas — Express solo ejecuta el primer match.
   app.post('/api/reports', requireAuthenticatedUser, upload.single('evidence'), processMachineReport);
   app.get('/api/reports/closing/request', requireAuthenticatedUser, requestClosingReport);
-  app.get('/api/reports/history', requireAuthenticatedUser, getHistory);
 
   // ── Session ──────────────────────────────────────────────────────────────
   app.get('/api/session', (req: AuthenticatedRequest, res) => {
@@ -732,6 +733,9 @@ export function createApiApp(): Express {
             });
           }
 
+          const humedad = toNumberOrNull(d.humedadReal) ?? toNumberOrNull(d.humedadRelativa) ?? 0;
+          const humedadSP = toNumberOrNull(d.humedadSP) ?? humedad;
+
           return {
             user_id: databaseUser.id,
             machine_id: resolvedMachine.id,
@@ -740,7 +744,8 @@ export function createApiApp(): Express {
             temp_principal_consigna: mainTempSP,
             co2_actual: co2,
             co2_consigna: co2SP,
-            fan_speed: 0,
+            humedad_actual: humedad,
+            humedad_consigna: humedadSP,
             temp_secundaria_actual: secondaryTemp,
             temp_secundaria_consigna: secondaryTempSP,
             is_na: machine.type === 'nacedora',
@@ -836,6 +841,8 @@ export function createApiApp(): Express {
           const humedad = toNumberOrNull(d.humedadReal) ?? toNumberOrNull(d.humedadRelativa) ?? 0;
 
           const storageResult = storageResults.find(r => r.machineId === machine.id);
+          const humedadDrive = humedad;
+          const humedadDriveSP = toNumberOrNull(d.humedadSP) ?? humedadDrive;
 
           if (d.alarma === 'Si') {
             await prisma.incident.create({
@@ -857,7 +864,8 @@ export function createApiApp(): Express {
             temp_principal_consigna: mainTempSP,
             co2_actual: co2,
             co2_consigna: co2SP,
-            fan_speed: 0,
+            humedad_actual: humedadDrive,
+            humedad_consigna: humedadDriveSP,
             temp_secundaria_actual: secondaryTemp,
             temp_secundaria_consigna: secondaryTempSP,
             is_na: machine.type === 'nacedora',
@@ -1013,10 +1021,24 @@ export function createApiApp(): Express {
   app.get('/api/dashboard/summary', requireRoles(SUPERVISOR_ROLES), async (_req, res) => {
     try {
       const prisma = await getPrismaClient();
-      // Count hourly reports for the current shift (last 8 hours)
-      const eightHoursAgo = new Date(Date.now() - 8 * 60 * 60 * 1000);
+
+      // Determinar inicio del turno actual en Colombia para contar reportes del turno vigente
+      const nowBogota = new Date(Date.now() - 5 * 60 * 60 * 1000);
+      const hourCO = nowBogota.getUTCHours();
+      // Turno 1: 06-14, Turno 2: 14-22, Turno 3: 22-06
+      let shiftStartHourCO: number;
+      if (hourCO >= 6 && hourCO < 14)       shiftStartHourCO = 6;
+      else if (hourCO >= 14 && hourCO < 22) shiftStartHourCO = 14;
+      else                                   shiftStartHourCO = 22;
+
+      // Convertir inicio del turno a UTC
+      const todayCO = new Date(Date.UTC(nowBogota.getUTCFullYear(), nowBogota.getUTCMonth(), nowBogota.getUTCDate()));
+      let shiftStartUTC = new Date(todayCO.getTime() + (shiftStartHourCO + 5) * 60 * 60 * 1000);
+      // Si el turno nocturno (22h CO → 03h UTC día siguiente) ya pasó medianoche UTC, ajustar
+      if (shiftStartUTC > new Date()) shiftStartUTC = new Date(shiftStartUTC.getTime() - 24 * 60 * 60 * 1000);
+
       const reportCount = await prisma.hourlyLog.count({
-        where: { fecha_hora: { gte: eightHoursAgo } }
+        where: { fecha_hora: { gte: shiftStartUTC } }
       });
       const lastLog = await prisma.hourlyLog.findFirst({
         orderBy: { fecha_hora: 'desc' },
@@ -1046,9 +1068,8 @@ export function createApiApp(): Express {
         select: { id: true, nombre: true, turno: true, rol: true }
       });
 
-      // Operarios asignados al turno actual por cronograma
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
+      // Operarios asignados al turno actual por cronograma (fecha Colombia)
+      const today = getTodayInBogota();
 
       const assignments = await prisma.scheduleAssignment.findMany({
         where: {
@@ -1080,15 +1101,13 @@ export function createApiApp(): Express {
       const onlineNames = onlineUsers.map(u => u.nombre.split(' ')[0]);
       const displayNames = onlineNames.length > 0 ? onlineNames.join(', ') : 'N/A';
 
-      // Contar reportes de cierre de turno (del día actual)
-      const todayStart = new Date();
-      todayStart.setHours(0, 0, 0, 0);
+      // Contar reportes de cierre de turno (del día Colombia)
       let shiftClosingCount = 0;
       try {
         shiftClosingCount = await prisma.report.count({
           where: {
             isClosingReport: true,
-            fecha_hora: { gte: todayStart }
+            fecha_hora: { gte: getTodayInBogota() }
           }
         });
       } catch {
@@ -1180,11 +1199,13 @@ export function createApiApp(): Express {
             tiempoMinutos = mMatch ? mMatch[1] : '0';
           }
 
-          humidity = humedadRelativa || log.co2_actual.toFixed(1);
+          // Preferir humedad_actual (columna dedicada) sobre el texto parseado
+          const humedadColumna = (log as any).humedad_actual;
+          humidity = humedadColumna > 0 ? humedadColumna.toFixed(1) : (humedadRelativa || log.co2_actual.toFixed(1));
           const diffMins = Math.floor((Date.now() - log.fecha_hora.getTime()) / 60000);
           data = {
             tiempoIncubacion: { dias: tiempoDias, horas: tiempoHoras, minutos: tiempoMinutos },
-            humedadRelativa: humedadRelativa || '0',
+            humedadRelativa: humedadColumna > 0 ? humedadColumna.toFixed(1) : (humedadRelativa || '0'),
             temperatura: temp,
             tempAire: tempAire || temp,
             volteoNumero: volteoNumero || '0',
@@ -1292,24 +1313,25 @@ export function createApiApp(): Express {
       });
 
       const trendsData = logs.map((log) => {
-        const d = new Date(log.fecha_hora);
-        const timeStr = `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
+        // Convertir fecha_hora (UTC) a hora Colombia para el eje X del gráfico
+        const localCO = new Date(log.fecha_hora.getTime() - 5 * 60 * 60 * 1000);
+        const timeStr = `${localCO.getUTCHours().toString().padStart(2, '0')}:${localCO.getUTCMinutes().toString().padStart(2, '0')}`;
         return {
           time: timeStr,
           // Temperatura principal (Ovoscan/Synchro) - REAL y SP
-          tempOvoscan: log.temp_principal_actual ?? 0,
+          tempOvoscan:  log.temp_principal_actual   ?? 0,
           tempOvoscanSP: log.temp_principal_consigna ?? 0,
           // Temperatura secundaria (Aire) - REAL y SP
-          tempAire: log.temp_secundaria_actual ?? 0,
-          tempAireSP: log.temp_secundaria_consigna ?? 0,
-          // Humedad - REAL y SP
-          humedad: log.temp_superior_actual ?? 0,
-          humedadSP: log.temp_superior_actual ? log.temp_superior_actual * 1.05 : 0, // Estimación SP
+          tempAire:     log.temp_secundaria_actual   ?? 0,
+          tempAireSP:   log.temp_secundaria_consigna ?? 0,
+          // Humedad - ahora desde columna dedicada
+          humedad:      (log as any).humedad_actual   ?? 0,
+          humedadSP:    (log as any).humedad_consigna ?? 0,
           // CO2 - REAL y SP
-          co2: log.co2_actual ?? 0,
-          co2SP: log.co2_consigna ?? 0,
+          co2:          log.co2_actual   ?? 0,
+          co2SP:        log.co2_consigna ?? 0,
           // Aliases para nacedoras
-          temp: log.temp_principal_actual ?? 0,
+          temp:   log.temp_principal_actual   ?? 0,
           tempSP: log.temp_principal_consigna ?? 0,
         };
       });
@@ -1843,7 +1865,9 @@ export function createApiApp(): Express {
     return res.json({ message: `${predefinedUsers.length} usuarios sincronizados.` });
   });
 
-  // ── Admin History Endpoint ───────────────────────────────────────────────
+  // ── Admin History Endpoint ─────────────────────────────────────────────────
+  // Nota: esta es la ÚNICA definición de GET /api/reports/history en la app.
+  // La importación del controller (getHistory) fue eliminada de la doble-ruta.
   app.get('/api/reports/history', requireAuthenticatedUser, async (req, res) => {
     try {
       const prisma = await getPrismaClient();

@@ -1,11 +1,25 @@
 import { Request, Response } from 'express';
 import { analyzeIncubatorImage } from '../services/vision.service';
-import { generateReportPDF, generateSummaryPDF } from '../services/pdf.service';
-import type { PrismaClient } from '@prisma/client';
+import { generateSummaryPDF } from '../services/pdf.service';
 
-async function getPrisma(): Promise<PrismaClient> {
-  const { PrismaClient } = await import('@prisma/client');
-  return new PrismaClient();
+// ──────────────────────────────────────────────────────────────────────────────
+// Singleton de Prisma: reutiliza el cliente global del proceso principal
+// para no agotar el pool de conexiones con instancias descartables.
+// ──────────────────────────────────────────────────────────────────────────────
+const globalForPrisma = globalThis as typeof globalThis & {
+  prisma?: import('@prisma/client').PrismaClient;
+};
+
+async function getPrisma() {
+  if (!globalForPrisma.prisma) {
+    const { PrismaClient } = await import('@prisma/client');
+    const dbUrl = (process.env.DATABASE_URL || '').replace(/\r/g, '').trim();
+    globalForPrisma.prisma = new PrismaClient({
+      log: process.env.NODE_ENV === 'development' ? ['error', 'warn'] : ['error'],
+      datasources: { db: { url: dbUrl } },
+    });
+  }
+  return globalForPrisma.prisma;
 }
 
 type AuthenticatedRequest = Request & {
@@ -13,19 +27,26 @@ type AuthenticatedRequest = Request & {
   file?: Express.Multer.File;
 };
 
-/**
- * Obtiene la hora actual en Colombia (UTC-5)
- */
+// ──────────────────────────────────────────────────────────────────────────────
+// Helpers de fecha en hora Colombia (UTC-5, sin horario de verano)
+// ──────────────────────────────────────────────────────────────────────────────
 function getBogotaDate(): Date {
+  // Colombia es UTC-5 permanentemente
   const now = new Date();
-  const utc = now.getTime() + now.getTimezoneOffset() * 60000;
-  return new Date(utc - 5 * 60 * 60 * 1000);
+  return new Date(now.getTime() - 5 * 60 * 60 * 1000);
 }
 
-
 /**
- * Limpia nombre de usuario para archivo: minúsculas, sin espacios, sin caracteres especiales
+ * Retorna la medianoche Colombia como timestamp UTC.
+ * Usado para filtros "hoy" que deben respetar la jornada laboral local.
  */
+function getTodayBogotaMidnight(): Date {
+  const bogota = getBogotaDate();
+  // Poner a medianoche en Colombia equivale a: año/mes/día a las 05:00 UTC
+  const d = new Date(Date.UTC(bogota.getUTCFullYear(), bogota.getUTCMonth(), bogota.getUTCDate()));
+  return d;
+}
+
 function cleanUserName(name: string): string {
   return name
     .normalize('NFD')
@@ -35,40 +56,16 @@ function cleanUserName(name: string): string {
     .toLowerCase();
 }
 
-/**
- * Formatea fecha como DD/MM/YYYY para nombres de carpetas
- */
-function formatDateFolder(date: Date): string {
-  const d = date.getDate().toString().padStart(2, '0');
-  const m = (date.getMonth() + 1).toString().padStart(2, '0');
-  const y = date.getFullYear();
-  return `${d}/${m}/${y}`;
-}
-
-/**
- * Formatea hora como HH:MM para nombres de archivo
- */
-function formatTimeFile(date: Date): string {
-  const h = date.getHours().toString().padStart(2, '0');
-  const min = date.getMinutes().toString().padStart(2, '0');
-  return `${h}:${min}`;
-}
-
-/**
- * POST /api/reports
- * Reporte por hora de una máquina individual.
- * 1. Recibe imagen del operario
- * 2. Analiza con Gemini Vision
- * 3. Sube foto → carpeta Fotos (fecha-hora-maquina-operador.jpg)
- * 4. Guarda Report en Supabase
- */
+// ──────────────────────────────────────────────────────────────────────────────
+// POST /api/reports
+// Reporte por hora de una máquina individual con imagen de evidencia.
+// ──────────────────────────────────────────────────────────────────────────────
 export const processMachineReport = async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { machineId, reportData: reportDataRaw } = req.body;
     const file = req.file;
     const userId = req.user?.id;
     const userName = req.user?.name || 'Operario';
-    const userShift = req.user?.shift || '';
 
     if (!machineId || !userId) {
       return res.status(400).json({ error: 'Faltan parámetros: machineId y sesión activa son requeridos.' });
@@ -78,34 +75,27 @@ export const processMachineReport = async (req: AuthenticatedRequest, res: Respo
       return res.status(400).json({ error: 'No se adjuntó imagen de evidencia.' });
     }
 
-    const bogotaDate = getBogotaDate();
-    const dateFolder = formatDateFolder(bogotaDate);
-    const timeStr = formatTimeFile(bogotaDate);
-    const cleanName = cleanUserName(userName);
-
     // 1. Análisis de imagen con Gemini Vision
-    let extractedData = { temperature: 0, humidity: 0, processStatus: 'SIN_LECTURA' };
+    let extractedData: Record<string, any> = { temperature: 0, humidity: 0, processStatus: 'SIN_LECTURA' };
     try {
       const base64Image = file.buffer.toString('base64');
       const aiResult = await analyzeIncubatorImage(base64Image, file.mimetype);
       extractedData = {
         temperature: aiResult.temperature ?? 0,
         humidity: aiResult.humidity ?? 0,
-        processStatus: aiResult.processStatus
+        processStatus: aiResult.processStatus,
       };
     } catch (visionError) {
-      console.warn('[Report Controller] Gemini Vision falló, usando datos manuales/defaults:', visionError);
+      console.warn('[Report] Gemini Vision falló, usando datos manuales:', visionError);
     }
 
-    // Mezclar con datos manuales (tienen prioridad)
-    let finalData = { ...extractedData };
+    // Mezclar con datos manuales (tienen prioridad sobre Vision)
+    let finalData: Record<string, any> = { ...extractedData };
     if (reportDataRaw) {
       try {
-        const manualOverrides = typeof reportDataRaw === 'string'
-          ? JSON.parse(reportDataRaw)
-          : reportDataRaw;
-        finalData = { ...finalData, ...manualOverrides };
-      } catch { /* ignorar si el JSON está malformado */ }
+        const manual = typeof reportDataRaw === 'string' ? JSON.parse(reportDataRaw) : reportDataRaw;
+        finalData = { ...finalData, ...manual };
+      } catch { /* JSON malformado — ignorar */ }
     }
 
     // 2. Subir foto → Supabase Storage
@@ -113,105 +103,110 @@ export const processMachineReport = async (req: AuthenticatedRequest, res: Respo
     let storagePhotoError = '';
     try {
       const { uploadToSupabase } = await import('../services/supabase_storage.service');
-      const photoResult = await uploadToSupabase(
-        file.buffer, userName, 'photos', file.mimetype
-      );
+      const photoResult = await uploadToSupabase(file.buffer, userName, 'photos', file.mimetype);
       imageUrl = photoResult.publicUrl;
-      console.log(`[Storage] Foto subida OK: ${photoResult.fileName}`);
+      console.log(`[Storage] Foto subida: ${photoResult.fileName}`);
     } catch (storageError) {
-      storagePhotoError = `Storage: ${storageError instanceof Error ? storageError.message : 'Error desconocido'}`;
+      storagePhotoError = storageError instanceof Error ? storageError.message : 'Error desconocido';
       console.error('[Storage] ERROR subiendo foto:', storageError);
     }
 
-    // 4. Guardar en la base de datos
+    // 3. Guardar en la base de datos
     let savedReport = null;
     try {
       const prisma = await getPrisma();
 
-      let machineNumber = 1;
+      // Resolución de máquina
       let dbType: 'INCUBADORA' | 'NACEDORA' = 'INCUBADORA';
-
+      let machineNumber = 1;
       const match = machineId.match(/(inc|nac)-(\d+)/i);
       if (match) {
         dbType = match[1].toLowerCase() === 'inc' ? 'INCUBADORA' : 'NACEDORA';
         machineNumber = parseInt(match[2], 10);
       }
 
-      let machine = await prisma.machine.findFirst({
-        where: { tipo: dbType, numero_maquina: machineNumber }
-      });
+      let machine = await prisma.machine.findFirst({ where: { tipo: dbType, numero_maquina: machineNumber } });
       if (!machine) {
-        machine = await prisma.machine.create({
-          data: { tipo: dbType, numero_maquina: machineNumber }
-        });
+        machine = await prisma.machine.create({ data: { tipo: dbType, numero_maquina: machineNumber } });
       }
 
-      const data = finalData as any;
-      const calcDiff = (r?: any, s?: any) => Math.abs(Number(r || 0) - Number(s || 0));
+      const d = finalData;
+      const toNum = (v: any) => (v !== undefined && v !== null && v !== '' ? Number(String(v).replace(',', '.')) : 0);
+      const calcDiff = (r: any, s: any) => Math.abs(toNum(r) - toNum(s));
 
-      const isAlarm = calcDiff(data.tempOvoscanReal || data.tempSynchroReal, data.tempOvoscanSP || data.tempSynchroSP) >= 1.5 ||
-        calcDiff(data.tempAireReal || data.temperaturaReal, data.tempAireSP || data.temperaturaSP) >= 1.5 ||
-        calcDiff(data.humidityReal, data.humiditySP) >= 1.5;
+      const tempPrincipalReal = toNum(d.tempOvoscanReal ?? d.tempSynchroReal);
+      const tempPrincipalSP   = toNum(d.tempOvoscanSP  ?? d.tempSynchroSP);
+      const tempAireReal      = toNum(d.tempAireReal   ?? d.temperaturaReal);
+      const tempAireSP        = toNum(d.tempAireSP     ?? d.temperaturaSP);
+      const humedadReal       = toNum(d.humedadReal    ?? d.humedadRelativa ?? d.humidity);
+      const humedadSP         = toNum(d.humedadSP      ?? d.humiditySP);
+      const co2Real           = toNum(d.co2Real        ?? d.co2);
+      const co2SP             = toNum(d.co2SP);
 
-      // Create Report entry (for evidence history)
+      const isAlarm =
+        calcDiff(tempPrincipalReal, tempPrincipalSP) >= 1.5 ||
+        calcDiff(tempAireReal, tempAireSP)           >= 1.5 ||
+        calcDiff(humedadReal, humedadSP)             >= 1.5;
+
+      // Report (para historial de evidencias)
       savedReport = await prisma.report.create({
         data: {
-          machine_id: machine.id,
-          user_id: userId,
-          tempPrincipalReal: Number(data.tempOvoscanReal || data.tempSynchroReal) || 0,
-          tempPrincipalSP: Number(data.tempOvoscanSP || data.tempSynchroSP) || 0,
-          tempAireReal: Number(data.tempAireReal || data.temperaturaReal) || 0,
-          tempAireSP: Number(data.tempAireSP || data.temperaturaSP) || 0,
-          humidityReal: Number(data.humidityReal) || 0,
-          humiditySP: Number(data.humiditySP) || 0,
-          co2Real: Number(data.co2Real) || 0,
-          co2SP: Number(data.co2SP) || 0,
-          isAlarm: isAlarm,
-          isClosingReport: false,
-          observaciones: String(data.observaciones || ''),
-          processStatus: String(isAlarm ? 'ALARMA' : 'NORMAL'),
+          machine_id:       machine.id,
+          user_id:          userId,
+          tempPrincipalReal,
+          tempPrincipalSP,
+          tempAireReal,
+          tempAireSP,
+          humidityReal:  humedadReal,
+          humiditySP:    humedadSP,
+          co2Real,
+          co2SP,
+          isAlarm,
+          isClosingReport:  false,
+          observaciones:    String(d.observaciones || ''),
+          processStatus:    isAlarm ? 'ALARMA' : 'NORMAL',
           imageUrl,
-          pdfUrl: '',
-          temperature: Number(data.tempOvoscanReal || data.tempSynchroReal) || 0,
-          humidity: Number(data.humidityReal) || 0,
-        }
+          pdfUrl:           '',
+          temperature:      tempPrincipalReal,
+          humidity:         humedadReal,
+        },
       });
 
-      // ALSO create HourlyLog entry (THIS IS WHAT THE DASHBOARD READS IN REAL-TIME)
+      // HourlyLog (lo que lee el dashboard en tiempo real)
       await prisma.hourlyLog.create({
         data: {
-          user_id: userId,
-          machine_id: machine.id,
-          photo_url: imageUrl,
-          temp_principal_actual: Number(data.tempOvoscanReal || data.tempSynchroReal) || 0,
-          temp_principal_consigna: Number(data.tempOvoscanSP || data.tempSynchroSP) || 0,
-          co2_actual: Number(data.co2Real) || 0,
-          co2_consigna: Number(data.co2SP) || 0,
-          fan_speed: 0,
-          temp_secundaria_actual: Number(data.tempAireReal || data.temperaturaReal) || 0,
-          temp_secundaria_consigna: Number(data.tempAireSP || data.temperaturaSP) || 0,
-          is_na: dbType === 'NACEDORA',
-          observaciones: `Registro visual: ${data.observaciones || ''}`
-        }
+          user_id:                  userId,
+          machine_id:               machine.id,
+          photo_url:                imageUrl || null,
+          temp_principal_actual:    tempPrincipalReal,
+          temp_principal_consigna:  tempPrincipalSP,
+          co2_actual:               co2Real,
+          co2_consigna:             co2SP,
+          humedad_actual:           humedadReal,      // ← campo dedicado
+          humedad_consigna:         humedadSP,        // ← campo dedicado
+          temp_secundaria_actual:   tempAireReal,
+          temp_secundaria_consigna: tempAireSP,
+          is_na:                    dbType === 'NACEDORA',
+          observaciones:            d.observaciones ? String(d.observaciones).slice(0, 500) : null,
+        },
       });
 
-      // 5. Trigger SSE Event to update Admin Dashboard IMMEDIATELY
+      // 4. Disparar SSE al panel del supervisor
       try {
         const { sendEventToAll } = await import('../services/event.service');
-        sendEventToAll({ 
-          type: 'NEW_REPORT', 
-          message: `Nuevo reporte de ${machineId} (${userName})`, 
+        sendEventToAll({
+          type:      'NEW_REPORT',
+          message:   `Nuevo reporte de ${machineId} (${userName})`,
           timestamp: new Date().toISOString(),
           machineId: machine.id,
-          status: isAlarm ? 'alarm' : 'ok'
+          status:    isAlarm ? 'alarm' : 'ok',
         });
       } catch (sseErr) {
-        console.warn('[SSE] Error sending notification:', sseErr);
+        console.warn('[SSE] Error enviando notificación:', sseErr);
       }
 
-      await prisma.$disconnect();
     } catch (dbError) {
-      console.error('[Report Controller] Error guardando en BD:', dbError);
+      console.error('[Report] Error guardando en BD:', dbError);
     }
 
     return res.status(201).json({
@@ -223,22 +218,22 @@ export const processMachineReport = async (req: AuthenticatedRequest, res: Respo
         isClosingReport: false,
         imageUrl,
         warnings: [storagePhotoError].filter(Boolean),
-      }
+      },
     });
 
   } catch (error) {
-    console.error('[Report Controller] Error general:', error);
+    console.error('[Report] Error general:', error);
     return res.status(500).json({ error: 'Error interno al procesar el reporte.' });
   }
 };
 
-/**
- * GET /api/reports/closing/request
- * Genera el reporte de cierre en el servidor basado en los logs del turno actual.
- */
+// ──────────────────────────────────────────────────────────────────────────────
+// GET /api/reports/closing/request
+// Genera el reporte de cierre basado en los logs del turno actual (hora Colombia).
+// ──────────────────────────────────────────────────────────────────────────────
 export const requestClosingReport = async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const userId = req.user?.id;
+    const userId   = req.user?.id;
     const userName = req.user?.name || 'Operario';
     const userShift = req.user?.shift || 'Turno';
 
@@ -247,99 +242,83 @@ export const requestClosingReport = async (req: AuthenticatedRequest, res: Respo
     }
 
     const prisma = await getPrisma();
-    
-    // 1. Obtener logs del turno actual (hoy)
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const tomorrow = new Date(today);
-    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    // Rango "hoy" en hora Colombia
+    const todayBogota = getTodayBogotaMidnight();
+    const tomorrowBogota = new Date(todayBogota.getTime() + 24 * 60 * 60 * 1000);
 
     const logs = await prisma.hourlyLog.findMany({
       where: {
-        user_id: userId,
-        fecha_hora: {
-          gte: today,
-          lt: tomorrow
-        }
+        user_id:   userId,
+        fecha_hora: { gte: todayBogota, lt: tomorrowBogota },
       },
-      include: {
-        machine: true
-      },
-      orderBy: {
-        fecha_hora: 'asc'
-      }
+      include:  { machine: true },
+      orderBy:  { fecha_hora: 'asc' },
     });
 
     if (logs.length === 0) {
       return res.status(200).json({ message: 'No hay registros para este turno. No se generará PDF.' });
     }
 
-    // 2. Generar PDF Profesional (Landscape)
+    // Generar PDF y subir a Supabase Storage
     const pdfBuffer = await generateSummaryPDF(userName, userShift, logs);
 
-    // 3. Subir a Supabase Storage (Carpeta "reports")
     const { uploadToSupabase } = await import('../services/supabase_storage.service');
-    
     const result = await uploadToSupabase(pdfBuffer, userName, 'reports', 'application/pdf');
 
-    // 4. Registrar el reporte en la DB
+    // Registrar el reporte de cierre en la BD
     await prisma.report.create({
       data: {
-        user_id: userId,
-        machine_id: logs[0].machine_id, // Referencia una máquina del turno
-        pdfUrl: result.publicUrl,
+        user_id:        userId,
+        machine_id:     logs[0].machine_id,
+        pdfUrl:         result.publicUrl,
         isClosingReport: true,
-        observaciones: `Reporte de cierre generado automáticamente para ${userName}.`,
-      }
+        observaciones:  `Reporte de cierre generado para ${userName} — ${logs.length} registros.`,
+      },
     });
-
-    await prisma.$disconnect();
 
     return res.status(200).json({
       success: true,
       message: 'Reporte de cierre generado y guardado en la nube.',
-      url: result.publicUrl
+      url:     result.publicUrl,
     });
 
   } catch (error) {
-    console.error('[Report Controller] Error en requestClosingReport:', error);
+    console.error('[Report] Error en requestClosingReport:', error);
     return res.status(500).json({ error: 'Fallo al generar el reporte de cierre.' });
   }
 };
 
-/**
- * GET /api/reports/history
- * Obtiene el historial en orden descendente.
- */
-export const getHistory = async (req: AuthenticatedRequest, res: Response) => {
+// ──────────────────────────────────────────────────────────────────────────────
+// GET /api/reports/history
+// Historial de HourlyLogs + Incidents para el panel admin.
+// ──────────────────────────────────────────────────────────────────────────────
+export const getHistory = async (_req: Request, res: Response) => {
   try {
     const prisma = await getPrisma();
 
-    // Obtener los logs incluyendo usuario y máquina
-    const logs = await prisma.hourlyLog.findMany({
-      orderBy: { fecha_hora: 'desc' },
-      take: 200,
-      include: {
-        user: { select: { nombre: true, rol: true, turno: true } },
-        machine: true
-      }
-    });
-
-    // Obtener incidentes
-    const incidents = await prisma.incident.findMany({
-      orderBy: { fecha_hora: 'desc' },
-      take: 100,
-      include: {
-        user: { select: { nombre: true, rol: true, turno: true } },
-        machine: true
-      }
-    });
-
-    await prisma.$disconnect();
+    const [logs, incidents] = await Promise.all([
+      prisma.hourlyLog.findMany({
+        orderBy: { fecha_hora: 'desc' },
+        take: 200,
+        include: {
+          user:    { select: { nombre: true, rol: true, turno: true } },
+          machine: true,
+        },
+      }),
+      prisma.incident.findMany({
+        orderBy: { fecha_hora: 'desc' },
+        take: 100,
+        include: {
+          user:    { select: { nombre: true, rol: true, turno: true } },
+          machine: true,
+        },
+      }),
+    ]);
 
     return res.status(200).json({ logs, incidents });
   } catch (error) {
-    console.error('[Report Controller] Error al obtener el historial:', error);
+    console.error('[Report] Error obteniendo historial:', error);
     return res.status(500).json({ error: 'Error interno obteniendo historial' });
   }
 };

@@ -22,9 +22,19 @@ export default class ErrorBoundary extends Component<Props, State> {
 
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     console.error('Uncaught error:', error, errorInfo);
+    
+    // Si es un error de carga de módulos (común tras un deploy en Vercel)
+    // intentamos recargar automáticamente una vez si no se ha hecho ya.
+    const isChunkError = /Failed to fetch dynamically imported module|Loading chunk|chunkLoadError/i.test(error.message);
+    if (isChunkError && !sessionStorage.getItem('last_chunk_error_reload')) {
+      sessionStorage.setItem('last_chunk_error_reload', Date.now().toString());
+      console.warn('Detectado error de carga de módulo. Recargando página...');
+      window.location.reload();
+    }
   }
 
   private handleReset = () => {
+    sessionStorage.removeItem('last_chunk_error_reload');
     localStorage.clear();
     sessionStorage.clear();
     if ('serviceWorker' in navigator) {
@@ -34,7 +44,8 @@ export default class ErrorBoundary extends Component<Props, State> {
         }
       });
     }
-    window.location.href = '/';
+    // Forzar recarga completa desde el servidor
+    window.location.href = window.location.origin + '?reload=' + Date.now();
   }
 
   public render() {

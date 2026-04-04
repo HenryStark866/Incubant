@@ -888,6 +888,41 @@ export function createApiApp(): Express {
           });
         }
 
+        // ── Generar PDF de Informe Horario (Sincronización) ──
+        try {
+          const { generateSummaryPDF } = await import('./services/pdf.service');
+          const { uploadToSupabase } = await import('./services/supabase_storage.service');
+          
+          // Obtener los logs recién creados para el PDF (con relaciones)
+          const logsForPdf = await prisma.hourlyLog.findMany({
+            where: {
+              user_id: databaseUser.id,
+              fecha_hora: { gte: new Date(Date.now() - 5 * 60 * 1000) } // Logs de los últimos 5 min
+            },
+            include: { machine: true, user: true },
+            orderBy: { fecha_hora: 'desc' }
+          });
+
+          if (logsForPdf.length > 0) {
+            const pdfBuffer = await generateSummaryPDF(userName, (req.user as any)?.shift || 'Turno Actual', logsForPdf);
+            const pdfResult = await uploadToSupabase(pdfBuffer, userName, 'reports', 'application/pdf');
+            console.log(`[Sync Storage] ✅ PDF Horario generado y subido: ${pdfResult.publicUrl}`);
+            
+            // También lo guardamos en la tabla Report para el historial administrativo
+            await prisma.report.create({
+              data: {
+                user_id: databaseUser.id,
+                machine_id: logsForPdf[0].machine_id,
+                pdfUrl: pdfResult.publicUrl,
+                isClosingReport: false,
+                observaciones: `Reporte sincronizado manualmente - ${logsForPdf.length} máquinas.`,
+              }
+            });
+          }
+        } catch (pdfErr) {
+          console.error('[Sync Storage] Error generando PDF horario:', pdfErr);
+        }
+
         sendEventToAll({ type: 'NEW_REPORT', message: 'Nuevo reporte sincronizado', timestamp: new Date().toISOString() });
       } catch (dbError) {
         console.error('[Sync Storage] Error BD:', dbError);
@@ -1022,20 +1057,31 @@ export function createApiApp(): Express {
     try {
       const prisma = await getPrismaClient();
 
-      // Determinar inicio del turno actual en Colombia para contar reportes del turno vigente
-      const nowBogota = new Date(Date.now() - 5 * 60 * 60 * 1000);
-      const hourCO = nowBogota.getUTCHours();
-      // Turno 1: 06-14, Turno 2: 14-22, Turno 3: 22-06
-      let shiftStartHourCO: number;
-      if (hourCO >= 6 && hourCO < 14)       shiftStartHourCO = 6;
-      else if (hourCO >= 14 && hourCO < 22) shiftStartHourCO = 14;
-      else                                   shiftStartHourCO = 22;
+      // Determinar el turno actual dinámicamente según la tabla de Shifts
+      const shiftData = await getCurrentShiftData();
+      
+      let shiftStartUTC: Date;
+      let currentShiftName: string;
 
-      // Convertir inicio del turno a UTC
-      const todayCO = new Date(Date.UTC(nowBogota.getUTCFullYear(), nowBogota.getUTCMonth(), nowBogota.getUTCDate()));
-      let shiftStartUTC = new Date(todayCO.getTime() + (shiftStartHourCO + 5) * 60 * 60 * 1000);
-      // Si el turno nocturno (22h CO → 03h UTC día siguiente) ya pasó medianoche UTC, ajustar
-      if (shiftStartUTC > new Date()) shiftStartUTC = new Date(shiftStartUTC.getTime() - 24 * 60 * 60 * 1000);
+      if (shiftData) {
+        shiftStartUTC = shiftData.startUTC;
+        currentShiftName = shiftData.shift.nombre;
+      } else {
+        // Fallback si no hay turnos configurados o no se encuentra uno actual
+        const nowBogota = getBogotaNow();
+        const hourCO = nowBogota.getUTCHours();
+        let shiftStartHourCO: number;
+        if (hourCO >= 6 && hourCO < 14)       shiftStartHourCO = 6;
+        else if (hourCO >= 14 && hourCO < 22) shiftStartHourCO = 14;
+        else                                   shiftStartHourCO = 22;
+
+        const todayCO = getTodayInBogota(); // Representa medianoche Bogota (en términos de UTC 00:00)
+        shiftStartUTC = new Date(todayCO.getTime() + (shiftStartHourCO + 5) * 60 * 60 * 1000);
+        
+        // Ajuste para el turno de 22h si ya es el día siguiente UTC
+        if (shiftStartUTC > new Date()) shiftStartUTC = new Date(shiftStartUTC.getTime() - 24 * 60 * 60 * 1000);
+        currentShiftName = getShiftName(new Date(Date.now() - 5*60*60*1000));
+      }
 
       const reportCount = await prisma.hourlyLog.count({
         where: { fecha_hora: { gte: shiftStartUTC } }
@@ -1046,40 +1092,29 @@ export function createApiApp(): Express {
       });
 
       const currentTime = new Date();
-      const shifts = await prisma.shift.findMany();
-      const timeStr = currentTime.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', hour12: false });
       
-      const currentShiftObj = shifts.find(s => {
-        if (s.hora_inicio <= s.hora_fin) {
-          return timeStr >= s.hora_inicio && timeStr <= s.hora_fin;
-        } else {
-          return timeStr >= s.hora_inicio || timeStr <= s.hora_fin;
-        }
+      // Intentar obtener el objeto Shift específico para colores etc.
+      const currentShiftObj = await prisma.shift.findFirst({
+        where: { nombre: currentShiftName }
       });
 
-      const currentShift = currentShiftObj?.nombre || getShiftName(currentTime);
-
-      // TODOS los usuarios ONLINE (activos en los últimos 15 min) - sin filtrar por rol
+      // TODOS los usuarios ONLINE (activos en los últimos 15 min)
       const fifteenMinsAgo = new Date(currentTime.getTime() - 15 * 60 * 1000);
       const onlineUsers = await prisma.user.findMany({
-        where: {
-          ultimo_acceso: { gte: fifteenMinsAgo },
-        },
+        where: { ultimo_acceso: { gte: fifteenMinsAgo } },
         select: { id: true, nombre: true, turno: true, rol: true }
       });
 
       // Operarios asignados al turno actual por cronograma (fecha Colombia)
       const today = getTodayInBogota();
-
       const assignments = await prisma.scheduleAssignment.findMany({
         where: {
           fecha: today,
-          shift_id: currentShiftObj?.id
+          shift_id: currentShiftObj?.id || undefined
         },
         include: { user: true, shift: true }
       });
 
-      // Responsable del turno (primer asignado)
       let responsibleOperator = '';
       const assignedUserIds = new Set<string>();
       if (assignments.length > 0) {
@@ -1087,7 +1122,6 @@ export function createApiApp(): Express {
         assignments.forEach(a => assignedUserIds.add(a.user.id));
       }
 
-      // Construir lista de onlineOperators con indicador de responsable
       const onlineOperators = onlineUsers.map(u => ({
         id: u.id,
         name: u.nombre,
@@ -1097,17 +1131,15 @@ export function createApiApp(): Express {
         isAssigned: assignedUserIds.has(u.id),
       }));
 
-      // Nombres para display (todos los online)
       const onlineNames = onlineUsers.map(u => u.nombre.split(' ')[0]);
       const displayNames = onlineNames.length > 0 ? onlineNames.join(', ') : 'N/A';
 
-      // Contar reportes de cierre de turno (del día Colombia)
       let shiftClosingCount = 0;
       try {
         shiftClosingCount = await prisma.report.count({
           where: {
             isClosingReport: true,
-            fecha_hora: { gte: getTodayInBogota() }
+            fecha_hora: { gte: today }
           }
         });
       } catch {
@@ -1120,7 +1152,7 @@ export function createApiApp(): Express {
         activeOperatorsCount: onlineNames.length,
         activeOperatorsNames: displayNames,
         responsibleOperator,
-        currentShift,
+        currentShift: currentShiftName,
         shiftClosingCount,
         onlineOperators,
       });
@@ -1132,7 +1164,7 @@ export function createApiApp(): Express {
         activeOperatorsCount: 0,
         activeOperatorsNames: 'N/A',
         responsibleOperator: '',
-        currentShift: getShiftName(new Date()),
+        currentShift: getShiftName(new Date(Date.now() - 5 * 60 * 60 * 1000)),
         shiftClosingCount: 0,
         onlineOperators: [],
       });
@@ -1146,17 +1178,15 @@ export function createApiApp(): Express {
       const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000);
 
       // Siempre obtener TODAS las máquinas (24 INC + 12 NAC)
+      // Buscamos el log más reciente para datos y la foto más reciente histórica
       const machines = await prisma.machine.findMany({
         orderBy: [{ tipo: 'asc' }, { numero_maquina: 'asc' }],
         include: {
           logs: {
-            where: { fecha_hora: { gte: twoHoursAgo } },
             orderBy: { fecha_hora: 'desc' },
             take: 1,
             include: {
-              user: {
-                select: { nombre: true },
-              },
+              user: { select: { nombre: true } },
             },
           },
         },
@@ -1187,6 +1217,9 @@ export function createApiApp(): Express {
           const ventilador = extractObservationValue(observaciones, 'Ventilador');
           const volteoPosicion = extractObservationValue(observaciones, 'Posicion');
           const notaOperario = extractObservationValue(observaciones, 'Nota');
+
+          // Verificamos si el log es "actual" (< 2 horas)
+          const isLogRecent = log.fecha_hora.getTime() > twoHoursAgo.getTime();
 
           // Parse tiempo incubacion string like "20d 12h 30m" into parts
           let tiempoDias = '0', tiempoHoras = '0', tiempoMinutos = '0';
@@ -1234,9 +1267,15 @@ export function createApiApp(): Express {
             status = 'alarm';
           }
 
+          // Si el log es muy viejo, marcar como mantenimiento/sin-datos para los números,
+          // pero conservamos la foto si existe.
+          if (!isLogRecent) {
+             status = 'maintenance';
+          }
+
           lastUpdate = `Hace ${diffMins} min`;
         } else {
-          status = 'maintenance'; // Apagada = sin reporte reciente
+          status = 'maintenance'; 
         }
 
         return {
@@ -1290,6 +1329,50 @@ export function createApiApp(): Express {
         });
       }
       return res.json(defaultMachines);
+    }
+  });
+
+  // ── Dashboard: Global History (Admin History Tab) ────────────────────────
+  // GET /api/reports/history — lo que requiere el componente AdminHistoryScreen
+  app.get('/api/reports/history', requireRoles(SUPERVISOR_ROLES), async (_req, res) => {
+    try {
+      const prisma = await getPrismaClient();
+      
+      // Obtener logs (con foto) e incidencias
+      const [logs, incidents] = await Promise.all([
+        prisma.hourlyLog.findMany({
+          take: 100,
+          orderBy: { fecha_hora: 'desc' },
+          include: {
+            user: { select: { nombre: true, turno: true } },
+            machine: { select: { tipo: true, numero_maquina: true, id: true } },
+          },
+        }),
+        prisma.incident.findMany({
+          take: 50,
+          orderBy: { fecha_hora: 'desc' },
+          include: {
+            user: { select: { nombre: true } },
+            machine: { select: { tipo: true, numero_maquina: true, id: true } },
+          },
+        }),
+      ]);
+
+      // Formatear logs para el frontend (asegurar campos esperados)
+      const formattedLogs = logs.map(l => ({
+        ...l,
+        photo_url: l.photo_url || null,
+        photoUrl: l.photo_url || null, // Algunos componentes esperan camelCase
+      }));
+
+      return res.json({
+        success: true,
+        logs: formattedLogs,
+        incidents: incidents
+      });
+    } catch (error) {
+      console.error('[Admin History] Error fetching global history:', error);
+      return res.status(500).json({ error: 'Error cargando historial global' });
     }
   });
 
@@ -2181,11 +2264,62 @@ function getShiftName(date: Date) {
 }
 
 /**
+ * Retorna un objeto Date con la hora actual en Colombia (UTC-5)
+ * pero desplazado para que sus métodos getUTC* funcionen como locales de Colombia.
+ */
+function getBogotaNow(): Date {
+  const colombiaOffset = -5 * 60 * 60 * 1000;
+  return new Date(Date.now() + colombiaOffset);
+}
+
+/**
+ * Retorna el turno actual y su hora de inicio (UTC real) para filtrado den BD.
+ */
+async function getCurrentShiftData(): Promise<{ shift: any; startUTC: Date } | null> {
+  try {
+    const prisma = await getPrismaClient();
+    const bogotaNow = getBogotaNow();
+    const timeStr = bogotaNow.getUTCHours().toString().padStart(2, '0') + ':' + 
+                    bogotaNow.getUTCMinutes().toString().padStart(2, '0');
+
+    const shifts = await prisma.shift.findMany();
+    
+    // Buscar el turno que cubre la hora actual (considerando cruces de medianoche)
+    const currentShift = shifts.find(s => {
+      if (s.hora_inicio <= s.hora_fin) {
+        return timeStr >= s.hora_inicio && timeStr <= s.hora_fin;
+      } else {
+        return timeStr >= s.hora_inicio || timeStr <= s.hora_fin;
+      }
+    });
+
+    if (!currentShift) return null;
+
+    const [h, m] = currentShift.hora_inicio.split(':').map(Number);
+    const startShiftBogota = getTodayInBogota(); // Medianoche hoy (UTC 00:00)
+    startShiftBogota.setUTCHours(h, m, 0, 0);
+
+    // Ajuste si el turno cruza medianoche y ya estamos en el día siguiente al inicio
+    if (currentShift.hora_inicio > currentShift.hora_fin && timeStr <= currentShift.hora_fin) {
+      startShiftBogota.setTime(startShiftBogota.getTime() - 24 * 60 * 60 * 1000);
+    }
+
+    // Convertir a UTC real sumando el offset (+5h)
+    const startUTC = new Date(startShiftBogota.getTime() + 5 * 60 * 60 * 1000);
+
+    return { shift: currentShift, startUTC };
+  } catch (error) {
+    console.warn('[Shift] Error calculating current shift:', error);
+    return null;
+  }
+}
+
+/**
  * Retorna la fecha de HOY en Colombia (America/Bogota, UTC-5)
  * normalizada a la medianoche UTC para coincidir con el almacenamiento de la BD.
  */
 function getTodayInBogota(): Date {
-  // Colombia es UTC-5 siempre (no tiene horario de verano)
+  // Colombia es UTC-5 siempre
   const now = new Date();
   const colombiaOffset = -5 * 60 * 60 * 1000;
   const colombiaTime = new Date(now.getTime() + colombiaOffset);

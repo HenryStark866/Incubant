@@ -1005,10 +1005,10 @@ export default function SupervisorDashboard() {
                           <div className="absolute inset-0">
                             {(() => {
                               let bgImageUrl = '/imagen1.png';
-                              if (machine.status === 'maintenance') {
-                                bgImageUrl = '/imagen2.png';
-                              } else if (machine.photoUrl) {
+                              if (machine.photoUrl) {
                                 bgImageUrl = machine.photoUrl;
+                              } else if (machine.status === 'maintenance') {
+                                bgImageUrl = '/imagen2.png';
                               }
 
                               return (

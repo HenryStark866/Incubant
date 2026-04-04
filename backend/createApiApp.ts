@@ -1052,6 +1052,33 @@ export function createApiApp(): Express {
     }
   });
 
+  // ── Admin History Endpoint ─────────────────────────────────────────────────
+  app.get('/api/reports/history', requireAuthenticatedUser, async (req, res) => {
+    try {
+      const prisma = await getPrismaClient();
+      const logs = await prisma.hourlyLog.findMany({
+        orderBy: { fecha_hora: 'desc' },
+        take: 150,
+        include: {
+          user: { select: { nombre: true, rol: true, turno: true } },
+          machine: true
+        }
+      });
+      const incidents = await prisma.incident.findMany({
+        orderBy: { fecha_hora: 'desc' },
+        take: 50,
+        include: {
+          user: { select: { nombre: true, rol: true, turno: true } },
+          machine: true
+        }
+      });
+      return res.json({ logs, incidents });
+    } catch (err: any) {
+      console.error('[Admin History] Error:', err);
+      return res.status(500).json({ error: 'Error cargando historial' });
+    }
+  });
+
   // ── Dashboard: Summary ───────────────────────────────────────────────────
   app.get('/api/dashboard/summary', requireRoles(SUPERVISOR_ROLES), async (_req, res) => {
     try {
@@ -1065,7 +1092,8 @@ export function createApiApp(): Express {
 
       if (shiftData) {
         shiftStartUTC = shiftData.startUTC;
-        currentShiftName = shiftData.shift.nombre;
+        // Nombre descriptivo: "Turno 1 (06:20 - 14:40)"
+        currentShiftName = `${shiftData.shift.nombre} (${shiftData.shift.hora_inicio} - ${shiftData.shift.hora_fin})`;
       } else {
         // Fallback si no hay turnos configurados o no se encuentra uno actual
         const nowBogota = getBogotaNow();
@@ -1333,48 +1361,8 @@ export function createApiApp(): Express {
   });
 
   // ── Dashboard: Global History (Admin History Tab) ────────────────────────
-  // GET /api/reports/history — lo que requiere el componente AdminHistoryScreen
-  app.get('/api/reports/history', requireRoles(SUPERVISOR_ROLES), async (_req, res) => {
-    try {
-      const prisma = await getPrismaClient();
-      
-      // Obtener logs (con foto) e incidencias
-      const [logs, incidents] = await Promise.all([
-        prisma.hourlyLog.findMany({
-          take: 100,
-          orderBy: { fecha_hora: 'desc' },
-          include: {
-            user: { select: { nombre: true, turno: true } },
-            machine: { select: { tipo: true, numero_maquina: true, id: true } },
-          },
-        }),
-        prisma.incident.findMany({
-          take: 50,
-          orderBy: { fecha_hora: 'desc' },
-          include: {
-            user: { select: { nombre: true } },
-            machine: { select: { tipo: true, numero_maquina: true, id: true } },
-          },
-        }),
-      ]);
-
-      // Formatear logs para el frontend (asegurar campos esperados)
-      const formattedLogs = logs.map(l => ({
-        ...l,
-        photo_url: l.photo_url || null,
-        photoUrl: l.photo_url || null, // Algunos componentes esperan camelCase
-      }));
-
-      return res.json({
-        success: true,
-        logs: formattedLogs,
-        incidents: incidents
-      });
-    } catch (error) {
-      console.error('[Admin History] Error fetching global history:', error);
-      return res.status(500).json({ error: 'Error cargando historial global' });
-    }
-  });
+  // [NOTA] Esta ruta ha sido movida abajo (línea ~1950) para centralizar
+  // la lógica de reportes y evitar duplicados.
 
   // ── Dashboard: Trends ────────────────────────────────────────────────────
   app.get('/api/dashboard/trends', requireRoles(SUPERVISOR_ROLES), async (req, res) => {

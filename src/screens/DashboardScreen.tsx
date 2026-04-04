@@ -4,7 +4,7 @@ import { useThemeStore } from '../store/useThemeStore';
 import {
   CheckCircle2, Clock, UploadCloud, Loader2, LogOut, Egg,
   AlertTriangle, FileText, Camera, Zap, Activity, Cpu, Wifi, WifiOff, Sun, Moon, Monitor,
-  Menu, Calendar, ClipboardList, Package
+  Menu, Calendar, ClipboardList, Package, X
 } from 'lucide-react';
 import { getApiUrl, apiFetch } from '../lib/api';
 import ReportUploader from '../components/ReportUploader';
@@ -259,7 +259,7 @@ const MachineCard = ({
 ───────────────────────────────────────────── */
 export default function DashboardScreen({ canAccessSupervisor = false, onSwitchToSupervisor }: { canAccessSupervisor?: boolean; onSwitchToSupervisor?: () => void }) {
   const [activePage, setActivePage] = useState<'dashboard' | 'schedule' | 'requests' | 'reports' | 'evidencias'>('dashboard');
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<MachineType>('incubadora');
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncSuccess, setSyncSuccess] = useState(false);
@@ -365,6 +365,17 @@ export default function DashboardScreen({ canAccessSupervisor = false, onSwitchT
     }, 60 * 60 * 1000); // Cada hora
     return () => clearInterval(reminderInterval);
   }, [currentUser, machines]);
+  // Sidebar click-outside close
+  useEffect(() => {
+    const handleOutside = (e: MouseEvent) => {
+      const sidebar = document.getElementById('operator-sidebar');
+      if (isSidebarOpen && sidebar && !sidebar.contains(e.target as Node)) {
+        setIsSidebarOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleOutside);
+    return () => document.removeEventListener('mousedown', handleOutside);
+  }, [isSidebarOpen]);
 
   const filteredMachines = machines.filter(m => m.type === activeTab);
   const pendingMachines = machines.filter(m => m.status === 'pending');
@@ -618,6 +629,172 @@ export default function DashboardScreen({ canAccessSupervisor = false, onSwitchT
         onConfirm={executeSync} pendingCount={pendingCount} pendingMachines={pendingMachines}
       />
 
+      {/* ── Sidebar backdrop ── */}
+      {isSidebarOpen && (
+        <button
+          type="button"
+          aria-label="Cerrar menú"
+          onClick={() => setIsSidebarOpen(false)}
+          className="fixed inset-0 z-30 bg-brand-dark/50 backdrop-blur-sm"
+        />
+      )}
+
+      {/* ── Sidebar lateral ── */}
+      <div
+        id="operator-sidebar"
+        className={`fixed inset-y-0 left-0 z-40 w-72 flex flex-col shadow-2xl transform transition-transform duration-300 ${
+          isSidebarOpen ? 'translate-x-0' : '-translate-x-full'
+        } ${isDark ? 'bg-[#0a0f20] border-r border-white/5' : 'bg-white border-r border-gray-100'}`}
+      >
+        {/* Cabecera del sidebar */}
+        <div className={`p-6 flex flex-col gap-4 border-b ${isDark ? 'border-white/5 bg-white/[0.02]' : 'border-gray-50 bg-brand-secondary/5'}`}>
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex items-center gap-2">
+              <div className="bg-brand-primary p-2 rounded-xl text-white shadow-md">
+                <Egg size={22} />
+              </div>
+              <div className="flex flex-col">
+                <span className={`text-xl font-black tracking-tight leading-none ${isDark ? 'text-white' : 'text-brand-dark'}`}>INCUBANT</span>
+                <span className="text-[0.5rem] font-bold text-brand-gray tracking-widest uppercase mt-0.5">Antioqueña de Incubación</span>
+              </div>
+            </div>
+            <button
+              onClick={() => setIsSidebarOpen(false)}
+              className={`p-2 rounded-xl ${isDark ? 'bg-white/5 border border-white/10 text-white/60' : 'bg-white border border-gray-100 text-brand-gray'}`}
+            >
+              <X size={18} />
+            </button>
+          </div>
+
+          {/* Usuario info */}
+          <div className={`rounded-xl px-4 py-3 flex items-center gap-3 ${isDark ? 'bg-white/5 border border-white/5' : 'bg-brand-primary/5 border border-brand-primary/10'}`}>
+            <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #f7931a, #ffb800)' }}>
+              <Egg size={18} className="text-white" />
+            </div>
+            <div className="min-w-0">
+              <p className={`text-[8px] font-black uppercase tracking-widest mb-0.5 ${isDark ? 'text-white/30' : 'text-brand-gray'}`}>Operario en Turno</p>
+              <p className={`text-sm font-black leading-none truncate ${isDark ? 'text-white' : 'text-brand-dark'}`}>{currentUser?.name}</p>
+              <div className="flex items-center gap-1 mt-1">
+                <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: currentUser?.shiftColor || '#f7931a', boxShadow: `0 0 5px ${currentUser?.shiftColor || '#f7931a'}` }} />
+                <span className={`text-[9px] font-black ${isDark ? 'text-white/50' : 'text-brand-gray'}`}>{currentUser?.shift || 'T1'}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Nav items */}
+        <nav className="flex-1 p-5 space-y-1.5 overflow-y-auto">
+          {/* Operación */}
+          <p className={`px-2 text-[10px] font-black uppercase tracking-[0.2em] opacity-50 mb-3 ${isDark ? 'text-white/40' : 'text-brand-gray'}`}>
+            Operación
+          </p>
+          <button
+            onClick={() => { setIsSidebarOpen(false); setActivePage('dashboard'); }}
+            className={`w-full flex items-center gap-4 px-5 py-4 rounded-2xl transition-all text-left ${
+              (activePage as string) === 'dashboard'
+                ? 'bg-brand-primary text-white shadow-lg shadow-brand-primary/30'
+                : `${isDark ? 'hover:bg-white/5 text-white/60' : 'hover:bg-gray-50 text-brand-gray'} font-semibold`
+            }`}
+          >
+            <Activity size={20} />
+            <span className="font-bold tracking-tight">Tablero Principal</span>
+          </button>
+
+          <button
+            onClick={() => { setIsSidebarOpen(false); setActivePage('schedule'); }}
+            className={`w-full flex items-center gap-4 px-5 py-4 rounded-2xl transition-all text-left ${
+              (activePage as string) === 'schedule'
+                ? 'bg-brand-primary text-white shadow-lg shadow-brand-primary/30'
+                : `${isDark ? 'hover:bg-white/5 text-white/60' : 'hover:bg-gray-50 text-brand-gray'} font-semibold`
+            }`}
+          >
+            <Calendar size={20} />
+            <span className="font-bold tracking-tight">Mis Horarios</span>
+          </button>
+
+          <button
+            onClick={() => { setIsSidebarOpen(false); setActivePage('requests'); }}
+            className={`w-full flex items-center gap-4 px-5 py-4 rounded-2xl transition-all text-left ${
+              (activePage as string) === 'requests'
+                ? 'bg-brand-primary text-white shadow-lg shadow-brand-primary/30'
+                : `${isDark ? 'hover:bg-white/5 text-white/60' : 'hover:bg-gray-50 text-brand-gray'} font-semibold`
+            }`}
+          >
+            <ClipboardList size={20} />
+            <span className="font-bold tracking-tight">Solicitudes y Permisos</span>
+          </button>
+
+          {/* Bóveda */}
+          <div className="pt-4 mt-4 border-t flex flex-col gap-1.5" style={{ borderColor: isDark ? 'rgba(255,255,255,0.06)' : '#f0f0f0' }}>
+            <p className={`px-2 text-[10px] font-black uppercase tracking-[0.2em] opacity-50 mb-2 ${isDark ? 'text-white/40' : 'text-brand-gray'}`}>
+              Bóveda de Evidencia
+            </p>
+            <button
+              onClick={() => { setIsSidebarOpen(false); setActivePage('evidencias'); }}
+              className={`w-full flex items-center gap-4 px-5 py-4 rounded-2xl transition-all text-left ${
+                (activePage as string) === 'evidencias'
+                  ? 'bg-brand-primary text-white shadow-lg shadow-brand-primary/30'
+                  : `${isDark ? 'hover:bg-white/5 text-white/60' : 'hover:bg-gray-50 text-brand-gray'} font-semibold`
+              }`}
+            >
+              <Package size={20} />
+              <span className="font-bold tracking-tight">Mis Evidencias</span>
+            </button>
+            <button
+              onClick={() => { setIsSidebarOpen(false); setActivePage('reports'); }}
+              className={`w-full flex items-center gap-4 px-5 py-4 rounded-2xl transition-all text-left ${
+                (activePage as string) === 'reports'
+                  ? 'bg-brand-primary text-white shadow-lg shadow-brand-primary/30'
+                  : `${isDark ? 'hover:bg-white/5 text-white/60' : 'hover:bg-gray-50 text-brand-gray'} font-semibold`
+              }`}
+            >
+              <Camera size={20} />
+              <span className="font-bold tracking-tight">Evidencias Adicionales</span>
+            </button>
+          </div>
+
+          {/* Panel admin (si aplica) */}
+          {canAccessSupervisor && onSwitchToSupervisor && (
+            <div className="pt-4 mt-4 border-t flex flex-col gap-1.5" style={{ borderColor: isDark ? 'rgba(255,255,255,0.06)' : '#f0f0f0' }}>
+              <p className={`px-2 text-[10px] font-black uppercase tracking-[0.2em] opacity-50 mb-2 ${isDark ? 'text-white/40' : 'text-brand-gray'}`}>
+                Administración
+              </p>
+              <button
+                onClick={() => { setIsSidebarOpen(false); onSwitchToSupervisor(); }}
+                className={`w-full flex items-center gap-4 px-5 py-4 rounded-2xl transition-all text-left ${
+                  isDark ? 'hover:bg-white/5 text-white/60' : 'hover:bg-gray-50 text-brand-gray'
+                } font-semibold`}
+              >
+                <Monitor size={20} />
+                <span className="font-bold tracking-tight">Panel de Control</span>
+              </button>
+            </div>
+          )}
+        </nav>
+
+        {/* Footer: tema + logout */}
+        <div className={`p-5 border-t flex flex-col gap-2`} style={{ borderColor: isDark ? 'rgba(255,255,255,0.06)' : '#f0f0f0' }}>
+          <button
+            onClick={toggleTheme}
+            className={`w-full flex items-center gap-4 px-5 py-3 rounded-2xl transition-all text-left ${
+              isDark ? 'hover:bg-white/5 text-white/50' : 'hover:bg-gray-50 text-brand-gray'
+            } font-semibold`}
+          >
+            {isDark ? <Sun size={20} /> : <Moon size={20} />}
+            <span className="font-bold tracking-tight">{isDark ? 'Modo Claro' : 'Modo Oscuro'}</span>
+          </button>
+          <button
+            onClick={() => { setIsSidebarOpen(false); handleLogout(); }}
+            className={`w-full flex items-center gap-4 px-5 py-3 rounded-2xl transition-all text-left ${
+              isDark ? 'hover:bg-red-500/10 text-red-400' : 'hover:bg-red-50 text-red-500'
+            } font-semibold`}
+          >
+            <LogOut size={20} />
+            <span className="font-bold tracking-tight">Cerrar Turno</span>
+          </button>
+        </div>
+      </div>
+
       {/* ── Header ── */}
       <div className={`relative z-10 px-4 pt-12 pb-3 shrink-0 ${isDark ? '' : 'bg-gray-50'}`}>
 
@@ -675,37 +852,11 @@ export default function DashboardScreen({ canAccessSupervisor = false, onSwitchT
               className={`p-2 rounded-xl border transition-colors active:scale-95 shrink-0 ${isDark ? 'glass border-white/6 text-white/30 hover:text-brand-primary' : 'bg-white border-gray-200 text-gray-400 hover:text-brand-primary shadow-sm'}`}>
               {isDark ? <Sun size={16} /> : <Moon size={16} />}
             </button>
-            {/* Menu Deploy */}
-            <div className="relative">
-              <button onClick={() => setIsMenuOpen(!isMenuOpen)}
-                className={`p-2 rounded-xl border transition-colors active:scale-95 shrink-0 ${isDark ? 'glass border-white/6 ' + (isMenuOpen ? 'text-brand-primary border-brand-primary/30' : 'text-white/30 hover:text-brand-primary') : 'bg-white border-gray-200 shadow-sm ' + (isMenuOpen ? 'text-brand-primary' : 'text-gray-400 hover:text-brand-primary')}`}>
-                <Menu size={16} />
-              </button>
-              {isMenuOpen && (
-                <div className={`absolute top-full right-0 mt-3 w-52 rounded-2xl border shadow-2xl z-50 animate-fade-in overflow-hidden ${isDark ? 'glass bg-[#060b18]/95 border-brand-primary/30' : 'bg-white border-brand-primary/20'}`}>
-                  <button onClick={() => { setIsMenuOpen(false); setActivePage('schedule'); }} className={`w-full flex items-center gap-3 px-4 py-3.5 text-left text-[10px] font-black uppercase tracking-widest hover:bg-brand-primary/10 transition-colors ${isDark ? 'text-white/80' : 'text-gray-700'}`}>
-                    <Calendar size={14} className="text-brand-primary shrink-0" />
-                    Mis Horarios
-                  </button>
-                  <button onClick={() => { setIsMenuOpen(false); setActivePage('requests'); }} className={`w-full flex items-center gap-3 px-4 py-3.5 text-left text-[10px] font-black uppercase tracking-widest border-t hover:bg-brand-primary/10 transition-colors ${isDark ? 'border-white/5 text-white/80' : 'border-gray-100 text-gray-700'}`}>
-                    <ClipboardList size={14} className="text-brand-primary shrink-0" />
-                    Solicitudes y Permisos
-                  </button>
-                  <button onClick={() => { setIsMenuOpen(false); setActivePage('evidencias'); }} className={`w-full flex items-center gap-3 px-4 py-3.5 text-left text-[10px] font-black uppercase tracking-widest border-t hover:bg-brand-primary/10 transition-colors ${isDark ? 'border-white/5 text-white/80' : 'border-gray-100 text-gray-700'}`}>
-                    <Package size={14} className="text-brand-primary shrink-0" />
-                    Mis Evidencias
-                  </button>
-                  <button onClick={() => { setIsMenuOpen(false); setActivePage('reports'); }} className={`w-full flex items-center gap-3 px-4 py-3.5 text-left text-[10px] font-black uppercase tracking-widest border-t hover:bg-brand-primary/10 transition-colors ${isDark ? 'border-white/5 text-white/80' : 'border-gray-100 text-gray-700'}`}>
-                    <Camera size={14} className="text-brand-primary shrink-0" />
-                    Evidencias Adicionales
-                  </button>
-                  <button onClick={handleLogout} className={`w-full flex items-center gap-3 px-4 py-3.5 text-left text-[10px] font-black uppercase tracking-widest border-t hover:bg-red-500/10 transition-colors ${isDark ? 'border-white/5 text-red-400' : 'border-gray-100 text-red-500'}`}>
-                    <LogOut size={14} className={isDark ? 'text-red-400' : 'text-red-500'} shrink-0 />
-                    Cerrar Sesión
-                  </button>
-                </div>
-              )}
-            </div>
+            {/* Menu trigger */}
+            <button onClick={() => setIsSidebarOpen(true)}
+              className={`p-2 rounded-xl border transition-colors active:scale-95 shrink-0 ${isDark ? 'glass border-white/6 text-white/30 hover:text-brand-primary' : 'bg-white border-gray-200 text-gray-400 hover:text-brand-primary shadow-sm'}`}>
+              <Menu size={16} />
+            </button>
           </div>
         </div>
 

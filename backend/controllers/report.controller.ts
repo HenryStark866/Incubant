@@ -98,14 +98,14 @@ export const processMachineReport = async (req: AuthenticatedRequest, res: Respo
       } catch { /* JSON malformado — ignorar */ }
     }
 
-    // 2. Subir foto → Supabase Storage
+    // 2. Subir foto → Supabase Storage (carpeta de la máquina)
     let imageUrl = '';
     let storagePhotoError = '';
     try {
       const { uploadToSupabase } = await import('../services/supabase_storage.service');
-      const photoResult = await uploadToSupabase(file.buffer, userName, 'photos', file.mimetype);
+      const photoResult = await uploadToSupabase(file.buffer, userName, 'photos', file.mimetype, machineId);
       imageUrl = photoResult.publicUrl;
-      console.log(`[Storage] Foto subida: ${photoResult.fileName}`);
+      console.log(`[Storage] Foto subida: ${photoResult.fileName} → ${machineId}`);
     } catch (storageError) {
       storagePhotoError = storageError instanceof Error ? storageError.message : 'Error desconocido';
       console.error('[Storage] ERROR subiendo foto:', storageError);

@@ -1,21 +1,110 @@
-import React, { useState, useEffect } from 'react';
-import { Search, Filter, Download, Calendar, Image as ImageIcon, FileText, AlertTriangle, X, RefreshCw } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import {
+  Search, Download, Calendar, Image as ImageIcon,
+  FileText, AlertTriangle, X, RefreshCw, ChevronDown,
+  ZoomIn, FileArchive, Loader2, Filter
+} from 'lucide-react';
 import { useThemeStore } from '../store/useThemeStore';
 import { getApiUrl, apiFetch } from '../lib/api';
 
+// ─── Machine selector options ──────────────────────────────────────────────
+const INC_OPTIONS = Array.from({ length: 24 }, (_, i) => `INC-${(i + 1).toString().padStart(2, '0')}`);
+const NAC_OPTIONS = Array.from({ length: 12 }, (_, i) => `NAC-${(i + 1).toString().padStart(2, '0')}`);
+const ALL_MACHINES = ['Todas', ...INC_OPTIONS, ...NAC_OPTIONS];
+
+// ─── Viewer Modal ───────────────────────────────────────────────────────────
+function PhotoViewer({
+  item,
+  onClose,
+  onDownload,
+}: {
+  item: any;
+  onClose: () => void;
+  onDownload: (url: string, name: string) => void;
+}) {
+  const machineName = item.machine
+    ? `${item.machine.tipo === 'INCUBADORA' ? 'INC' : 'NAC'}-${item.machine.numero_maquina?.toString().padStart(2, '0')}`
+    : '—';
+
+  return (
+    <div
+      className="fixed inset-0 z-[200] bg-black/95 backdrop-blur-sm flex flex-col items-center justify-center p-4 animate-fade-in"
+      onClick={onClose}
+    >
+      {/* Close */}
+      <button
+        className="absolute top-5 right-5 p-2.5 bg-white/10 hover:bg-white/20 rounded-xl text-white transition-colors z-10"
+        onClick={onClose}
+      >
+        <X size={22} />
+      </button>
+
+      {/* Image */}
+      <img
+        src={item.photo_url}
+        alt="Evidencia"
+        className="max-w-full max-h-[72vh] object-contain rounded-xl shadow-2xl select-none"
+        onClick={e => e.stopPropagation()}
+      />
+
+      {/* Meta-info bar */}
+      <div
+        className="mt-4 bg-white/10 backdrop-blur rounded-2xl px-5 py-3 flex flex-wrap items-center gap-4 text-sm text-white max-w-2xl w-full"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="flex flex-col">
+          <span className="text-[10px] text-white/50 font-black uppercase tracking-widest">Máquina</span>
+          <span className="font-black">{machineName}</span>
+        </div>
+        <div className="flex flex-col">
+          <span className="text-[10px] text-white/50 font-black uppercase tracking-widest">Operario</span>
+          <span className="font-bold">{item.user?.nombre || '—'}</span>
+        </div>
+        <div className="flex flex-col">
+          <span className="text-[10px] text-white/50 font-black uppercase tracking-widest">Fecha y Hora</span>
+          <span className="font-bold">
+            {new Date(item.fecha_hora).toLocaleDateString('es-CO')} ·{' '}
+            {new Date(item.fecha_hora).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+          </span>
+        </div>
+        {item.observaciones && (
+          <div className="flex flex-col flex-1 min-w-0">
+            <span className="text-[10px] text-white/50 font-black uppercase tracking-widest">Observaciones</span>
+            <span className="font-medium text-white/80 truncate">{item.observaciones}</span>
+          </div>
+        )}
+        <button
+          onClick={() =>
+            onDownload(
+              item.photo_url,
+              `Evidencia-${machineName}-${new Date(item.fecha_hora).getTime()}.jpg`
+            )
+          }
+          className="ml-auto flex items-center gap-2 px-4 py-2 bg-brand-primary hover:bg-brand-primary/80 rounded-xl font-black text-xs uppercase tracking-wider transition-all"
+        >
+          <Download size={14} /> Descargar
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ─── Main component ──────────────────────────────────────────────────────────
 export default function AdminHistoryScreen() {
   const isDark = useThemeStore(state => state.theme) === 'dark';
-  
+
   const [logs, setLogs] = useState<any[]>([]);
   const [incidents, setIncidents] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  
+
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState<'all' | 'photos' | 'incidents'>('all');
-  const [selectedPhoto, setSelectedPhoto] = useState<string | null>(null);
+  const [selectedMachine, setSelectedMachine] = useState('Todas');
+  const [selectedPhoto, setSelectedPhoto] = useState<any | null>(null);
+  const [downloadingAll, setDownloadingAll] = useState(false);
 
-  const fetchHistory = async () => {
+  const fetchHistory = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
@@ -29,11 +118,21 @@ export default function AdminHistoryScreen() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
+  // Auto-refresh via SSE: listen for NEW_REPORT events
   useEffect(() => {
     fetchHistory();
-  }, []);
+    const apiUrl = getApiUrl('/api/events');
+    const es = new EventSource(apiUrl, { withCredentials: true });
+    es.onmessage = (ev) => {
+      try {
+        const data = JSON.parse(ev.data);
+        if (data.type === 'NEW_REPORT') fetchHistory();
+      } catch { /* silent */ }
+    };
+    return () => es.close();
+  }, [fetchHistory]);
 
   const handleDownloadPhoto = async (url: string, filename: string) => {
     try {
@@ -47,180 +146,316 @@ export default function AdminHistoryScreen() {
       link.click();
       document.body.removeChild(link);
       window.URL.revokeObjectURL(objectUrl);
-    } catch (err) {
-      console.error('Error downloading photo', err);
-      // Fallback
+    } catch {
       window.open(url, '_blank');
     }
   };
 
+  const handleDownloadAll = async () => {
+    setDownloadingAll(true);
+    const items = filteredData.filter(i => i.itemType === 'log' && i.photo_url);
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      const machineName = item.machine
+        ? `${item.machine.tipo === 'INCUBADORA' ? 'INC' : 'NAC'}-${item.machine.numero_maquina?.toString().padStart(2, '0')}`
+        : 'SIN-MAQUINA';
+      await handleDownloadPhoto(
+        item.photo_url,
+        `${machineName}_${new Date(item.fecha_hora).getTime()}.jpg`
+      );
+      await new Promise(r => setTimeout(r, 200));
+    }
+    setDownloadingAll(false);
+  };
+
+  // Combine and filter
   const combinedData = [
     ...logs.map(l => ({ ...l, itemType: 'log' })),
-    ...incidents.map(i => ({ ...i, itemType: 'incident' }))
+    ...incidents.map(i => ({ ...i, itemType: 'incident' })),
   ].sort((a, b) => new Date(b.fecha_hora).getTime() - new Date(a.fecha_hora).getTime());
 
   const filteredData = combinedData.filter(item => {
-    if (filterType === 'photos' && item.itemType !== 'log') return false;
+    if (filterType === 'photos' && (item.itemType !== 'log' || !item.photo_url)) return false;
     if (filterType === 'incidents' && item.itemType !== 'incident') return false;
-    
+
+    // Machine filter
+    if (selectedMachine !== 'Todas' && item.itemType === 'log') {
+      if (!item.machine) return false;
+      const prefix = item.machine.tipo === 'INCUBADORA' ? 'INC' : 'NAC';
+      const machineStr = `${prefix}-${item.machine.numero_maquina?.toString().padStart(2, '0')}`;
+      if (machineStr !== selectedMachine) return false;
+    }
+
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
       const userName = item.user?.nombre?.toLowerCase() || '';
-      const machineName = item.machine?.numero_maquina ? `${item.machine.tipo} ${item.machine.numero_maquina}`.toLowerCase() : '';
+      const machineName = item.machine?.numero_maquina
+        ? `${item.machine.tipo} ${item.machine.numero_maquina}`.toLowerCase()
+        : '';
       const notes = (item.observaciones || item.descripcion || item.titulo || '').toLowerCase();
       return userName.includes(query) || machineName.includes(query) || notes.includes(query);
     }
     return true;
   });
 
-  return (
-    <div className={`rounded-[2rem] overflow-hidden shadow-sm h-full flex flex-col ${isDark ? 'bg-[#0a0f20] border border-white/5' : 'bg-white border border-gray-100'}`}>
-      <div className={`p-6 sm:p-8 border-b flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 ${isDark ? 'border-white/5' : 'border-gray-50'}`}>
-        <div>
-          <h2 className={`text-xl font-black ${isDark ? 'text-white' : 'text-brand-dark'}`}>Historial y Reportes</h2>
-          <p className={`text-sm font-medium ${isDark ? 'text-white/40' : 'text-brand-gray'}`}>Auditoría centralizada de todos los turnos</p>
-        </div>
-        <div className="flex gap-2">
-          <button
-            onClick={fetchHistory}
-            className={`p-2.5 rounded-xl transition-all flex items-center justify-center ${isDark ? 'bg-white/5 hover:bg-white/10 text-white' : 'bg-gray-100 hover:bg-gray-200 text-brand-dark'}`}
-            title="Refrescar"
-          >
-            <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
-          </button>
-        </div>
-      </div>
+  const photosInFilter = filteredData.filter(i => i.itemType === 'log' && i.photo_url).length;
 
-      <div className="p-6 sm:p-8 flex-1 flex flex-col min-h-0">
-        <div className="flex flex-col sm:flex-row gap-4 mb-6">
+  return (
+    <div
+      className={`rounded-[2rem] overflow-hidden shadow-sm h-full flex flex-col ${
+        isDark ? 'bg-[#0a0f20] border border-white/5' : 'bg-white border border-gray-100'
+      }`}
+    >
+      {/* Header */}
+      <div
+        className={`p-6 sm:p-8 border-b flex flex-col gap-4 ${
+          isDark ? 'border-white/5' : 'border-gray-50'
+        }`}
+      >
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className={`text-xl font-black ${isDark ? 'text-white' : 'text-brand-dark'}`}>
+              Historial y Evidencias
+            </h2>
+            <p className={`text-sm font-medium ${isDark ? 'text-white/40' : 'text-brand-gray'}`}>
+              Bóveda centralizada · {combinedData.length} registros
+            </p>
+          </div>
+          <div className="flex gap-2">
+            {photosInFilter > 0 && (
+              <button
+                onClick={handleDownloadAll}
+                disabled={downloadingAll}
+                className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-black bg-brand-primary text-white hover:bg-brand-primary/80 transition-all disabled:opacity-50"
+                title="Descargar todas las fotos visibles"
+              >
+                {downloadingAll ? (
+                  <Loader2 size={14} className="animate-spin" />
+                ) : (
+                  <FileArchive size={14} />
+                )}
+                <span className="hidden sm:inline">
+                  {downloadingAll ? 'Descargando...' : `Descargar ${photosInFilter} fotos`}
+                </span>
+              </button>
+            )}
+            <button
+              onClick={fetchHistory}
+              className={`p-2.5 rounded-xl transition-all flex items-center justify-center ${
+                isDark
+                  ? 'bg-white/5 hover:bg-white/10 text-white'
+                  : 'bg-gray-100 hover:bg-gray-200 text-brand-dark'
+              }`}
+              title="Refrescar"
+            >
+              <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
+            </button>
+          </div>
+        </div>
+
+        {/* Search + filters row */}
+        <div className="flex flex-col sm:flex-row gap-3">
+          {/* Search */}
           <div className="relative flex-1">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-brand-gray" size={18} />
             <input
               type="text"
-              placeholder="Buscar por operario, máquina o palabras clave..."
+              placeholder="Buscar por operario, máquina..."
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className={`w-full pl-11 pr-4 py-3 rounded-2xl font-bold text-sm outline-none transition-all ${isDark ? 'bg-white/5 text-white placeholder-white/30 focus:bg-white/10' : 'bg-gray-50 text-brand-dark placeholder-gray-400 focus:bg-white focus:ring-2 focus:ring-brand-primary/20 focus:border-brand-primary'}`}
+              onChange={e => setSearchQuery(e.target.value)}
+              className={`w-full pl-11 pr-4 py-2.5 rounded-2xl font-bold text-sm outline-none transition-all ${
+                isDark
+                  ? 'bg-white/5 text-white placeholder-white/30 focus:bg-white/10'
+                  : 'bg-gray-50 text-brand-dark placeholder-gray-400 focus:ring-2 focus:ring-brand-primary/20'
+              }`}
             />
           </div>
+
+          {/* Machine filter */}
+          <div className="relative">
+            <Filter className="absolute left-3 top-1/2 -translate-y-1/2 text-brand-gray pointer-events-none" size={14} />
+            <select
+              value={selectedMachine}
+              onChange={e => setSelectedMachine(e.target.value)}
+              className={`pl-8 pr-8 py-2.5 rounded-2xl font-bold text-sm outline-none appearance-none transition-all cursor-pointer ${
+                isDark
+                  ? 'bg-white/5 text-white focus:bg-white/10'
+                  : 'bg-gray-50 text-brand-dark focus:ring-2 focus:ring-brand-primary/20'
+              }`}
+            >
+              {ALL_MACHINES.map(m => (
+                <option key={m} value={m}>{m}</option>
+              ))}
+            </select>
+            <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-brand-gray pointer-events-none" />
+          </div>
+
+          {/* Type filter */}
           <div className="flex gap-2">
-            <button
-              onClick={() => setFilterType('all')}
-              className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all ${filterType === 'all' ? 'bg-brand-primary text-white' : isDark ? 'bg-white/5 text-white/50 hover:bg-white/10' : 'bg-gray-100 text-brand-gray hover:bg-gray-200'}`}
-            >
-              Todos
-            </button>
-            <button
-              onClick={() => setFilterType('photos')}
-              className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center gap-2 ${filterType === 'photos' ? 'bg-brand-primary text-white' : isDark ? 'bg-white/5 text-white/50 hover:bg-white/10' : 'bg-gray-100 text-brand-gray hover:bg-gray-200'}`}
-            >
-              <ImageIcon size={14} /> Fotos
-            </button>
-            <button
-              onClick={() => setFilterType('incidents')}
-              className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center gap-2 ${filterType === 'incidents' ? 'bg-red-500 text-white' : isDark ? 'bg-white/5 hover:bg-red-500/10 hover:text-red-400 text-white/50' : 'bg-gray-100 hover:bg-red-50 hover:text-red-500 text-brand-gray'}`}
-            >
-              <AlertTriangle size={14} /> Novedades
-            </button>
+            {(['all', 'photos', 'incidents'] as const).map(f => (
+              <button
+                key={f}
+                onClick={() => setFilterType(f)}
+                className={`px-3 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center gap-1.5 ${
+                  filterType === f
+                    ? f === 'incidents'
+                      ? 'bg-red-500 text-white'
+                      : 'bg-brand-primary text-white'
+                    : isDark
+                    ? 'bg-white/5 text-white/50 hover:bg-white/10'
+                    : 'bg-gray-100 text-brand-gray hover:bg-gray-200'
+                }`}
+              >
+                {f === 'all' && 'Todo'}
+                {f === 'photos' && <><ImageIcon size={12} /> Fotos</>}
+                {f === 'incidents' && <><AlertTriangle size={12} /> Novedades</>}
+              </button>
+            ))}
           </div>
         </div>
+      </div>
 
-        <div className={`flex-1 overflow-y-auto rounded-2xl border ${isDark ? 'border-white/5' : 'border-gray-100'}`}>
-          {loading ? (
-            <div className="flex flex-col items-center justify-center p-12 h-full gap-4">
-              <RefreshCw className="animate-spin text-brand-primary" size={32} />
-              <p className={`font-bold ${isDark ? 'text-white/50' : 'text-brand-gray'}`}>Cargando historial...</p>
-            </div>
-          ) : error ? (
-            <div className="flex flex-col items-center justify-center p-12 h-full gap-4 text-center">
-              <AlertTriangle className="text-red-500" size={32} />
-              <p className={`font-bold text-red-500`}>{error}</p>
-            </div>
-          ) : filteredData.length === 0 ? (
-            <div className="flex flex-col items-center justify-center p-12 h-full gap-4 text-center">
-              <FileText className={isDark ? 'text-white/20' : 'text-gray-300'} size={48} />
-              <p className={`font-bold ${isDark ? 'text-white/50' : 'text-brand-gray'}`}>No se encontraron resultados</p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 p-4">
-              {filteredData.map((item, idx) => (
-                <div key={item.id || idx} className={`rounded-xl border flex flex-col overflow-hidden transition-all hover:shadow-lg ${isDark ? 'bg-white/5 border-white/5 hover:border-white/10' : 'bg-white border-gray-100 hover:border-brand-primary/30'}`}>
+      {/* Content */}
+      <div className="flex-1 overflow-y-auto p-4 sm:p-6">
+        {loading ? (
+          <div className="flex flex-col items-center justify-center h-60 gap-4">
+            <Loader2 className="animate-spin text-brand-primary" size={32} />
+            <p className={`font-bold ${isDark ? 'text-white/50' : 'text-brand-gray'}`}>
+              Cargando historial...
+            </p>
+          </div>
+        ) : error ? (
+          <div className="flex flex-col items-center justify-center h-60 gap-4 text-center">
+            <AlertTriangle className="text-red-500" size={32} />
+            <p className="font-bold text-red-500">{error}</p>
+          </div>
+        ) : filteredData.length === 0 ? (
+          <div className="flex flex-col items-center justify-center h-60 gap-4 text-center">
+            <FileText className={isDark ? 'text-white/20' : 'text-gray-300'} size={48} />
+            <p className={`font-bold ${isDark ? 'text-white/50' : 'text-brand-gray'}`}>
+              No se encontraron resultados
+            </p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
+            {filteredData.map((item, idx) => {
+              const machineName = item.machine
+                ? `${item.machine.tipo === 'INCUBADORA' ? 'INC' : 'NAC'}-${item.machine.numero_maquina?.toString().padStart(2, '0')}`
+                : '—';
+              const dateStr = new Date(item.fecha_hora).toLocaleDateString('es-CO', {
+                day: '2-digit',
+                month: 'short',
+              });
+              const timeStr = new Date(item.fecha_hora).toLocaleTimeString([], {
+                hour: '2-digit',
+                minute: '2-digit',
+              });
+
+              return (
+                <div
+                  key={item.id || idx}
+                  className={`rounded-2xl border flex flex-col overflow-hidden transition-all hover:shadow-xl group ${
+                    isDark
+                      ? 'bg-white/5 border-white/5 hover:border-white/20'
+                      : 'bg-white border-gray-100 hover:border-brand-primary/30 shadow-sm'
+                  }`}
+                >
+                  {/* Thumbnail */}
                   {item.itemType === 'log' && item.photo_url ? (
-                    <div 
-                      className="aspect-square relative cursor-pointer group bg-black/5"
-                      onClick={() => setSelectedPhoto(item.photo_url)}
+                    <div
+                      className="aspect-square relative cursor-pointer bg-black/10 overflow-hidden"
+                      onClick={() => setSelectedPhoto(item)}
                     >
-                      <img 
-                        src={item.photo_url} 
-                        alt="Evidencia" 
+                      <img
+                        src={item.photo_url}
+                        alt="Evidencia"
                         loading="lazy"
-                        className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" 
+                        className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
                       />
-                      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-all flex items-center justify-center">
-                        <ImageIcon className="text-white opacity-0 group-hover:opacity-100 transform scale-50 group-hover:scale-100 transition-all" size={32} />
+                      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-all flex items-center justify-center">
+                        <div className="opacity-0 group-hover:opacity-100 transition-all bg-white/20 rounded-full p-3">
+                          <ZoomIn className="text-white" size={20} />
+                        </div>
+                      </div>
+                      {/* Machine badge */}
+                      <div className="absolute top-2 left-2 bg-brand-primary text-white text-[9px] font-black px-2 py-0.5 rounded-md shadow">
+                        {machineName}
                       </div>
                     </div>
                   ) : (
-                    <div className={`aspect-square flex items-center justify-center ${item.itemType === 'incident' ? 'bg-red-500/5' : isDark ? 'bg-white/5' : 'bg-gray-50'}`}>
+                    <div
+                      className={`aspect-square flex flex-col items-center justify-center gap-2 ${
+                        item.itemType === 'incident'
+                          ? 'bg-red-500/5'
+                          : isDark
+                          ? 'bg-white/5'
+                          : 'bg-gray-50'
+                      }`}
+                    >
                       {item.itemType === 'incident' ? (
-                        <AlertTriangle size={48} className="text-red-400 opacity-50" />
+                        <AlertTriangle size={36} className="text-red-400 opacity-60" />
                       ) : (
-                        <FileText size={48} className={isDark ? 'text-white/20' : 'text-gray-300'} />
+                        <FileText size={36} className={isDark ? 'text-white/20' : 'text-gray-300'} />
                       )}
+                      <span
+                        className={`text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded ${
+                          item.itemType === 'incident'
+                            ? 'bg-red-500/10 text-red-500'
+                            : 'bg-gray-100 text-gray-400'
+                        }`}
+                      >
+                        {item.itemType === 'incident' ? 'Novedad' : 'Sin foto'}
+                      </span>
                     </div>
                   )}
-                  
-                  <div className="p-4 flex flex-col gap-2 flex-1">
-                    <div className="flex justify-between items-start">
-                      <span className={`text-[10px] font-black tracking-wider uppercase px-2 py-1 rounded-md ${item.itemType === 'incident' ? 'bg-red-500/10 text-red-500' : 'bg-brand-primary/10 text-brand-primary'}`}>
-                        {item.itemType === 'incident' ? 'Novedad' : 'Reporte'}
-                      </span>
-                      <div className="flex items-center gap-1 text-[10px] font-bold text-gray-400">
-                        <Calendar size={10} />
-                        {new Date(item.fecha_hora).toLocaleDateString()} {new Date(item.fecha_hora).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-                      </div>
-                    </div>
-                    
-                    <div className="mt-2">
-                       <p className={`font-black text-sm truncate ${isDark ? 'text-white' : 'text-brand-dark'}`}>
-                         {item.machine?.tipo} {item.machine?.numero_maquina} {item.titulo ? `- ${item.titulo}` : ''}
-                       </p>
-                       <p className={`text-xs font-bold mt-1 ${isDark ? 'text-white/50' : 'text-brand-gray'}`}>
-                         Operario: {item.user?.nombre}
-                       </p>
-                    </div>
 
-                    <p className={`text-xs font-medium mt-2 line-clamp-2 ${isDark ? 'text-white/70' : 'text-gray-600'}`}>
-                      {item.observaciones || item.descripcion || "Sin observaciones."}
+                  {/* Info */}
+                  <div className="p-2.5 flex flex-col gap-1 flex-1">
+                    <p className={`text-[10px] font-black truncate ${isDark ? 'text-white' : 'text-brand-dark'}`}>
+                      {item.itemType === 'incident' ? (item.titulo || 'Novedad') : machineName}
                     </p>
+                    <p className={`text-[9px] font-bold truncate ${isDark ? 'text-white/40' : 'text-brand-gray'}`}>
+                      {item.user?.nombre?.split(' ')[0] || '—'}
+                    </p>
+                    <div className={`flex items-center gap-1 text-[9px] font-bold ${isDark ? 'text-white/30' : 'text-gray-400'}`}>
+                      <Calendar size={9} />
+                      {dateStr} · {timeStr}
+                    </div>
 
-                    {item.photo_url && (
+                    {/* Actions */}
+                    {item.itemType === 'log' && item.photo_url && (
                       <button
-                        onClick={(e) => { e.stopPropagation(); handleDownloadPhoto(item.photo_url, `Evidencia-${item.machine?.tipo || 'INC'}-${new Date(item.fecha_hora).getTime()}.jpg`); }}
-                        className="mt-4 flex items-center justify-center gap-2 w-full py-2 rounded-lg bg-gray-100 hover:bg-gray-200 text-brand-dark text-xs font-bold transition-colors"
+                        onClick={e => {
+                          e.stopPropagation();
+                          handleDownloadPhoto(
+                            item.photo_url,
+                            `${machineName}_${new Date(item.fecha_hora).getTime()}.jpg`
+                          );
+                        }}
+                        className={`mt-1 flex items-center justify-center gap-1 w-full py-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider transition-colors ${
+                          isDark
+                            ? 'bg-white/5 hover:bg-brand-primary/20 text-white/60 hover:text-brand-primary'
+                            : 'bg-gray-50 hover:bg-brand-primary/10 text-brand-gray hover:text-brand-primary'
+                        }`}
                       >
-                        <Download size={14} /> Descargar Foto
+                        <Download size={10} /> Descargar
                       </button>
                     )}
                   </div>
                 </div>
-              ))}
-            </div>
-          )}
-        </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
-      {/* Selected Photo Modal */}
+      {/* Photo Viewer Modal */}
       {selectedPhoto && (
-        <div className="fixed inset-0 z-[100] bg-black/90 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setSelectedPhoto(null)}>
-           <button 
-             className="absolute top-6 right-6 p-2 bg-white/10 hover:bg-white/20 rounded-xl text-white transition-colors"
-             onClick={() => setSelectedPhoto(null)}
-           >
-             <X size={24} />
-           </button>
-           <img src={selectedPhoto} alt="Visor de Evidencia" className="max-w-full max-h-[90vh] object-contain rounded-xl shadow-2xl" onClick={e => e.stopPropagation()} />
-        </div>
+        <PhotoViewer
+          item={selectedPhoto}
+          onClose={() => setSelectedPhoto(null)}
+          onDownload={handleDownloadPhoto}
+        />
       )}
     </div>
   );

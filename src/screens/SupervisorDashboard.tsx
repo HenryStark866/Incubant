@@ -49,6 +49,7 @@ export default function SupervisorDashboard() {
   const [pendingRequestsCount, setPendingRequestsCount] = useState(0);
   const [machineViewTab, setMachineViewTab] = useState<'incubadora' | 'nacedora'>('incubadora');
   const [selectedMachine, setSelectedMachine] = useState<any | null>(null);
+  const [adminPhotoViewer, setAdminPhotoViewer] = useState<any | null>(null);
   const [chartFilter, setChartFilter] = useState('Ver: Planta Completa');
   const [chartTimeRange, setChartTimeRange] = useState('24');
   const [activeMetrics, setActiveMetrics] = useState<Record<string, boolean>>({
@@ -987,12 +988,16 @@ export default function SupervisorDashboard() {
                         <button
                           key={machine.id}
                           onClick={() => {
-                            if (machine.status === 'alarm') {
+                            if (machine.photoUrl) {
+                              setAdminPhotoViewer(machine);
+                            } else if (machine.status === 'alarm') {
                               setSelectedMachine(machine);
                             }
                           }}
                           className={`relative p-4 rounded-2xl border-2 flex flex-col items-center justify-center gap-1 transition-all ${
-                            machine.status === 'alarm' ? 'hover:scale-105 active:scale-95 cursor-pointer shadow-lg border-red-500/50' : 'cursor-default border-transparent'
+                            machine.photoUrl
+                              ? 'hover:scale-105 active:scale-95 cursor-pointer shadow-lg border-brand-primary/30'
+                              : machine.status === 'alarm' ? 'hover:scale-105 active:scale-95 cursor-pointer shadow-lg border-red-500/50' : 'cursor-default border-transparent'
                           } overflow-hidden shadow-sm`}
                           style={{ minHeight: '120px' }}
                         >
@@ -1068,6 +1073,52 @@ export default function SupervisorDashboard() {
                   </div>
                 </div>
               </section>
+
+              {/* ── Admin Photo Viewer Modal ── */}
+              {adminPhotoViewer && (
+                <div
+                  className="fixed inset-0 z-[200] bg-black/95 backdrop-blur-sm flex flex-col items-center justify-center p-4"
+                  onClick={() => setAdminPhotoViewer(null)}
+                >
+                  <button
+                    className="absolute top-5 right-5 p-2.5 bg-white/10 hover:bg-white/20 rounded-xl text-white"
+                    onClick={() => setAdminPhotoViewer(null)}
+                  >
+                    <X size={22} />
+                  </button>
+                  <img
+                    src={adminPhotoViewer.photoUrl}
+                    alt={adminPhotoViewer.name}
+                    className="max-w-full max-h-[72vh] object-contain rounded-xl shadow-2xl"
+                    onClick={e => e.stopPropagation()}
+                  />
+                  <div
+                    className="mt-4 bg-white/10 backdrop-blur rounded-2xl px-5 py-3 flex flex-wrap items-center gap-4 text-sm text-white max-w-2xl w-full"
+                    onClick={e => e.stopPropagation()}
+                  >
+                    <div className="flex flex-col">
+                      <span className="text-[10px] text-white/50 font-black uppercase tracking-widest">Máquina</span>
+                      <span className="font-black">{adminPhotoViewer.name}</span>
+                    </div>
+                    {adminPhotoViewer.lastUpdate && (
+                      <div className="flex flex-col">
+                        <span className="text-[10px] text-white/50 font-black uppercase tracking-widest">Actualizado</span>
+                        <span className="font-bold">{adminPhotoViewer.lastUpdate}</span>
+                      </div>
+                    )}
+                    <a
+                      href={adminPhotoViewer.photoUrl}
+                      download={`${adminPhotoViewer.name}-${Date.now()}.jpg`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="ml-auto flex items-center gap-2 px-4 py-2 bg-brand-primary hover:bg-brand-primary/80 rounded-xl font-black text-xs uppercase text-white"
+                      onClick={e => e.stopPropagation()}
+                    >
+                      <Download size={14} /> Descargar
+                    </a>
+                  </div>
+                </div>
+              )}
 
               <section>
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">

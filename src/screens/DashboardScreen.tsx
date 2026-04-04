@@ -10,6 +10,7 @@ import { getApiUrl, apiFetch } from '../lib/api';
 import ReportUploader from '../components/ReportUploader';
 import OperatorSchedule from './OperatorSchedule';
 import RequestsScreen from './RequestsScreen';
+import MisEvidenciasScreen from './MisEvidenciasScreen';
 
 /* ─────────────────────────────────────────────
    Modal de confirmación futurista
@@ -257,7 +258,7 @@ const MachineCard = ({
    Dashboard principal
 ───────────────────────────────────────────── */
 export default function DashboardScreen({ canAccessSupervisor = false, onSwitchToSupervisor }: { canAccessSupervisor?: boolean; onSwitchToSupervisor?: () => void }) {
-  const [activePage, setActivePage] = useState<'dashboard' | 'schedule' | 'requests' | 'reports'>('dashboard');
+  const [activePage, setActivePage] = useState<'dashboard' | 'schedule' | 'requests' | 'reports' | 'evidencias'>('dashboard');
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<MachineType>('incubadora');
   const [isSyncing, setIsSyncing] = useState(false);
@@ -516,6 +517,10 @@ export default function DashboardScreen({ canAccessSupervisor = false, onSwitchT
     );
   }
 
+  if (activePage === 'evidencias') {
+    return <MisEvidenciasScreen onBack={() => setActivePage('dashboard')} />;
+  }
+
   if (activePage === 'requests') {
     return <RequestsScreen onBack={() => setActivePage('dashboard')} />;
   }
@@ -685,6 +690,10 @@ export default function DashboardScreen({ canAccessSupervisor = false, onSwitchT
                   <button onClick={() => { setIsMenuOpen(false); setActivePage('requests'); }} className={`w-full flex items-center gap-3 px-4 py-3.5 text-left text-[10px] font-black uppercase tracking-widest border-t hover:bg-brand-primary/10 transition-colors ${isDark ? 'border-white/5 text-white/80' : 'border-gray-100 text-gray-700'}`}>
                     <ClipboardList size={14} className="text-brand-primary shrink-0" />
                     Solicitudes y Permisos
+                  </button>
+                  <button onClick={() => { setIsMenuOpen(false); setActivePage('evidencias'); }} className={`w-full flex items-center gap-3 px-4 py-3.5 text-left text-[10px] font-black uppercase tracking-widest border-t hover:bg-brand-primary/10 transition-colors ${isDark ? 'border-white/5 text-white/80' : 'border-gray-100 text-gray-700'}`}>
+                    <Package size={14} className="text-brand-primary shrink-0" />
+                    Mis Evidencias
                   </button>
                   <button onClick={() => { setIsMenuOpen(false); setActivePage('reports'); }} className={`w-full flex items-center gap-3 px-4 py-3.5 text-left text-[10px] font-black uppercase tracking-widest border-t hover:bg-brand-primary/10 transition-colors ${isDark ? 'border-white/5 text-white/80' : 'border-gray-100 text-gray-700'}`}>
                     <Camera size={14} className="text-brand-primary shrink-0" />

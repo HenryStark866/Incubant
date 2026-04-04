@@ -807,10 +807,10 @@ export function createApiApp(): Express {
             const buffer = Buffer.from(base64Data, 'base64');
             
             const uploadResult = await uploadToSupabase(
-              buffer, userName, 'photos', 'image/jpeg'
+              buffer, userName, 'photos', 'image/jpeg', machine.id
             );
             result.photoUrl = uploadResult.publicUrl;
-            console.log(`[Storage Sync] ✅ Foto subida OK: ${uploadResult.fileName} -> ${uploadResult.publicUrl}`);
+            console.log(`[Storage Sync] ✅ Foto subida OK: ${uploadResult.fileName} (${machine.id}) -> ${uploadResult.publicUrl}`);
           } catch (err) {
             result.photoError = err instanceof Error ? err.message : 'Error desconocido';
             console.error(`[Storage Sync] ❌ Error subiendo foto ${machine.id}:`, err);
@@ -2051,6 +2051,124 @@ export function createApiApp(): Express {
   });
 
   // ── Finalization ─────────────────────────────────────────────────────────
+
+  // ── Evidence API ──────────────────────────────────────────────────────────
+  // GET /api/evidence/machine/:machineId — últimas fotos de una máquina (Admin)
+  app.get('/api/evidence/machine/:machineId', requireRoles(SUPERVISOR_ROLES), async (req, res) => {
+    try {
+      const { machineId } = req.params;
+      const { limit = '50', days = '30' } = req.query;
+      const prisma = await getPrismaClient();
+
+      const daysNum = parseInt(days as string) || 30;
+      const limitNum = parseInt(limit as string) || 50;
+      const since = new Date(Date.now() - daysNum * 24 * 60 * 60 * 1000);
+
+      // Normaliza el machineId del frontend ("inc-1") al ID de la BD ("inc-1" → buscar por tipo+numero)
+      const logs = await prisma.hourlyLog.findMany({
+        where: {
+          machine: {
+            OR: [
+              { id: machineId },
+              { id: machineId.toLowerCase() },
+            ]
+          },
+          photo_url: { not: null },
+          fecha_hora: { gte: since },
+        },
+        orderBy: { fecha_hora: 'desc' },
+        take: limitNum,
+        include: {
+          user: { select: { nombre: true, turno: true } },
+          machine: { select: { tipo: true, numero_maquina: true, id: true } },
+        },
+      });
+
+      const result = logs.map(l => ({
+        id: l.id,
+        photoUrl: l.photo_url,
+        fecha_hora: l.fecha_hora,
+        operario: l.user?.nombre || 'Desconocido',
+        turno: l.user?.turno || '',
+        machine: l.machine ? `${l.machine.tipo === 'INCUBADORA' ? 'INC' : 'NAC'}-${l.machine.numero_maquina.toString().padStart(2, '0')}` : machineId,
+        observaciones: l.observaciones || '',
+        itemType: 'photo' as const,
+      }));
+
+      return res.json({ photos: result, total: result.length });
+    } catch (error) {
+      console.error('[Evidence] Error fetching machine evidence:', error);
+      return res.status(500).json({ error: 'Error cargando evidencias de la máquina' });
+    }
+  });
+
+  // GET /api/evidence/mine — fotos y PDFs del operario autenticado (Mis Evidencias)
+  app.get('/api/evidence/mine', requireAuthenticatedUser, async (req: AuthenticatedRequest, res) => {
+    try {
+      const prisma = await getPrismaClient();
+      const databaseUser = await resolveDatabaseUser(req.user!);
+      const { page = '1', limit = '40' } = req.query;
+      const pageNum = Math.max(1, parseInt(page as string) || 1);
+      const limitNum = Math.min(100, parseInt(limit as string) || 40);
+      const skip = (pageNum - 1) * limitNum;
+
+      // Fotos de reportes horarios
+      const [photos, reports] = await Promise.all([
+        prisma.hourlyLog.findMany({
+          where: { user_id: databaseUser.id, photo_url: { not: null } },
+          orderBy: { fecha_hora: 'desc' },
+          take: limitNum,
+          skip,
+          include: {
+            machine: { select: { tipo: true, numero_maquina: true, id: true } },
+          },
+        }),
+        prisma.report.findMany({
+          where: { user_id: databaseUser.id, pdfUrl: { not: null } },
+          orderBy: { fecha_hora: 'desc' },
+          take: 20,
+          select: {
+            id: true,
+            fecha_hora: true,
+            pdfUrl: true,
+            isClosingReport: true,
+          },
+        }),
+      ]);
+
+      const photoItems = photos.map(l => ({
+        id: l.id,
+        itemType: 'photo' as const,
+        url: l.photo_url!,
+        fecha_hora: l.fecha_hora,
+        machine: l.machine
+          ? `${l.machine.tipo === 'INCUBADORA' ? 'INC' : 'NAC'}-${l.machine.numero_maquina.toString().padStart(2, '0')}`
+          : 'Sin máquina',
+        machineId: l.machine?.id || null,
+        observaciones: l.observaciones || '',
+      }));
+
+      const pdfItems = reports.map(r => ({
+        id: r.id,
+        itemType: 'pdf' as const,
+        url: r.pdfUrl!,
+        fecha_hora: r.fecha_hora,
+        machine: r.isClosingReport ? 'Reporte de Cierre' : 'Reporte Horario',
+        machineId: null,
+        observaciones: r.isClosingReport ? 'Cierre de turno' : 'Reporte horario',
+      }));
+
+      // Combinar y ordenar por fecha
+      const combined = [...photoItems, ...pdfItems].sort(
+        (a, b) => new Date(b.fecha_hora).getTime() - new Date(a.fecha_hora).getTime()
+      );
+
+      return res.json({ items: combined, operario: databaseUser.nombre, page: pageNum });
+    } catch (error) {
+      console.error('[Evidence] Error fetching mine:', error);
+      return res.status(500).json({ error: 'Error cargando tus evidencias' });
+    }
+  });
 
   return app;
 }

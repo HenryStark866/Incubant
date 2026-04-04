@@ -1175,7 +1175,7 @@ export function createApiApp(): Express {
       }
 
       return res.json({ 
-        version: '1.2.3-DEPLOY-FIX',
+        version: '1.2.4-TOTAL-FIX',
         reportCount, 
         lastReportTime: lastLog?.fecha_hora || null,
         activeOperatorsCount: onlineNames.length,
@@ -1280,6 +1280,7 @@ export function createApiApp(): Express {
             tempAireSP: log.temp_secundaria_consigna.toFixed(1),
             tempSynchroReal: temp,
             tempSynchroSP: log.temp_principal_consigna.toFixed(1),
+            version: 'v1.2.4-TOTAL-FIX',
             temperaturaReal: tempAire || temp,
             temperaturaSP: log.temp_secundaria_consigna.toFixed(1),
             humedadReal: humedadRelativa || log.co2_actual.toFixed(1),

@@ -525,7 +525,7 @@ export default function SupervisorDashboard() {
             <div className="px-4 py-1 bg-brand-primary/10 rounded-full border border-brand-primary/20">
               <p className="text-[10px] text-brand-primary font-black uppercase tracking-[0.2em]">Sistema de Monitoreo</p>
             </div>
-            <span className="text-[8px] text-brand-gray font-bold opacity-40">v0.1.1-PROD</span>
+            <span className="text-xs text-white/40 block mt-1">v1.2.1-SHIFT-FIX</span>
           </div>
         </div>
 

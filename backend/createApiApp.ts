@@ -1175,6 +1175,7 @@ export function createApiApp(): Express {
       }
 
       return res.json({ 
+        version: '1.2.1-SHIFT-FIX',
         reportCount, 
         lastReportTime: lastLog?.fecha_hora || null,
         activeOperatorsCount: onlineNames.length,

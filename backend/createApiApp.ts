@@ -32,14 +32,29 @@ type SubmittedMachineData = {
     horas: string;
     minutos: string;
   };
+  // Legacy / simplified names (kept for backwards compat)
   tempOvoscan?: string;
   tempAire?: string;
-  volteoNumero?: string;
-  volteoPosicion?: string;
-  alarma?: 'Si' | 'No';
   temperatura?: string;
   humedadRelativa?: string;
   co2?: string;
+  // Full Real/SP names (what the frontend store actually sends)
+  tempOvoscanReal?: string;
+  tempOvoscanSP?: string;
+  tempAireReal?: string;
+  tempAireSP?: string;
+  tempSynchroReal?: string;
+  tempSynchroSP?: string;
+  temperaturaReal?: string;
+  temperaturaSP?: string;
+  humedadReal?: string;
+  humedadSP?: string;
+  co2Real?: string;
+  co2SP?: string;
+  // Common fields
+  volteoNumero?: string;
+  volteoPosicion?: string;
+  alarma?: 'Si' | 'No';
   observaciones?: string;
   ventiladorPrincipal?: 'Si' | 'No';
 };
@@ -342,11 +357,16 @@ function buildObservationSummary(data: SubmittedMachineData) {
     ? `Tiempo: ${data.tiempoIncubacion.dias}d ${data.tiempoIncubacion.horas}h ${data.tiempoIncubacion.minutos}m`
     : null;
 
+  // Accept both legacy field names and Real-suffixed names from the frontend store
+  const humedad = data.humedadReal || data.humedadRelativa;
+  const co2Val = data.co2Real || data.co2;
+  const tempAire = data.tempAireReal || data.tempAire || data.temperaturaReal;
+
   const details = [
     timeStr,
-    data.humedadRelativa ? `Humedad: ${data.humedadRelativa}%` : null,
-    data.co2 ? `CO2: ${data.co2}%` : null,
-    data.tempAire ? `Temp Aire: ${data.tempAire}` : null,
+    humedad ? `Humedad: ${humedad}%` : null,
+    co2Val ? `CO2: ${co2Val}%` : null,
+    tempAire ? `Temp Aire: ${tempAire}` : null,
     data.volteoNumero ? `Volteos: ${data.volteoNumero}` : null,
     data.volteoPosicion ? `Posicion: ${data.volteoPosicion}` : null,
     data.alarma ? `Alarma: ${data.alarma}` : null,
@@ -691,10 +711,13 @@ export function createApiApp(): Express {
           
           // Para máquinas apagadas, usar 0
           const d = machine.data!;
-          const mainTemp = toNumberOrNull(d.tempOvoscan) ?? toNumberOrNull(d.temperatura) ?? 0;
-          const secondaryTemp = toNumberOrNull(d.tempAire) ?? mainTemp;
-          const co2 = toNumberOrNull(d.co2) ?? 0;
-          const humidity = toNumberOrNull(d.humedadRelativa) ?? 0;
+          // Accept both Real-suffixed and legacy field names
+          const mainTemp = toNumberOrNull(d.tempOvoscanReal) ?? toNumberOrNull(d.tempSynchroReal) ?? toNumberOrNull(d.tempOvoscan) ?? toNumberOrNull(d.temperatura) ?? 0;
+          const mainTempSP = toNumberOrNull(d.tempOvoscanSP) ?? toNumberOrNull(d.tempSynchroSP) ?? mainTemp;
+          const secondaryTemp = toNumberOrNull(d.tempAireReal) ?? toNumberOrNull(d.temperaturaReal) ?? toNumberOrNull(d.tempAire) ?? mainTemp;
+          const secondaryTempSP = toNumberOrNull(d.tempAireSP) ?? toNumberOrNull(d.temperaturaSP) ?? mainTemp;
+          const co2 = toNumberOrNull(d.co2Real) ?? toNumberOrNull(d.co2) ?? 0;
+          const co2SP = toNumberOrNull(d.co2SP) ?? co2;
 
           // Crear incidente automático si hay alarma
           if (d.alarma === 'Si') {
@@ -714,12 +737,12 @@ export function createApiApp(): Express {
             machine_id: resolvedMachine.id,
             photo_url: machine.photoUrl || null,
             temp_principal_actual: mainTemp,
-            temp_principal_consigna: mainTemp,
+            temp_principal_consigna: mainTempSP,
             co2_actual: co2,
-            co2_consigna: co2,
+            co2_consigna: co2SP,
             fan_speed: 0,
             temp_secundaria_actual: secondaryTemp,
-            temp_secundaria_consigna: secondaryTemp,
+            temp_secundaria_consigna: secondaryTempSP,
             is_na: machine.type === 'nacedora',
             temp_superior_actual: null,
             observaciones: buildObservationSummary(d),
@@ -802,9 +825,15 @@ export function createApiApp(): Express {
         const logsToInsert = await Promise.all(completedMachines.map(async (machine) => {
           const resolvedMachine = await resolveDatabaseMachine(machine);
           const d = machine.data!;
-          const mainTemp = toNumberOrNull(d.tempOvoscan) ?? toNumberOrNull(d.temperatura) ?? 0;
-          const secondaryTemp = toNumberOrNull(d.tempAire) ?? mainTemp;
-          const co2 = toNumberOrNull(d.co2) ?? 0;
+
+          // Extract temperatures: accept both Real-suffixed and legacy field names
+          const mainTemp = toNumberOrNull(d.tempOvoscanReal) ?? toNumberOrNull(d.tempSynchroReal) ?? toNumberOrNull(d.tempOvoscan) ?? toNumberOrNull(d.temperatura) ?? 0;
+          const mainTempSP = toNumberOrNull(d.tempOvoscanSP) ?? toNumberOrNull(d.tempSynchroSP) ?? mainTemp;
+          const secondaryTemp = toNumberOrNull(d.tempAireReal) ?? toNumberOrNull(d.temperaturaReal) ?? toNumberOrNull(d.tempAire) ?? mainTemp;
+          const secondaryTempSP = toNumberOrNull(d.tempAireSP) ?? toNumberOrNull(d.temperaturaSP) ?? mainTemp;
+          const co2 = toNumberOrNull(d.co2Real) ?? toNumberOrNull(d.co2) ?? 0;
+          const co2SP = toNumberOrNull(d.co2SP) ?? co2;
+          const humedad = toNumberOrNull(d.humedadReal) ?? toNumberOrNull(d.humedadRelativa) ?? 0;
 
           const storageResult = storageResults.find(r => r.machineId === machine.id);
 
@@ -825,12 +854,12 @@ export function createApiApp(): Express {
             machine_id: resolvedMachine.id,
             photo_url: storageResult?.photoUrl || null,
             temp_principal_actual: mainTemp,
-            temp_principal_consigna: mainTemp,
+            temp_principal_consigna: mainTempSP,
             co2_actual: co2,
-            co2_consigna: co2,
+            co2_consigna: co2SP,
             fan_speed: 0,
             temp_secundaria_actual: secondaryTemp,
-            temp_secundaria_consigna: secondaryTemp,
+            temp_secundaria_consigna: secondaryTempSP,
             is_na: machine.type === 'nacedora',
             temp_superior_actual: null,
             observaciones: buildObservationSummary(d),

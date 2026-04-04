@@ -9,6 +9,7 @@ import {
 import { getApiUrl, apiFetch } from '../lib/api';
 import ReportUploader from '../components/ReportUploader';
 import OperatorSchedule from './OperatorSchedule';
+import RequestsScreen from './RequestsScreen';
 
 /* ─────────────────────────────────────────────
    Modal de confirmación futurista
@@ -515,26 +516,21 @@ export default function DashboardScreen({ canAccessSupervisor = false, onSwitchT
     );
   }
 
-  if (activePage === 'requests' || activePage === 'reports') {
+  if (activePage === 'requests') {
+    return <RequestsScreen onBack={() => setActivePage('dashboard')} />;
+  }
+
+  if (activePage === 'reports') {
     return (
       <div className={`flex flex-col h-full relative overflow-hidden ${isDark ? '' : 'bg-gray-50'}`} style={isDark ? { background: '#060b18' } : {}}>
         <div className="p-6 relative z-10 flex flex-col items-center justify-center h-full text-center">
-           {activePage === 'requests' ? (
-             <ClipboardList size={48} className="text-brand-primary mb-6 glow-primary" />
-           ) : (
-             <Camera size={48} className="text-brand-primary mb-6 glow-primary" />
-           )}
-           
+           <Camera size={48} className="text-brand-primary mb-6 glow-primary" />
            <h2 className={`text-2xl font-black mb-3 font-mono-display uppercase tracking-widest ${isDark ? 'text-white' : 'text-gray-900'}`}>
-             {activePage === 'requests' ? 'Solicitudes' : 'Reportes Físicos'}
+             Evidencias Adicionales
            </h2>
-           
            <p className={`text-xs font-mono mb-8 max-w-xs leading-relaxed ${isDark ? 'text-white/40' : 'text-gray-500'}`}>
-             {activePage === 'requests' 
-               ? 'Módulo en construcción. Aquí podrás enviar formatos de permisos o novedades administrativas al supervisor.'
-               : 'Módulo en construcción. Aquí podrás registrar fotografías y daños encontrados en las áreas de la planta ajenas a las máquinas.'}
+             Módulo en construcción. Aquí podrás registrar fotografías y daños encontrados en las áreas de la planta ajenas a las máquinas.
            </p>
-
            <button onClick={() => setActivePage('dashboard')} className="px-8 py-4 bg-brand-primary rounded-2xl text-white font-black text-xs uppercase tracking-widest shadow-[0_0_20px_rgba(247,147,26,0.3)] active:scale-95 transition-all">
              Volver al Tablero
            </button>

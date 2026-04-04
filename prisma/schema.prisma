@@ -24,6 +24,25 @@ model User {
   reports         Report[]
   assignments     ScheduleAssignment[]
   sessions        Session[]
+  leaveRequests   LeaveRequest[]       @relation("RequesterRelation")
+  reviewedRequests LeaveRequest[]      @relation("ReviewerRelation")
+}
+
+model LeaveRequest {
+  id              String    @id @default(uuid())
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  tipo            String    // PERMISO, VACACIONES, AUSENCIA, OTRO
+  fecha_inicio    DateTime
+  fecha_fin       DateTime
+  motivo          String
+  observaciones   String?
+  estado          String    @default("PENDIENTE") // PENDIENTE, APROBADO, RECHAZADO
+  respuesta       String?   // Respuesta del supervisor
+  requester_id    String
+  reviewer_id     String?
+  requester       User      @relation("RequesterRelation", fields: [requester_id], references: [id], onDelete: Cascade)
+  reviewer        User?     @relation("ReviewerRelation", fields: [reviewer_id], references: [id], onDelete: SetNull)
 }
 
 model Machine {

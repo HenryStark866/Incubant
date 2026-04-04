@@ -1873,6 +1873,159 @@ export function createApiApp(): Express {
     }
   });
 
+  // ==========================================================================
+  // SOLICITUDES Y PERMISOS (LeaveRequest)
+  // ==========================================================================
+
+  // ── GET /api/requests - Listar solicitudes (supervisor ve todas, operario ve las suyas)
+  app.get('/api/requests', requireAuthenticatedUser, async (req: AuthenticatedRequest, res) => {
+    try {
+      const prisma = await getPrismaClient();
+      const isSupervisor = req.user && SUPERVISOR_ROLES.includes(req.user.role);
+
+      const where = isSupervisor
+        ? {} // supervisores ven todas
+        : { requester_id: req.user!.id }; // operarios solo ven las suyas
+
+      const requests = await (prisma as any).leaveRequest.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        take: 100,
+        include: {
+          requester: { select: { nombre: true, turno: true, rol: true } },
+          reviewer: { select: { nombre: true } }
+        }
+      });
+
+      return res.json(requests);
+    } catch (error) {
+      console.error('[Requests] Error fetching:', error);
+      return res.status(500).json({ error: 'Error cargando solicitudes' });
+    }
+  });
+
+  // ── POST /api/requests - Crear nueva solicitud (operario)
+  app.post('/api/requests', requireAuthenticatedUser, async (req: AuthenticatedRequest, res) => {
+    try {
+      const { tipo, fecha_inicio, fecha_fin, motivo, observaciones } = req.body;
+
+      if (!tipo || !fecha_inicio || !fecha_fin || !motivo) {
+        return res.status(400).json({ error: 'Tipo, fechas y motivo son requeridos' });
+      }
+
+      const prisma = await getPrismaClient();
+      const databaseUser = await resolveDatabaseUser(req.user!);
+
+      const newRequest = await (prisma as any).leaveRequest.create({
+        data: {
+          tipo,
+          fecha_inicio: new Date(fecha_inicio),
+          fecha_fin: new Date(fecha_fin),
+          motivo: String(motivo).slice(0, 500),
+          observaciones: observaciones ? String(observaciones).slice(0, 1000) : null,
+          estado: 'PENDIENTE',
+          requester_id: databaseUser.id,
+        },
+        include: {
+          requester: { select: { nombre: true, turno: true, rol: true } },
+          reviewer: { select: { nombre: true } }
+        }
+      });
+
+      // Notificar a supervisores vía SSE
+      sendEventToAll({
+        type: 'NEW_REQUEST',
+        message: `Nueva solicitud de ${databaseUser.nombre}: ${tipo}`,
+        timestamp: new Date().toISOString()
+      });
+
+      return res.status(201).json(newRequest);
+    } catch (error) {
+      console.error('[Requests] Error creating:', error);
+      return res.status(500).json({ error: 'Error creando solicitud' });
+    }
+  });
+
+  // ── PATCH /api/requests/:id/review - Revisar/aprobar/rechazar solicitud (supervisor/jefe)
+  app.patch('/api/requests/:id/review', requireRoles(SUPERVISOR_ROLES), async (req: AuthenticatedRequest, res) => {
+    try {
+      const { id } = req.params;
+      const { estado, respuesta } = req.body;
+
+      if (!['APROBADO', 'RECHAZADO'].includes(estado)) {
+        return res.status(400).json({ error: 'Estado debe ser APROBADO o RECHAZADO' });
+      }
+
+      const prisma = await getPrismaClient();
+      const databaseUser = await resolveDatabaseUser(req.user!);
+
+      const updated = await (prisma as any).leaveRequest.update({
+        where: { id },
+        data: {
+          estado,
+          respuesta: respuesta ? String(respuesta).slice(0, 500) : null,
+          reviewer_id: databaseUser.id,
+        },
+        include: {
+          requester: { select: { nombre: true, turno: true, rol: true } },
+          reviewer: { select: { nombre: true } }
+        }
+      });
+
+      // Notificar al operario que solicitó
+      sendEventToUser(updated.requester_id, {
+        type: 'REQUEST_REVIEWED',
+        title: estado === 'APROBADO' ? '✅ Solicitud Aprobada' : '❌ Solicitud Rechazada',
+        message: `Tu solicitud de ${updated.tipo} ha sido ${estado.toLowerCase()}.${respuesta ? ' Respuesta: ' + respuesta : ''}`,
+        estado,
+      });
+
+      return res.json(updated);
+    } catch (error) {
+      console.error('[Requests] Error reviewing:', error);
+      return res.status(500).json({ error: 'Error procesando revisión' });
+    }
+  });
+
+  // ── DELETE /api/requests/:id - Cancelar solicitud propia (operario, solo si PENDIENTE)
+  app.delete('/api/requests/:id', requireAuthenticatedUser, async (req: AuthenticatedRequest, res) => {
+    try {
+      const { id } = req.params;
+      const prisma = await getPrismaClient();
+      const databaseUser = await resolveDatabaseUser(req.user!);
+      const isSupervisor = SUPERVISOR_ROLES.includes(req.user!.role);
+
+      const existing = await (prisma as any).leaveRequest.findUnique({ where: { id } });
+
+      if (!existing) return res.status(404).json({ error: 'Solicitud no encontrada' });
+      if (!isSupervisor && existing.requester_id !== databaseUser.id) {
+        return res.status(403).json({ error: 'No puedes eliminar esta solicitud' });
+      }
+      if (!isSupervisor && existing.estado !== 'PENDIENTE') {
+        return res.status(400).json({ error: 'Solo puedes cancelar solicitudes pendientes' });
+      }
+
+      await (prisma as any).leaveRequest.delete({ where: { id } });
+      return res.status(204).end();
+    } catch (error) {
+      console.error('[Requests] Error deleting:', error);
+      return res.status(500).json({ error: 'Error eliminando solicitud' });
+    }
+  });
+
+  // ── GET /api/requests/stats - Estadísticas de solicitudes para el dashboard
+  app.get('/api/requests/stats', requireRoles(SUPERVISOR_ROLES), async (_req, res) => {
+    try {
+      const prisma = await getPrismaClient();
+      const pending = await (prisma as any).leaveRequest.count({ where: { estado: 'PENDIENTE' } });
+      const approved = await (prisma as any).leaveRequest.count({ where: { estado: 'APROBADO' } });
+      const rejected = await (prisma as any).leaveRequest.count({ where: { estado: 'RECHAZADO' } });
+      return res.json({ pending, approved, rejected, total: pending + approved + rejected });
+    } catch (error) {
+      return res.json({ pending: 0, approved: 0, rejected: 0, total: 0 });
+    }
+  });
+
   // ── Finalization ─────────────────────────────────────────────────────────
 
   return app;

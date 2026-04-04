@@ -3,7 +3,7 @@ import {
   Activity, AlertTriangle, Clock, Users, LayoutDashboard,
   Settings, ChevronDown, X, Image as ImageIcon, CheckCircle2,
   Download, Loader2, Egg, Menu, RefreshCw, LogOut, Camera, FileText, FolderOpen,
-  Sun, Moon, Wifi, WifiOff, Monitor, Thermometer, Droplets, Wind, Gauge
+  Sun, Moon, Wifi, WifiOff, Monitor, Thermometer, Droplets, Wind, Gauge, ClipboardList
 } from 'lucide-react';
 import { useThemeStore } from '../store/useThemeStore';
 import {
@@ -14,6 +14,7 @@ import { getApiUrl, apiFetch } from '../lib/api';
 
 import ShiftManager from '../components/Admin/ShiftManager';
 import AdminHistoryScreen from './AdminHistoryScreen';
+import PermitsManagerPanel from '../components/Admin/PermitsManagerPanel';
 
 // Helper: status badge for parameter comparison
 function statusBadge(real: any, sp: any) {
@@ -44,7 +45,8 @@ function CheckItem({ label, value, icon, alarm }: { label: string; value: string
 }
 
 export default function SupervisorDashboard() {
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'history' | 'personal' | 'horarios' | 'settings'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'history' | 'personal' | 'horarios' | 'solicitudes' | 'settings'>('dashboard');
+  const [pendingRequestsCount, setPendingRequestsCount] = useState(0);
   const [machineViewTab, setMachineViewTab] = useState<'incubadora' | 'nacedora'>('incubadora');
   const [selectedMachine, setSelectedMachine] = useState<any | null>(null);
   const [chartFilter, setChartFilter] = useState('Ver: Planta Completa');
@@ -132,11 +134,27 @@ export default function SupervisorDashboard() {
     return () => clearInterval(timer);
   }, []);
 
+  // Load pending requests count on mount and via SSE
+  useEffect(() => {
+    const fetchPending = async () => {
+      try {
+        const res = await apiFetch(getApiUrl('/api/requests/stats'));
+        if (res.ok) {
+          const data = await res.json();
+          setPendingRequestsCount(data.pending || 0);
+        }
+      } catch { /* silently fail */ }
+    };
+    void fetchPending();
+    const interval = setInterval(fetchPending, 30000);
+    return () => clearInterval(interval);
+  }, []);
+
   // REEMPLAZADO POR DATOS DE API: El nombre del turno y operarios ahora se obtienen de la tabla de asignaciones
   const currentShiftName = summaryData.currentShift;
   const activeOperatorsList = summaryData.activeOperatorsNames;
 
-  const handleTabChange = (tab: 'dashboard' | 'personal' | 'horarios' | 'settings') => {
+  const handleTabChange = (tab: 'dashboard' | 'personal' | 'horarios' | 'solicitudes' | 'settings') => {
     setActiveTab(tab);
     setIsSidebarOpen(false);
   };
@@ -371,6 +389,10 @@ export default function SupervisorDashboard() {
             const data = JSON.parse(event.data);
             if (data.targetUserId && data.targetUserId !== currentUser.id) return;
             console.log('[SSE] Evento recibido:', data.type);
+            // Increment pending badge immediately for new requests
+            if (data.type === 'NEW_REQUEST') {
+              setPendingRequestsCount(c => c + 1);
+            }
             void fetchData();
           } catch {
             void fetchData();
@@ -549,6 +571,34 @@ export default function SupervisorDashboard() {
               <span className="font-bold tracking-tight">Historial</span>
             </button>
           </div>
+
+          {/* SOLICITUDES Y PERMISOS */}
+          <div className="pt-4 mt-4 border-t border-gray-100 flex flex-col gap-2">
+            <p className={`px-2 text-[10px] font-black uppercase tracking-[0.2em] opacity-60 mb-2 ${isDark ? 'text-white/40' : 'text-brand-gray'}`}>
+              Gestión
+            </p>
+            <button
+              onClick={() => handleTabChange('solicitudes')}
+              className={`w-full flex items-center gap-4 px-5 py-4 rounded-2xl transition-all ${
+                activeTab === 'solicitudes' 
+                  ? 'bg-brand-primary text-white shadow-lg shadow-brand-primary/30 active:scale-95' 
+                  : `${isDark ? 'hover:bg-white/5 text-white/50' : 'hover:bg-gray-50 text-brand-gray'} font-semibold`
+              }`}
+            >
+              <ClipboardList size={20} />
+              <span className="font-bold tracking-tight flex-1">Solicitudes</span>
+              {pendingRequestsCount > 0 && (
+                <span className={`text-[10px] font-black min-w-[20px] h-5 px-1.5 rounded-full flex items-center justify-center ${
+                  activeTab === 'solicitudes'
+                    ? 'bg-white/25 text-white'
+                    : 'bg-brand-primary text-white'
+                }`}>
+                  {pendingRequestsCount}
+                </span>
+              )}
+            </button>
+          </div>
+
         </nav>
 
 
@@ -1347,6 +1397,12 @@ export default function SupervisorDashboard() {
                     )}
                   </tbody>
                 </table>
+              </div>
+            </div>
+          ) : activeTab === 'solicitudes' ? (
+            <div className="h-full -m-4 sm:-m-6 lg:-m-10">
+              <div className={`h-full flex flex-col overflow-hidden`}> 
+                <PermitsManagerPanel />
               </div>
             </div>
           ) : (

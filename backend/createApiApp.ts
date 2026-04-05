@@ -1227,15 +1227,20 @@ export function createApiApp(): Express {
           
           // LÓGICA DE PERSISTENCIA DE FOTO:
           // 1. Debe ser del turno actual.
-          // 2. Si hay una nueva ronda en marcha (maxLogTime > log), no debe ser más vieja que el umbral.
-          const logTime = log.fecha_hora.getTime();
-          const isFromCurrentShift = logTime >= shiftStartUTC.getTime();
-          const isFromCurrentCycle = (maxLogTime - logTime) < cycleThreshold;
-
-          if (isFromCurrentShift && isFromCurrentCycle) {
+          // 2. Debe pertenecer a la misma HORA y DÍA que el reporte más reciente del sistema (ronda actual).
+          const logDate = log.fecha_hora;
+          const maxDate = lastOverallLog?.fecha_hora || new Date(0);
+          
+          const isFromCurrentShift = logDate.getTime() >= shiftStartUTC.getTime();
+          
+          // Comparar buckets de hora: YYYY-MM-DD-HH
+          const logBucket = `${logDate.getUTCFullYear()}-${logDate.getUTCMonth()}-${logDate.getUTCDate()}-${logDate.getUTCHours()}`;
+          const maxBucket = `${maxDate.getUTCFullYear()}-${maxDate.getUTCMonth()}-${maxDate.getUTCDate()}-${maxDate.getUTCHours()}`;
+          
+          if (isFromCurrentShift && logBucket === maxBucket) {
             photoUrl = log.photo_url;
           } else {
-            photoUrl = null; // Reset a imagen de "maquina apagada"
+            photoUrl = null; // Revertir a imagen de "maquina apagada"
           }
 
           observaciones = log.observaciones;

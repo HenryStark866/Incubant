@@ -51,15 +51,12 @@ export default defineConfig(({mode}) => {
           dir: 'ltr'
         },
         workbox: {
-          // Limpiar cachés obsoletos automáticamente al actualizar
           cleanupOutdatedCaches: true,
-          // Activar el nuevo SW de inmediato, sin esperar al cierre del tab
           skipWaiting: true,
           clientsClaim: true,
           globPatterns: ['**/*.{js,css,html,ico,png,svg,json,woff2}'],
           runtimeCaching: [
             {
-              // Cache de APIs del backend
               urlPattern: /^https?:\/\/.*\/api\/.*/i,
               handler: 'NetworkFirst',
               options: {
@@ -67,7 +64,7 @@ export default defineConfig(({mode}) => {
                 networkTimeoutSeconds: 10,
                 expiration: {
                   maxEntries: 32,
-                  maxAgeSeconds: 60 * 5 // 5 minutos
+                  maxAgeSeconds: 60 * 5
                 },
                 cacheableResponse: {
                   statuses: [0, 200]
@@ -116,9 +113,14 @@ export default defineConfig(({mode}) => {
       },
     },
     server: {
-      // HMR is disabled in AI Studio via DISABLE_HMR env var.
-      // Do not modifyâfile watching is disabled to prevent flickering during agent edits.
       hmr: process.env.DISABLE_HMR !== 'true',
+      proxy: {
+        '/api': {
+          target: 'http://localhost:3001',
+          changeOrigin: true,
+          secure: false,
+        }
+      }
     },
   };
 });

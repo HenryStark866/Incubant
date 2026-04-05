@@ -146,8 +146,14 @@ export default function RequestsScreen({ onBack }: { onBack: () => void }) {
       });
 
       if (!res.ok) {
-        const err = await res.json();
-        setFormError(err.details ? `${err.error}: ${err.details}` : (err.error || 'Error al enviar la solicitud'));
+        const contentType = res.headers.get('content-type');
+        if (contentType && contentType.includes('application/json')) {
+          const err = await res.json();
+          setFormError(err.details ? `${err.error}: ${err.details}` : (err.error || `Error ${res.status}: Fallo al enviar`));
+        } else {
+          const text = await res.text();
+          setFormError(`Error ${res.status}: El servidor no respondió con JSON. ${text.slice(0, 50)}...`);
+        }
         return;
       }
 
@@ -155,8 +161,9 @@ export default function RequestsScreen({ onBack }: { onBack: () => void }) {
       setRequests(prev => [created, ...prev]);
       setShowForm(false);
       setForm({ tipo: 'PERMISO', fecha_inicio: '', fecha_fin: '', motivo: '', observaciones: '' });
-    } catch {
-      setFormError('Error de conexión. Verifica tu red e intenta de nuevo.');
+    } catch (err: any) {
+      console.error('[RequestsScreen] Submit Error:', err);
+      setFormError(`Error de conexión: ${err.message || 'Verifica tu red o el estado del servidor'}`);
     } finally {
       setIsSubmitting(false);
     }
@@ -466,14 +473,12 @@ export default function RequestsScreen({ onBack }: { onBack: () => void }) {
   );
 }
 
-function RequestCard({
-  req, isDark, onDelete, deletingId
-}: {
+const RequestCard: React.FC<{
   req: LeaveRequest;
   isDark: boolean;
-  onDelete: (id: string) => void;
+  onDelete: (id: string) => void | Promise<void>;
   deletingId: string | null;
-}) {
+}> = ({ req, isDark, onDelete, deletingId }) => {
   const badge = estadoBadge(req.estado);
 
   return (

@@ -392,30 +392,35 @@ function extractObservationValue(observaciones: string | null | undefined, label
 // Garantizan que los usuarios y máquinas existan en BD antes de insertar logs.
 // ==========================================================================
 async function resolveDatabaseUser(sessionUser: SessionUser) {
-  const prisma = await getPrismaClient();
+  try {
+    const prisma = await getPrismaClient();
 
-  // 1. Buscar primero por ID estable (slug)
-  const byId = await prisma.user.findUnique({ where: { id: sessionUser.id } }).catch(() => null);
-  if (byId) return byId;
+    // 1. Buscar primero por ID estable (slug)
+    const byId = await prisma.user.findUnique({ where: { id: sessionUser.id } }).catch(() => null);
+    if (byId) return byId;
 
-  // 2. Buscar por nombre
-  const byName = await prisma.user.findFirst({ where: { nombre: sessionUser.name } }).catch(() => null);
-  if (byName) return byName;
+    // 2. Buscar por nombre
+    const byName = await prisma.user.findFirst({ where: { nombre: sessionUser.name } }).catch(() => null);
+    if (byName) return byName;
 
-  // 3. Crear el usuario en BD usando los datos del predefinido si existe, o datos sintéticos
-  const predefined = predefinedUsers.find(u => u.id === sessionUser.id || u.nombre === sessionUser.name);
+    // 3. Crear el usuario en BD usando los datos del predefinido si existe, o datos sintéticos
+    const predefined = predefinedUsers.find(u => u.id === sessionUser.id || u.nombre === sessionUser.name);
 
-  return prisma.user.create({
-    data: {
-      id: sessionUser.id,
-      nombre: sessionUser.name,
-      pin_acceso: predefined?.pin_acceso || `ext-${crypto.createHash('sha1').update(sessionUser.id).digest('hex').slice(0, 8)}`,
-      rol: sessionUser.role,
-      turno: sessionUser.shift || predefined?.turno || 'Turno 1',
-      estado: 'Activo',
-      ultimo_acceso: new Date()
-    },
-  });
+    return await prisma.user.create({
+      data: {
+        id: sessionUser.id,
+        nombre: sessionUser.name,
+        pin_acceso: predefined?.pin_acceso || `ext-${crypto.createHash('sha1').update(sessionUser.id).digest('hex').slice(0, 8)}`,
+        rol: sessionUser.role,
+        turno: sessionUser.shift || predefined?.turno || 'Turno 1',
+        estado: 'Activo',
+        ultimo_acceso: new Date()
+      },
+    });
+  } catch (error) {
+    console.error('[resolveDatabaseUser] Error fatal resolving user:', error);
+    throw error;
+  }
 }
 
 async function resolveDatabaseMachine(machine: SubmittedMachine) {
@@ -1977,6 +1982,7 @@ export function createApiApp(): Express {
   // ── POST /api/requests - Crear nueva solicitud (operario)
   app.post('/api/requests', requireAuthenticatedUser, async (req: AuthenticatedRequest, res) => {
     try {
+      console.log('[Requests] Crear solicitud - Body:', JSON.stringify(req.body));
       const { tipo, fecha_inicio, fecha_fin, motivo, observaciones } = req.body;
 
       if (!tipo || !fecha_inicio || !fecha_fin || !motivo) {
@@ -1984,8 +1990,11 @@ export function createApiApp(): Express {
       }
 
       const prisma = await getPrismaClient();
+      console.log('[Requests] Resolviendo usuario de BD para:', req.user?.name);
       const databaseUser = await resolveDatabaseUser(req.user!);
+      console.log('[Requests] Usuario resuelto ID:', databaseUser.id);
 
+      console.log('[Requests] Intentando crear registro en BD...');
       const newRequest = await (prisma as any).leaveRequest.create({
         data: {
           tipo,
@@ -2001,6 +2010,7 @@ export function createApiApp(): Express {
           reviewer: { select: { nombre: true } }
         }
       });
+      console.log('[Requests] Registro creado con éxito:', newRequest.id);
 
       // Notificar a supervisores vía SSE
       sendEventToAll({
@@ -2012,7 +2022,10 @@ export function createApiApp(): Express {
       return res.status(201).json(newRequest);
     } catch (error) {
       console.error('[Requests] Error creating:', error);
-      return res.status(500).json({ error: 'Error creando solicitud' });
+      return res.status(500).json({ 
+        error: 'Error creando solicitud', 
+        details: error instanceof Error ? error.message : String(error) 
+      });
     }
   });
 

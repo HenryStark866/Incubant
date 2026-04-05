@@ -96,8 +96,7 @@ const predefinedUsers: PredefinedUser[] = [
 ];
 
 // ==========================================================================
-// PRISMA CLIENT
-// ==========================================================================
+// PRISMA CLIENT & DB INIT
 const globalForPrisma = globalThis as typeof globalThis & {
   prisma?: PrismaClient;
 };
@@ -117,8 +116,43 @@ async function getPrismaClient() {
       },
     });
   }
-
   return globalForPrisma.prisma;
+}
+
+// Helper to seed database from predefined users
+async function seedDatabase() {
+  const prisma = await getPrismaClient();
+  console.log('[Seed] Initializing database...');
+  
+  for (const user of predefinedUsers) {
+    await prisma.user.upsert({
+      where: { id: user.id },
+      update: { nombre: user.nombre, rol: user.rol, turno: user.turno, pin_acceso: user.pin_acceso },
+      create: {
+        id: user.id,
+        nombre: user.nombre,
+        pin_acceso: user.pin_acceso,
+        rol: user.rol,
+        turno: user.turno,
+        estado: 'Activo'
+      }
+    });
+  }
+
+  // Ensure some machines exist for testing
+  const machineIds = ['B01', 'B02', 'B03', 'N01', 'N02'];
+  for (const mid of machineIds) {
+    await prisma.machine.upsert({
+      where: { id: mid },
+      update: {},
+      create: {
+        id: mid,
+        tipo: mid.startsWith('B') ? 'INCUBADORA' : 'NACEDORA',
+        numero_maquina: parseInt(mid.substring(1))
+      }
+    });
+  }
+  console.log('[Seed] Database seeded successfully.');
 }
 
 // ==========================================================================
@@ -628,7 +662,22 @@ export function createApiApp(): Express {
     res.status(204).end();
   });
 
-  // ── Login ────────────────────────────────────────────────────────────────
+  // ── Database Seed ────────────────────────────────────────────────────────
+  app.post('/api/admin/seed-db', async (req, res) => {
+    try {
+      await seedDatabase();
+      return res.json({ message: 'Base de datos inicializada correctamente' });
+    } catch (error) {
+      console.error('[Seed] Error:', error);
+      return res.status(500).json({ error: 'Error al inicializar base de datos', details: error instanceof Error ? error.message : String(error) });
+    }
+  });
+
+  // Initialize DB and Predefined Users
+  console.log('[Init] Running startup database seed...');
+  seedDatabase().catch(err => console.error('[Init] Seed failed during startup:', err));
+
+  // ── Auth ──────────────────────────────────────────────────────────────────
   app.post('/api/login', async (req, res) => {
     const { id, pin } = req.body ?? {};
 

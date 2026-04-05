@@ -1,55 +1,33 @@
 {
-    "version": 2,
-    "builds": [
+  "version": 2,
+  "rewrites": [
+    {
+      "source": "/api/(.*)",
+      "destination": "https://incubant.onrender.com/api/$1"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ],
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
         {
-            "src": "api/index.ts",
-            "use": "@vercel/node"
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
         },
         {
-            "src": "package.json",
-            "use": "@vercel/static-build",
-            "config": {
-                "distDir": "dist"
-            }
-        }
-    ],
-    "rewrites": [
-        {
-            "source": "/api/(.*)",
-            "destination": "https://incubant.onrender.com/api/$1"
+          "key": "X-Frame-Options",
+          "value": "DENY"
         },
         {
-            "source": "/(.*)",
-            "destination": "/index.html"
+          "key": "X-XSS-Protection",
+          "value": "1; mode=block"
         }
-    ],
-    "headers": [
-        {
-            "source": "/(.*)",
-            "headers": [
-                {
-                    "key": "X-Content-Type-Options",
-                    "value": "nosniff"
-                },
-                {
-                    "key": "X-Frame-Options",
-                    "value": "DENY"
-                },
-                {
-                    "key": "X-XSS-Protection",
-                    "value": "1; mode=block"
-                }
-            ]
-        },
-        {
-            "source": "/(.*\\.png)",
-            "headers": [
-                {
-                    "key": "Cache-Control",
-                    "value": "public, max-age=31536000, immutable"
-                }
-            ]
-        }
-    ],
-    "outputDirectory": "dist"
+      ]
+    }
+  ],
+  "outputDirectory": "dist"
 }

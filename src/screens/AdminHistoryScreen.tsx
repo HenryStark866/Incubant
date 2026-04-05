@@ -225,7 +225,21 @@ export default function AdminHistoryScreen() {
               Bóveda centralizada · {combinedData.length} registros
             </p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2 justify-end">
+            <button
+               onClick={() => window.open('/docs/manual_administrador.pdf', '_blank')}
+               className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-black transition-all ${
+                 isDark ? 'bg-white/5 text-white/60 hover:bg-white/10' : 'bg-gray-100 text-brand-gray hover:bg-gray-200'
+               }`}
+             >
+               <FileText size={14} /> Instructivo Admin
+             </button>
+             <button
+               onClick={() => window.open('/docs/propuesta_mejora.pdf', '_blank')}
+               className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-black transition-all bg-brand-primary/10 text-brand-primary hover:bg-brand-primary/20`}
+             >
+               <FileText size={14} /> Propuesta Mejora
+             </button>
             {photosInFilter > 0 && (
               <button
                 onClick={handleDownloadAll}

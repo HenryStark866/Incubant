@@ -216,6 +216,18 @@ export default function MisEvidenciasScreen({ onBack }: { onBack?: () => void })
           <p className={`text-[11px] font-medium ${isDark ? 'text-white/40' : 'text-gray-500'}`}>
             {operario ? `${operario} · ` : ''}{items.length} archivo{items.length !== 1 ? 's' : ''}
           </p>
+          <div className="mt-2">
+            <button
+              onClick={() => window.open('/docs/manual_operador.pdf', '_blank')}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all ${
+                isDark 
+                  ? 'bg-brand-primary/20 hover:bg-brand-primary/30 text-brand-primary' 
+                  : 'bg-brand-primary/10 hover:bg-brand-primary/20 text-brand-primary'
+              }`}
+            >
+              <FileText size={12} /> Ver Instructivo
+            </button>
+          </div>
         </div>
         <button
           onClick={fetchEvidence}

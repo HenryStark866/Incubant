@@ -421,10 +421,14 @@ export default function AdminHistoryScreen() {
                   {/* Info */}
                   <div className="p-2.5 flex flex-col gap-1 flex-1">
                     <p className={`text-[10px] font-black truncate ${isDark ? 'text-white' : 'text-brand-dark'}`}>
-                      {item.itemType === 'incident' ? (item.titulo || 'Novedad') : machineName}
+                      {item.itemType === 'incident' 
+                        ? (item.titulo || 'Novedad') 
+                        : item.itemType === 'report' 
+                          ? (item.isClosingReport ? 'Cierre de Turno' : `Reporte ${machineName}`)
+                          : machineName}
                     </p>
                     <p className={`text-[9px] font-bold truncate ${isDark ? 'text-white/40' : 'text-brand-gray'}`}>
-                      {item.user?.nombre?.split(' ')[0] || '—'}
+                      {item.user?.nombre?.split(' ')[0] || 'Sistema'}
                     </p>
                     <div className={`flex items-center gap-1 text-[9px] font-bold ${isDark ? 'text-white/30' : 'text-gray-400'}`}>
                       <Calendar size={9} />
@@ -453,15 +457,18 @@ export default function AdminHistoryScreen() {
                       <button
                         onClick={e => {
                           e.stopPropagation();
-                          window.open(item.pdfUrl, '_blank');
+                          if (item.pdfUrl) window.open(item.pdfUrl, '_blank');
                         }}
+                        disabled={!item.pdfUrl}
                         className={`mt-1 flex items-center justify-center gap-1 w-full py-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider transition-colors ${
-                          isDark
-                            ? 'bg-brand-primary/20 hover:bg-brand-primary/30 text-brand-primary'
-                            : 'bg-brand-primary/10 hover:bg-brand-primary/20 text-brand-primary'
+                          !item.pdfUrl 
+                            ? 'bg-gray-100 text-gray-400 opacity-50 cursor-not-allowed'
+                            : isDark
+                              ? 'bg-brand-primary/20 hover:bg-brand-primary/30 text-brand-primary'
+                              : 'bg-brand-primary/10 hover:bg-brand-primary/20 text-brand-primary'
                         }`}
                       >
-                        <FileText size={10} /> Abrir PDF
+                        <FileText size={10} /> {item.pdfUrl ? 'Abrir PDF' : 'Error PDF'}
                       </button>
                     ) : null}
                   </div>

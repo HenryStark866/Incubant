@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { analyzeIncubatorImage } from '../services/vision.service';
-import { generateSummaryPDF } from '../services/pdf.service';
+import { generateSummaryPDF, generateReportPDF } from '../services/pdf.service';
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Singleton de Prisma: reutiliza el cliente global del proceso principal
@@ -151,15 +151,16 @@ export const processMachineReport = async (req: AuthenticatedRequest, res: Respo
       // Generar PDF individual del reporte
       let pdfUrl = '';
       try {
-        const pdfBuffer = await generateSummaryPDF(userName, 'Individual', [{
-          fecha_hora: new Date(),
-          temp_principal_actual: tempPrincipalReal,
-          temp_secundaria_actual: tempAireReal,
-          co2_actual: co2Real,
-          is_na: dbType === 'NACEDORA',
-          observaciones: d.observaciones || '',
-          machine: { tipo: dbType, numero_maquina: machineNumber },
-        }]);
+        const pdfBuffer = await generateReportPDF(
+          { tipo: dbType, numero_maquina: machineNumber },
+          { nombre: userName },
+          {
+            temperature: tempPrincipalReal,
+            humidity: humedadReal,
+            processStatus: isAlarm ? 'ALARMA' : 'NORMAL'
+          },
+          file.buffer
+        );
         const { uploadToSupabase } = await import('../services/supabase_storage.service');
         const pdfResult = await uploadToSupabase(pdfBuffer, userName, 'reports', 'application/pdf');
         pdfUrl = pdfResult.publicUrl;

@@ -147,7 +147,7 @@ export default function RequestsScreen({ onBack }: { onBack: () => void }) {
 
       if (!res.ok) {
         const err = await res.json();
-        setFormError(err.error || 'Error al enviar la solicitud');
+        setFormError(err.details ? `${err.error}: ${err.details}` : (err.error || 'Error al enviar la solicitud'));
         return;
       }
 

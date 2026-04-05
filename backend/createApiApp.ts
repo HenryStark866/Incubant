@@ -599,10 +599,20 @@ export function createApiApp(): Express {
   app.get('/api/reports/closing/request', requireAuthenticatedUser, requestClosingReport);
 
   // ── Session ──────────────────────────────────────────────────────────────
-  app.get('/api/session', (req: AuthenticatedRequest, res) => {
+  app.get('/api/session', async (req: AuthenticatedRequest, res) => {
     if (!req.user) {
       return res.status(401).json({ error: 'No hay sesión activa' });
     }
+
+    // Mantener al usuario "online" actualizando su último acceso (touch)
+    // Se dispara cada 10 seg (heartbeat del frontend)
+    try {
+      const prisma = await getPrismaClient();
+      await prisma.user.update({
+        where: { id: req.user.id },
+        data: { ultimo_acceso: new Date() }
+      }).catch(err => console.warn('[Session Touch] Error:', err.message));
+    } catch { /* ignore */ }
 
     return res.json({ user: req.user });
   });

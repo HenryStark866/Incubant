@@ -135,6 +135,16 @@ export default function SupervisorDashboard() {
     return () => clearInterval(timer);
   }, []);
 
+  // Cambio automático para modo monitor en pantalla
+  useEffect(() => {
+    if (activeTab === 'dashboard' && !selectedMachine && !adminPhotoViewer) {
+      const interval = setInterval(() => {
+        setMachineViewTab(prev => prev === 'incubadora' ? 'nacedora' : 'incubadora');
+      }, 10000); // Cambia cada 10 segundos
+      return () => clearInterval(interval);
+    }
+  }, [activeTab, selectedMachine, adminPhotoViewer]);
+
   // Load pending requests count on mount and via SSE
   useEffect(() => {
     const fetchPending = async () => {

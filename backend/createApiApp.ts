@@ -1284,17 +1284,9 @@ export function createApiApp(): Express {
         if (log) {
           temp = log.temp_principal_actual.toFixed(1);
           
-          // LÓGICA DE PERSISTENCIA DE FOTO:
-          // 1. Debe ser del turno actual.
-          // 2. Debe pertenecer a la misma HORA y DÍA que el reporte más reciente del sistema (ronda actual).
-          const isFromCurrentShift = log.fecha_hora.getTime() >= shiftStartUTC.getTime();
+          // 1. Mostrar siempre la última foto registrada.
+          photoUrl = log.photo_url || null;
           
-          if (isFromCurrentShift) {
-            photoUrl = log.photo_url;
-          } else {
-            photoUrl = null; // Revertir a imagen de "maquina apagada" si no hay datos de este turno
-          }
-
           observaciones = log.observaciones;
           updatedBy = log.user?.nombre || null;
 

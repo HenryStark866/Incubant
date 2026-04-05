@@ -1199,6 +1199,18 @@ export function createApiApp(): Express {
         },
       });
 
+      // Determinar el inicio del turno actual y el tiempo del último reporte global
+      const shiftData = await getCurrentShiftData();
+      const shiftStartUTC = shiftData?.startUTC || new Date(Date.now() - 8 * 60 * 60 * 1000);
+      
+      // Obtener el tiempo del registro más caliente en el sistema para detectar el "ciclo actual"
+      const lastOverallLog = await prisma.hourlyLog.findFirst({
+        orderBy: { fecha_hora: 'desc' },
+        select: { fecha_hora: true }
+      });
+      const maxLogTime = lastOverallLog?.fecha_hora.getTime() || 0;
+      const cycleThreshold = 40 * 60 * 1000; // 40 minutos de margen para considerar que pertenecen al mismo reporte/ronda
+
       const statusData = machines.map((machine) => {
         const log = machine.logs[0];
         let status = 'ok';
@@ -1212,7 +1224,20 @@ export function createApiApp(): Express {
 
         if (log) {
           temp = log.temp_principal_actual.toFixed(1);
-          photoUrl = log.photo_url;
+          
+          // LÓGICA DE PERSISTENCIA DE FOTO:
+          // 1. Debe ser del turno actual.
+          // 2. Si hay una nueva ronda en marcha (maxLogTime > log), no debe ser más vieja que el umbral.
+          const logTime = log.fecha_hora.getTime();
+          const isFromCurrentShift = logTime >= shiftStartUTC.getTime();
+          const isFromCurrentCycle = (maxLogTime - logTime) < cycleThreshold;
+
+          if (isFromCurrentShift && isFromCurrentCycle) {
+            photoUrl = log.photo_url;
+          } else {
+            photoUrl = null; // Reset a imagen de "maquina apagada"
+          }
+
           observaciones = log.observaciones;
           updatedBy = log.user?.nombre || null;
 

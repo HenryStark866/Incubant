@@ -1004,12 +1004,7 @@ export default function SupervisorDashboard() {
                           {/* Imagen de fondo dinámica */}
                           <div className="absolute inset-0">
                             {(() => {
-                              let bgImageUrl = '/imagen1.png';
-                              if (machine.photoUrl) {
-                                bgImageUrl = machine.photoUrl;
-                              } else if (machine.status === 'maintenance') {
-                                bgImageUrl = '/imagen2.png';
-                              }
+                              const bgImageUrl = machine.photoUrl || (machine.status === 'maintenance' ? '/imagen2.png' : '/imagen1.png');
 
                               return (
                                 <img
@@ -1017,15 +1012,13 @@ export default function SupervisorDashboard() {
                                   alt={machine.name}
                                   className="w-full h-full object-cover"
                                   style={{
-                                    filter: machine.status === 'maintenance' ? 'brightness(0.6) grayscale(0.5)' : 'brightness(0.9) contrast(1.1)',
-                                    transform: machine.status !== 'maintenance' && !machine.photoUrl ? 'scale(1.02)' : 'none',
-                                    imageRendering: 'auto',
+                                    filter: machine.status === 'maintenance' ? 'brightness(0.6) grayscale(0.5)' : 'brightness(1) contrast(1.05)',
+                                    transform: 'scale(1.05)',
+                                    imageRendering: '-webkit-optimize-contrast',
                                   }}
                                   // Fallback handling just in case imagen2.png is missing temporarily
                                   onError={(e) => {
-                                    if (bgImageUrl === '/imagen2.png') {
-                                      e.currentTarget.src = '/imagen1.png';
-                                    }
+                                    e.currentTarget.src = '/imagen1.png';
                                   }}
                                 />
                               );
@@ -1091,6 +1084,9 @@ export default function SupervisorDashboard() {
                     alt={adminPhotoViewer.name}
                     className="max-w-full max-h-[72vh] object-contain rounded-xl shadow-2xl"
                     onClick={e => e.stopPropagation()}
+                    onError={(e) => {
+                      e.currentTarget.src = '/imagen1.png';
+                    }}
                   />
                   <div
                     className="mt-4 bg-white/10 backdrop-blur rounded-2xl px-5 py-3 flex flex-wrap items-center gap-4 text-sm text-white max-w-2xl w-full"

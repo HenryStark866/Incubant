@@ -95,11 +95,12 @@ export default function AdminHistoryScreen() {
 
   const [logs, setLogs] = useState<any[]>([]);
   const [incidents, setIncidents] = useState<any[]>([]);
+  const [reports, setReports] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const [searchQuery, setSearchQuery] = useState('');
-  const [filterType, setFilterType] = useState<'all' | 'photos' | 'incidents'>('all');
+  const [filterType, setFilterType] = useState<'all' | 'photos' | 'incidents' | 'reports'>('all');
   const [selectedMachine, setSelectedMachine] = useState('Todas');
   const [selectedPhoto, setSelectedPhoto] = useState<any | null>(null);
   const [downloadingAll, setDownloadingAll] = useState(false);
@@ -113,6 +114,7 @@ export default function AdminHistoryScreen() {
       const data = await res.json();
       setLogs(data.logs || []);
       setIncidents(data.incidents || []);
+      setReports(data.reports || []);
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -172,11 +174,13 @@ export default function AdminHistoryScreen() {
   const combinedData = [
     ...logs.map(l => ({ ...l, itemType: 'log' })),
     ...incidents.map(i => ({ ...i, itemType: 'incident' })),
+    ...reports.map(r => ({ ...r, itemType: 'report' })),
   ].sort((a, b) => new Date(b.fecha_hora).getTime() - new Date(a.fecha_hora).getTime());
 
   const filteredData = combinedData.filter(item => {
     if (filterType === 'photos' && (item.itemType !== 'log' || !item.photo_url)) return false;
     if (filterType === 'incidents' && item.itemType !== 'incident') return false;
+    if (filterType === 'reports' && item.itemType !== 'report') return false;
 
     // Machine filter
     if (selectedMachine !== 'Todas' && item.itemType === 'log') {
@@ -292,7 +296,7 @@ export default function AdminHistoryScreen() {
 
           {/* Type filter */}
           <div className="flex gap-2">
-            {(['all', 'photos', 'incidents'] as const).map(f => (
+            {(['all', 'photos', 'incidents', 'reports'] as const).map(f => (
               <button
                 key={f}
                 onClick={() => setFilterType(f)}
@@ -309,6 +313,7 @@ export default function AdminHistoryScreen() {
                 {f === 'all' && 'Todo'}
                 {f === 'photos' && <><ImageIcon size={12} /> Fotos</>}
                 {f === 'incidents' && <><AlertTriangle size={12} /> Novedades</>}
+                {f === 'reports' && <><Download size={12} /> Reportes PDF</>}
               </button>
             ))}
           </div>
@@ -394,6 +399,8 @@ export default function AdminHistoryScreen() {
                     >
                       {item.itemType === 'incident' ? (
                         <AlertTriangle size={36} className="text-red-400 opacity-60" />
+                      ) : item.itemType === 'report' ? (
+                        <FileText size={36} className="text-brand-primary opacity-80" />
                       ) : (
                         <FileText size={36} className={isDark ? 'text-white/20' : 'text-gray-300'} />
                       )}
@@ -401,10 +408,12 @@ export default function AdminHistoryScreen() {
                         className={`text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded ${
                           item.itemType === 'incident'
                             ? 'bg-red-500/10 text-red-500'
+                            : item.itemType === 'report'
+                            ? 'bg-brand-primary/10 text-brand-primary'
                             : 'bg-gray-100 text-gray-400'
                         }`}
                       >
-                        {item.itemType === 'incident' ? 'Novedad' : 'Sin foto'}
+                        {item.itemType === 'incident' ? 'Novedad' : item.itemType === 'report' ? 'Reporte PDF' : 'Sin foto'}
                       </span>
                     </div>
                   )}
@@ -423,7 +432,7 @@ export default function AdminHistoryScreen() {
                     </div>
 
                     {/* Actions */}
-                    {item.itemType === 'log' && item.photo_url && (
+                    {(item.itemType === 'log' && item.photo_url) ? (
                       <button
                         onClick={e => {
                           e.stopPropagation();
@@ -440,7 +449,21 @@ export default function AdminHistoryScreen() {
                       >
                         <Download size={10} /> Descargar
                       </button>
-                    )}
+                    ) : item.itemType === 'report' ? (
+                      <button
+                        onClick={e => {
+                          e.stopPropagation();
+                          window.open(item.pdfUrl, '_blank');
+                        }}
+                        className={`mt-1 flex items-center justify-center gap-1 w-full py-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider transition-colors ${
+                          isDark
+                            ? 'bg-brand-primary/20 hover:bg-brand-primary/30 text-brand-primary'
+                            : 'bg-brand-primary/10 hover:bg-brand-primary/20 text-brand-primary'
+                        }`}
+                      >
+                        <FileText size={10} /> Abrir PDF
+                      </button>
+                    ) : null}
                   </div>
                 </div>
               );

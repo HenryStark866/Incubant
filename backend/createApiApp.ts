@@ -1238,19 +1238,12 @@ export function createApiApp(): Express {
           // LÓGICA DE PERSISTENCIA DE FOTO:
           // 1. Debe ser del turno actual.
           // 2. Debe pertenecer a la misma HORA y DÍA que el reporte más reciente del sistema (ronda actual).
-          const logDate = log.fecha_hora;
-          const maxDate = lastOverallLog?.fecha_hora || new Date(0);
+          const isFromCurrentShift = log.fecha_hora.getTime() >= shiftStartUTC.getTime();
           
-          const isFromCurrentShift = logDate.getTime() >= shiftStartUTC.getTime();
-          
-          // Comparar buckets de hora: YYYY-MM-DD-HH
-          const logBucket = `${logDate.getUTCFullYear()}-${logDate.getUTCMonth()}-${logDate.getUTCDate()}-${logDate.getUTCHours()}`;
-          const maxBucket = `${maxDate.getUTCFullYear()}-${maxDate.getUTCMonth()}-${maxDate.getUTCDate()}-${maxDate.getUTCHours()}`;
-          
-          if (isFromCurrentShift && logBucket === maxBucket) {
+          if (isFromCurrentShift) {
             photoUrl = log.photo_url;
           } else {
-            photoUrl = null; // Revertir a imagen de "maquina apagada"
+            photoUrl = null; // Revertir a imagen de "maquina apagada" si no hay datos de este turno
           }
 
           observaciones = log.observaciones;
@@ -1963,25 +1956,34 @@ export function createApiApp(): Express {
     try {
       const prisma = await getPrismaClient();
       
-      const logs = await prisma.hourlyLog.findMany({
-        orderBy: { fecha_hora: 'desc' },
-        take: 200,
-        include: {
-          user: { select: { nombre: true, rol: true, turno: true } },
-          machine: true
-        }
-      });
+      const [logs, incidents, reports] = await Promise.all([
+        prisma.hourlyLog.findMany({
+          orderBy: { fecha_hora: 'desc' },
+          take: 200,
+          include: {
+            user: { select: { nombre: true, rol: true, turno: true } },
+            machine: true
+          }
+        }),
+        prisma.incident.findMany({
+          orderBy: { fecha_hora: 'desc' },
+          take: 100,
+          include: {
+            user: { select: { nombre: true, rol: true, turno: true } },
+            machine: true
+          }
+        }),
+        prisma.report.findMany({
+          orderBy: { fecha_hora: 'desc' },
+          take: 100,
+          include: {
+            user: { select: { nombre: true, rol: true, turno: true } },
+            machine: true
+          }
+        })
+      ]);
       
-      const incidents = await prisma.incident.findMany({
-        orderBy: { fecha_hora: 'desc' },
-        take: 50,
-        include: {
-          user: { select: { nombre: true, rol: true, turno: true } },
-          machine: true
-        }
-      });
-      
-      return res.json({ logs, incidents });
+      return res.json({ logs, incidents, reports });
     } catch (err: any) {
       console.error('[Admin History] Error details:', err?.message || err);
       return res.status(500).json({ error: 'Error cargando historial', details: err?.message });

@@ -321,7 +321,7 @@ export const getHistory = async (_req: Request, res: Response) => {
   try {
     const prisma = await getPrisma();
 
-    const [logs, incidents] = await Promise.all([
+    const [logs, incidents, reports] = await Promise.all([
       prisma.hourlyLog.findMany({
         orderBy: { fecha_hora: 'desc' },
         take: 200,
@@ -338,9 +338,17 @@ export const getHistory = async (_req: Request, res: Response) => {
           machine: true,
         },
       }),
+      prisma.report.findMany({
+        orderBy: { fecha_hora: 'desc' },
+        take: 100,
+        include: {
+          user:    { select: { nombre: true, rol: true, turno: true } },
+          machine: true,
+        },
+      }),
     ]);
 
-    return res.status(200).json({ logs, incidents });
+    return res.status(200).json({ logs, incidents, reports });
   } catch (error) {
     console.error('[Report] Error obteniendo historial:', error);
     return res.status(500).json({ error: 'Error interno obteniendo historial' });

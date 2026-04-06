@@ -1328,8 +1328,8 @@ export function createApiApp(): Express {
       const statusData = machines.map((machine) => {
         const log = machine.logs[0];
         let status = 'ok';
-        let temp = 'N/A';
-        let humidity = 'N/A';
+        let temp: string | null = null;
+        let humidity: string | null = null;
         let lastUpdate = 'Sin datos recientes';
         let photoUrl = null;
         let observaciones = null;

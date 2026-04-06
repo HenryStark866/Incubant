@@ -1094,13 +1094,15 @@ export default function SupervisorDashboard() {
                             </span>
                             
                             <div className="flex items-center gap-1.5">
-                              <span 
-                                className={`text-base font-black ${machine.status === 'alarm' ? 'text-red-400' : 'text-brand-primary'}`} 
-                                style={{ textShadow: '0 2px 8px rgba(0,0,0,1)' }}
-                              >
-                                {machine.temp}°F
-                              </span>
-                              {machine.humidity && (
+                              {machine.temp && machine.temp !== 'N/A' && (
+                                <span 
+                                  className={`text-base font-black ${machine.status === 'alarm' ? 'text-red-400' : 'text-brand-primary'}`} 
+                                  style={{ textShadow: '0 2px 8px rgba(0,0,0,1)' }}
+                                >
+                                  {machine.temp}°F
+                                </span>
+                              )}
+                              {machine.humidity && machine.humidity !== 'N/A' && (
                                 <span className="text-[10px] font-bold text-blue-300" style={{ textShadow: '0 1px 4px rgba(0,0,0,1)' }}>
                                   {machine.humidity}%
                                 </span>

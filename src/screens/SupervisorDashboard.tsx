@@ -3,12 +3,9 @@ import {
   Activity, AlertTriangle, Clock, Users, LayoutDashboard,
   Settings, ChevronDown, X, Image as ImageIcon, CheckCircle2,
   Download, Loader2, Egg, Menu, RefreshCw, LogOut, Camera, FileText, FolderOpen,
-  Sun, Moon, Wifi, WifiOff, Monitor, Thermometer, Droplets, Wind, Gauge, ClipboardList
+  Sun, Moon, Wifi, WifiOff, Monitor, Thermometer, Droplets, Wind, ClipboardList
 } from 'lucide-react';
 import { useThemeStore } from '../store/useThemeStore';
-import {
-  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
-} from 'recharts';
 import { useMachineStore } from '../store/useMachineStore';
 import { getApiUrl, apiFetch } from '../lib/api';
 
@@ -50,14 +47,6 @@ export default function SupervisorDashboard() {
   const [machineViewTab, setMachineViewTab] = useState<'incubadora' | 'nacedora'>('incubadora');
   const [selectedMachine, setSelectedMachine] = useState<any | null>(null);
   const [adminPhotoViewer, setAdminPhotoViewer] = useState<any | null>(null);
-  const [chartFilter, setChartFilter] = useState('Ver: Planta Completa');
-  const [chartTimeRange, setChartTimeRange] = useState('24');
-  const [activeMetrics, setActiveMetrics] = useState<Record<string, boolean>>({
-    tempOvoscan: true,
-    tempAire: true,
-    humedad: false,
-    co2: false,
-  });
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
 
@@ -66,7 +55,6 @@ export default function SupervisorDashboard() {
   const isDark = theme === 'dark';
 
   const [machinesData, setMachinesData] = useState<any[]>([]);
-  const [trendsData, setTrendsData] = useState<any[]>([]);
   const [operatorsData, setOperatorsData] = useState<any[]>([]);
   const [machineLogs, setMachineLogs] = useState<any[]>([]);
   const [isLoadingLogs, setIsLoadingLogs] = useState(false);
@@ -312,7 +300,6 @@ export default function SupervisorDashboard() {
         setReportCount(0);
         setShiftClosingCount(0);
         setMachinesData([]);
-        setTrendsData([]);
         alert('Base de datos limpiada exitosamente');
       } else {
         const err = await response.json();
@@ -337,9 +324,8 @@ export default function SupervisorDashboard() {
     try {
       setDbError(null);
       
-      const [statusRes, trendsRes, operatorsRes, summaryRes] = await Promise.allSettled([
+      const [statusRes, operatorsRes, summaryRes] = await Promise.allSettled([
         apiFetch(getApiUrl('/api/dashboard/status')),
-        apiFetch(getApiUrl(`/api/dashboard/trends?machine=${encodeURIComponent(chartFilter)}&hours=${chartTimeRange}`)),
         apiFetch(getApiUrl('/api/dashboard/operators')),
         apiFetch(getApiUrl('/api/dashboard/summary'))
       ]);
@@ -349,10 +335,7 @@ export default function SupervisorDashboard() {
         setMachinesData(Array.isArray(json) ? json : []);
       }
 
-      if (trendsRes.status === 'fulfilled' && trendsRes.value.ok) {
-        const json = await trendsRes.value.json();
-        setTrendsData(Array.isArray(json) ? json : []);
-      }
+
 
       if (operatorsRes.status === 'fulfilled' && operatorsRes.value.ok) {
         const json = await operatorsRes.value.json();
@@ -385,7 +368,7 @@ export default function SupervisorDashboard() {
       setIsLoading(false);
       isFetchingRef.current = false;
     }
-  }, [currentUser, canAccessSupervisor, chartFilter, chartTimeRange]);
+  }, [currentUser, canAccessSupervisor]);
 
   // Polling de datos cada 3 segundos
   useEffect(() => {
@@ -982,7 +965,7 @@ export default function SupervisorDashboard() {
               <section>
                 <div className="flex items-center gap-4 mb-6">
                   <div className="w-1.5 h-8 bg-brand-primary rounded-full"></div>
-                  <h2 className="text-xl font-black text-brand-dark flex items-center gap-3">
+                  <h2 className={`text-xl font-black flex items-center gap-3 ${isDark ? 'text-white' : 'text-brand-dark'}`}>
                     Mapa de Planta en Tiempo Real
                   </h2>
                 </div>
@@ -1030,12 +1013,12 @@ export default function SupervisorDashboard() {
                               setSelectedMachine(machine);
                             }
                           }}
-                          className={`relative p-4 rounded-2xl border-2 flex flex-col items-center justify-center gap-1 transition-all ${
+                          className={`relative p-4 rounded-3xl border-2 flex flex-col items-center justify-end gap-1 transition-all ${
                             machine.photoUrl
-                              ? 'hover:scale-105 active:scale-95 cursor-pointer shadow-lg border-brand-primary/30'
-                              : machine.status === 'alarm' ? 'hover:scale-105 active:scale-95 cursor-pointer shadow-lg border-red-500/50' : 'cursor-default border-transparent'
-                          } overflow-hidden shadow-sm`}
-                          style={{ minHeight: '120px' }}
+                              ? 'hover:scale-105 active:scale-95 cursor-pointer shadow-xl border-brand-primary/40'
+                              : machine.status === 'alarm' ? 'hover:scale-105 active:scale-95 cursor-pointer shadow-xl border-red-500/50' : 'cursor-default border-transparent'
+                          } overflow-hidden shadow-md`}
+                          style={{ minHeight: '160px' }}
                         >
                           {/* Imagen de fondo dinámica */}
                           <div className="absolute inset-0">
@@ -1046,13 +1029,11 @@ export default function SupervisorDashboard() {
                                 <img
                                   src={bgImageUrl}
                                   alt={machine.name}
-                                  className="w-full h-full object-cover"
+                                  className="w-full h-full object-cover transition-transform duration-700 hover:scale-110"
                                   style={{
-                                    filter: machine.status === 'maintenance' ? 'brightness(0.6) grayscale(0.5)' : 'brightness(1) contrast(1.05)',
-                                    transform: 'scale(1.05)',
+                                    filter: machine.status === 'maintenance' && !machine.photoUrl ? 'brightness(0.5) grayscale(1)' : 'brightness(1.1) contrast(1.1)',
                                     imageRendering: '-webkit-optimize-contrast',
                                   }}
-                                  // Fallback handling just in case imagen2.png is missing temporarily
                                   onError={(e) => {
                                     e.currentTarget.src = '/imagen1.png';
                                   }}
@@ -1060,41 +1041,65 @@ export default function SupervisorDashboard() {
                               );
                             })()}
                             
-                            {/* Overlay para legibilidad de textos */}
-                            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
+                            {/* Overlay degradado mejorado para legibilidad total del texto inferior */}
+                            <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/40 to-transparent" />
                             
-                            {/* Borde de estado */}
+                            {/* Borde de estado de alarma */}
                             {machine.status === 'alarm' && (
-                              <div className="absolute inset-0 border-4 border-red-500 animate-pulse pointer-events-none" />
+                              <div className="absolute inset-0 border-[6px] border-red-500 animate-pulse pointer-events-none" />
                             )}
                           </div>
 
-                          <span 
-                            className={`relative z-10 font-black text-sm ${machine.status === 'alarm' ? 'text-red-300 animate-bounce' : 'text-white'}`} 
-                            style={{ textShadow: '0 2px 8px rgba(0,0,0,0.9)' }}
-                          >
-                            {machine.name.replace(/(INC|NAC)-/, '')}
-                          </span>
-                          
-                          <span 
-                            className={`relative z-10 text-[11px] font-black ${machine.status === 'alarm' ? 'text-red-400' : 'text-brand-primary'}`} 
-                            style={{ textShadow: '0 1px 6px rgba(0,0,0,0.8)' }}
-                          >
-                            {machine.temp}°F
-                          </span>
-                          
-                          {machine.data && (
-                            <span 
-                              className="relative z-10 text-[8px] text-white/70 font-black uppercase tracking-wider" 
-                              style={{ textShadow: '0 1px 4px rgba(0,0,0,0.7)' }}
-                            >
-                              {machine.data.lastUpdate || machine.lastUpdate}
-                            </span>
+                          {/* Badge de Foto Real */}
+                          {machine.photoUrl && (
+                            <div className="absolute top-3 left-3 z-20 px-2 py-1 bg-brand-primary/90 backdrop-blur-md rounded-lg flex items-center gap-1.5 shadow-lg border border-white/20">
+                              <Camera size={10} className="text-white" />
+                              <span className="text-[8px] font-black text-white uppercase tracking-tighter">VISTA REAL</span>
+                            </div>
                           )}
 
+                          <div className="relative z-10 w-full flex flex-col items-center text-center">
+                            <span 
+                              className={`font-black text-sm tracking-tight ${machine.status === 'alarm' ? 'text-red-300 animate-pulse' : 'text-white'}`} 
+                              style={{ textShadow: '0 2px 10px rgba(0,0,0,1)' }}
+                            >
+                              {machine.name.replace(/(INC|NAC)-/, '')}
+                            </span>
+                            
+                            <div className="flex items-center gap-1.5">
+                              <span 
+                                className={`text-base font-black ${machine.status === 'alarm' ? 'text-red-400' : 'text-brand-primary'}`} 
+                                style={{ textShadow: '0 2px 8px rgba(0,0,0,1)' }}
+                              >
+                                {machine.temp}°F
+                              </span>
+                              {machine.humidity && (
+                                <span className="text-[10px] font-bold text-blue-300" style={{ textShadow: '0 1px 4px rgba(0,0,0,1)' }}>
+                                  {machine.humidity}%
+                                </span>
+                              )}
+                            </div>
+                            
+                            {machine.data && (
+                              <div className="mt-1 flex flex-col">
+                                <span 
+                                  className="text-[9px] text-white/80 font-black uppercase tracking-wider font-mono" 
+                                  style={{ textShadow: '0 1px 4px rgba(0,0,0,1)' }}
+                                >
+                                  {machine.data.lastUpdate || machine.lastUpdate}
+                                </span>
+                                {machine.updatedBy && (
+                                  <span className="text-[7px] text-white/40 font-bold uppercase" style={{ textShadow: '0 1px 2px rgba(0,0,0,0.5)' }}>
+                                    por {machine.updatedBy.split(' ')[0]}
+                                  </span>
+                                )}
+                              </div>
+                            )}
+                          </div>
+
                           {machine.status === 'alarm' && (
-                            <div className="absolute top-2 right-2 z-20 bg-red-600 text-white p-1 rounded-lg animate-pulse">
-                              <AlertTriangle size={12} />
+                            <div className="absolute top-3 right-3 z-20 bg-red-600 text-white p-1.5 rounded-xl animate-bounce shadow-xl">
+                              <AlertTriangle size={14} />
                             </div>
                           )}
                         </button>
@@ -1152,235 +1157,7 @@ export default function SupervisorDashboard() {
                 </div>
               )}
 
-              <section>
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
-                  <div className="flex items-center gap-4">
-                    <div className="w-1.5 h-8 bg-brand-primary rounded-full"></div>
-                    <h2 className={`text-xl font-black flex items-center gap-3 ${isDark ? 'text-white' : 'text-brand-dark'}`}>
-                      <Gauge size={22} className="text-brand-primary" />
-                      Panel de Gráficos en Tiempo Real
-                    </h2>
-                  </div>
-                  <div className="flex items-center gap-2 flex-wrap">
-                    {/* Time range selector */}
-                    <div className="flex rounded-xl overflow-hidden border border-gray-200">
-                      {(['6', '12', '24', '48'].map(h => (
-                        <button
-                          key={h}
-                          onClick={() => setChartTimeRange(h)}
-                          className={`px-3 py-1.5 text-[10px] font-black transition-all ${chartTimeRange === h
-                            ? 'bg-brand-primary text-white'
-                            : `${isDark ? 'bg-white/5 text-white/40 hover:bg-white/10' : 'bg-white text-gray-500 hover:bg-gray-50'}`
-                          }`}
-                        >
-                          {h}h
-                        </button>
-                      )))}
-                    </div>
-                    {/* Machine selector */}
-                    <div className="relative">
-                      <select
-                        value={chartFilter}
-                        onChange={(e) => setChartFilter(e.target.value)}
-                        className={`appearance-none bg-white border-2 text-brand-dark font-bold py-2 pl-4 pr-10 rounded-xl focus:outline-none focus:border-brand-primary text-sm transition-all shadow-sm ${isDark ? 'border-gray-700' : 'border-gray-100'}`}
-                      >
-                        <option>Ver: Planta Completa</option>
-                        {machinesData.map(m => (
-                          <option key={m.id} value={m.id}>{m.name}</option>
-                        ))}
-                      </select>
-                      <ChevronDown size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-brand-primary pointer-events-none" />
-                    </div>
-                  </div>
-                </div>
 
-                {/* Metric toggles */}
-                <div className="flex flex-wrap gap-2 mb-4">
-                  {[
-                    { key: 'tempOvoscan', label: 'Temp. Principal', icon: Thermometer, color: '#ec4899' },
-                    { key: 'tempAire', label: 'Temp. Aire', icon: Thermometer, color: '#ef4444' },
-                    { key: 'humedad', label: 'Humedad', icon: Droplets, color: '#3b82f6' },
-                    { key: 'co2', label: 'CO2', icon: Wind, color: '#eab308' },
-                  ].map(({ key, label, icon: Icon, color }) => (
-                    <button
-                      key={key}
-                      onClick={() => setActiveMetrics(prev => ({ ...prev, [key]: !prev[key] }))}
-                      className={`flex items-center gap-2 px-3 py-2 rounded-xl text-[11px] font-black transition-all border-2 ${activeMetrics[key]
-                        ? 'text-white shadow-lg'
-                        : `${isDark ? 'bg-white/5 border-white/10 text-white/30' : 'bg-gray-50 border-gray-200 text-gray-400'}`
-                      }`}
-                      style={activeMetrics[key] ? {
-                        backgroundColor: color + '30',
-                        borderColor: color,
-                        color: color,
-                      } : {}}
-                    >
-                      <Icon size={14} />
-                      {label}
-                      {activeMetrics[key] && <span className="ml-1 w-2 h-2 rounded-full" style={{ backgroundColor: color }} />}
-                    </button>
-                  ))}
-                </div>
-
-                {/* Chart */}
-                <div className={`rounded-3xl p-4 sm:p-6 lg:p-8 shadow-sm relative ${isDark ? 'bg-[#0a0f20] border border-white/5' : 'bg-white border border-gray-100'}`}>
-                  <ResponsiveContainer width="100%" height={400}>
-                    <LineChart data={trendsData} margin={{ top: 10, right: 30, bottom: 10, left: 10 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke={isDark ? '#1e293b' : '#f1f5f9'} vertical={false} />
-                      <XAxis
-                        dataKey="time"
-                        stroke={isDark ? '#64748b' : '#94a3b8'}
-                        tick={{ fill: isDark ? '#64748b' : '#94a3b8', fontSize: 11, fontWeight: '600' }}
-                        tickLine={false}
-                        axisLine={{ stroke: isDark ? '#334155' : '#e2e8f0' }}
-                        dy={10}
-                      />
-                      <YAxis
-                        stroke={isDark ? '#64748b' : '#94a3b8'}
-                        tick={{ fill: isDark ? '#64748b' : '#94a3b8', fontSize: 11, fontWeight: '600' }}
-                        tickLine={false}
-                        axisLine={false}
-                        dx={-10}
-                      />
-                      <Tooltip
-                        contentStyle={{
-                          backgroundColor: isDark ? 'rgba(15,23,42,0.95)' : 'rgba(255,255,255,0.95)',
-                          border: `1px solid ${isDark ? '#334155' : '#f1f5f9'}`,
-                          borderRadius: '16px',
-                          boxShadow: '0 10px 25px rgba(0,0,0,0.15)',
-                          padding: '14px',
-                          backdropFilter: 'blur(8px)'
-                        }}
-                        itemStyle={{ fontWeight: '900', fontSize: '12px' }}
-                        labelStyle={{ fontWeight: '900', fontSize: '13px', marginBottom: '6px' }}
-                      />
-                      <Legend
-                        wrapperStyle={{ paddingTop: '16px', fontSize: '11px', fontWeight: '900' }}
-                        iconType="circle"
-                      />
-
-                      {/* Temp Principal - Real line */}
-                      {activeMetrics.tempOvoscan && (
-                        <Line
-                          yAxisId="left"
-                          type="monotone"
-                          dataKey="tempOvoscan"
-                          name="T. Principal (°F)"
-                          stroke="#ec4899"
-                          strokeWidth={3}
-                          dot={{ r: 3, fill: '#ec4899', stroke: '#fff', strokeWidth: 2 }}
-                          activeDot={{ r: 6, fill: '#ec4899', stroke: '#fff', strokeWidth: 3 }}
-                        />
-                      )}
-                      {/* Temp Principal - SP dotted line */}
-                      {activeMetrics.tempOvoscan && (
-                        <Line
-                          yAxisId="left"
-                          type="monotone"
-                          dataKey="tempOvoscanSP"
-                          name="T. Principal SP (°F)"
-                          stroke="#f9a8d4"
-                          strokeWidth={2}
-                          strokeDasharray="6 4"
-                          dot={false}
-                          activeDot={false}
-                        />
-                      )}
-
-                      {/* Temp Aire - Real line */}
-                      {activeMetrics.tempAire && (
-                        <Line
-                          yAxisId="left"
-                          type="monotone"
-                          dataKey="tempAire"
-                          name="T. Aire (°F)"
-                          stroke="#ef4444"
-                          strokeWidth={3}
-                          dot={{ r: 3, fill: '#ef4444', stroke: '#fff', strokeWidth: 2 }}
-                          activeDot={{ r: 6, fill: '#ef4444', stroke: '#fff', strokeWidth: 3 }}
-                        />
-                      )}
-                      {/* Temp Aire - SP dotted line */}
-                      {activeMetrics.tempAire && (
-                        <Line
-                          yAxisId="left"
-                          type="monotone"
-                          dataKey="tempAireSP"
-                          name="T. Aire SP (°F)"
-                          stroke="#fca5a5"
-                          strokeWidth={2}
-                          strokeDasharray="6 4"
-                          dot={false}
-                          activeDot={false}
-                        />
-                      )}
-
-                      {/* Humedad - Real line */}
-                      {activeMetrics.humedad && (
-                        <Line
-                          yAxisId="left"
-                          type="monotone"
-                          dataKey="humedad"
-                          name="Humedad (%)"
-                          stroke="#3b82f6"
-                          strokeWidth={3}
-                          dot={{ r: 3, fill: '#3b82f6', stroke: '#fff', strokeWidth: 2 }}
-                          activeDot={{ r: 6, fill: '#3b82f6', stroke: '#fff', strokeWidth: 3 }}
-                        />
-                      )}
-                      {/* Humedad - SP dotted line */}
-                      {activeMetrics.humedad && (
-                        <Line
-                          yAxisId="left"
-                          type="monotone"
-                          dataKey="humedadSP"
-                          name="Humedad SP (%)"
-                          stroke="#93c5fd"
-                          strokeWidth={2}
-                          strokeDasharray="6 4"
-                          dot={false}
-                          activeDot={false}
-                        />
-                      )}
-
-                      {/* CO2 - Real line */}
-                      {activeMetrics.co2 && (
-                        <Line
-                          yAxisId="left"
-                          type="monotone"
-                          dataKey="co2"
-                          name="CO2 (ppm)"
-                          stroke="#eab308"
-                          strokeWidth={3}
-                          dot={{ r: 3, fill: '#eab308', stroke: '#fff', strokeWidth: 2 }}
-                          activeDot={{ r: 6, fill: '#eab308', stroke: '#fff', strokeWidth: 3 }}
-                        />
-                      )}
-                      {/* CO2 - SP dotted line */}
-                      {activeMetrics.co2 && (
-                        <Line
-                          yAxisId="left"
-                          type="monotone"
-                          dataKey="co2SP"
-                          name="CO2 SP (ppm)"
-                          stroke="#fde047"
-                          strokeWidth={2}
-                          strokeDasharray="6 4"
-                          dot={false}
-                          activeDot={false}
-                        />
-                      )}
-                    </LineChart>
-                  </ResponsiveContainer>
-                  {trendsData.length === 0 && (
-                    <div className="absolute inset-0 flex items-center justify-center flex-col bg-white/80 p-6 text-center">
-                      <AlertTriangle className="text-brand-primary mb-2" size={32} />
-                      <p className="font-bold text-brand-dark">{dbError || "No hay datos de tendencias."}</p>
-                      <p className="text-xs text-brand-gray mt-1">Inténtelo más tarde o verifique la base de datos.</p>
-                    </div>
-                  )}
-                </div>
-              </section>
             </div>
           ) : activeTab === 'history' ? (
             <AdminHistoryScreen />

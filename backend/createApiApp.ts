@@ -105,7 +105,7 @@ async function getPrismaClient() {
   if (!globalForPrisma.prisma) {
     const { PrismaClient } = await import('@prisma/client');
     // Sanitizar la URL: eliminar caracteres ocultos (\r) y espacios
-    const dbUrl = (process.env.DATABASE_URL || '').replace(/\r/g, '').trim();
+    const dbUrl = (process.env.DATABASE_URL || '').replace(/\r/g, '').trim().replace(/^"(.*)"$/, '$1');
     
     globalForPrisma.prisma = new PrismaClient({
       log: process.env.NODE_ENV === 'development' ? ['error', 'warn'] : ['error'],
@@ -662,7 +662,7 @@ export function createApiApp(): Express {
   });
 
   // ── Smart Reporting (Gemini + Drive + PDF) ────────────────────────────────
-  // NOTA: /api/reports/history se registra SOLO AQUÍ abajo (línea ~1847) con la implementación
+  // NOTE: Routes above take priority.
   // inline. No duplicar rutas — Express solo ejecuta el primer match.
   app.post('/api/reports', requireAuthenticatedUser, upload.single('evidence'), processMachineReport);
   app.get('/api/reports/closing/request', requireAuthenticatedUser, requestClosingReport);

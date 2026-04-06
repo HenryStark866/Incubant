@@ -1448,6 +1448,44 @@ export function createApiApp(): Express {
   // ── Dashboard: Global History (Admin History Tab) ────────────────────────
   app.get('/api/reports/history', requireRoles(SUPERVISOR_ROLES), getHistory);
 
+  // ── Temporary Test Endpoint (Populate Photos) ───────────────────────────
+  // Use it only for testing, visit /api/test/populate-photos once
+  app.get('/api/test/populate-photos', async (req, res) => {
+    try {
+      const prisma = await getPrismaClient();
+      const user = await prisma.user.findFirst({ where: { rol: 'OPERARIO' } });
+      if (!user) return res.status(404).send('No se encontró operario para el login de prueba');
+      
+      const machines = await prisma.machine.findMany();
+      const timestamp = new Date(); // Use current time
+      
+      for (const machine of machines) {
+        const seed = Math.floor(Math.random() * 10000);
+        await prisma.hourlyLog.create({
+          data: {
+            machine_id: machine.id,
+            user_id: user.id || 'juan-suaza', // Use a stable ID if possible
+            fecha_hora: timestamp,
+            photo_url: `https://picsum.photos/seed/${machine.id}_${seed}/800/1200`,
+            temp_principal_actual: 37.5 + (Math.random() * 0.4 - 0.2),
+            temp_principal_consigna: 37.5,
+            co2_actual: 1200 + (Math.random() * 200 - 100),
+            co2_consigna: 1200,
+            humedad_actual: 55.0 + (Math.random() * 2 - 1),
+            humedad_consigna: 55.0,
+            temp_secundaria_actual: 36.8 + (Math.random() * 0.4 - 0.2),
+            temp_secundaria_consigna: 36.8,
+            observaciones: `Reporte de prueba automático generado para ${machine.id}`
+          }
+        });
+      }
+      return res.json({ success: true, message: `Se agregaron reportes de prueba con imágenes para ${machines.length} máquinas.`, timestamp: timestamp.toISOString() });
+    } catch (error: any) {
+      console.error('[Test] Error populating photos:', error);
+      return res.status(500).json({ success: false, error: error.message });
+    }
+  });
+
   // ── Dashboard: Trends ────────────────────────────────────────────────────
   app.get('/api/dashboard/trends', requireRoles(SUPERVISOR_ROLES), async (req, res) => {
     try {

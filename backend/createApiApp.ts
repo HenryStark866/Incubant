@@ -1167,9 +1167,11 @@ export function createApiApp(): Express {
         // Nombre descriptivo: "Turno 1 (06:20 - 14:40)"
         currentShiftName = `${shiftData.shift.nombre} (${shiftData.shift.hora_inicio} - ${shiftData.shift.hora_fin})`;
       } else {
-        // Fallback si no hay turnos configurados o no se encuentra uno actual
+        // Fallback robusto: si no hay turnos en DB, usamos el cálculo sintético pero lo guardamos como referencia
         const bogotaComps = getBogotaTimeComponents();
         const hourCO = bogotaComps.hour;
+        const shiftName = getShiftNameFromHour(hourCO);
+        
         let shiftStartHourCO: number;
         if (hourCO >= 6 && hourCO < 14)       shiftStartHourCO = 6;
         else if (hourCO >= 14 && hourCO < 22) shiftStartHourCO = 14;
@@ -1178,11 +1180,10 @@ export function createApiApp(): Express {
         const midnightBogotaUTC = new Date(Date.UTC(bogotaComps.year, bogotaComps.month - 1, bogotaComps.day, 5, 0, 0, 0));
         shiftStartUTC = new Date(midnightBogotaUTC.getTime() + shiftStartHourCO * 60 * 60 * 1000);
         
-        // Ajuste para el turno de 22h si ya es el día siguiente UTC
         if (shiftStartUTC > new Date()) {
           shiftStartUTC = new Date(shiftStartUTC.getTime() - 24 * 60 * 60 * 1000);
         }
-        currentShiftName = getShiftNameFromHour(hourCO);
+        currentShiftName = shiftName;
       }
 
       const reportCount = await prisma.hourlyLog.count({
@@ -1267,7 +1268,7 @@ export function createApiApp(): Express {
         activeOperatorsCount: 0,
         activeOperatorsNames: 'N/A',
         responsibleOperator: '',
-        currentShift: getShiftName(new Date(Date.now() - 5 * 60 * 60 * 1000)),
+        currentShift: getShiftNameFromHour(getBogotaTimeComponents().hour),
         shiftClosingCount: 0,
         onlineOperators: [],
       });
@@ -2372,14 +2373,23 @@ async function getCurrentShiftData(): Promise<{ shift: any; startUTC: Date } | n
 
     const shifts = await prisma.shift.findMany();
     
-    // Buscar el turno que cubre la hora actual (considerando cruces de medianoche)
     const currentShift = shifts.find(s => {
-      if (s.hora_inicio <= s.hora_fin) {
-        return timeStr >= s.hora_inicio && timeStr <= s.hora_fin;
+      // El fin de turno es exclusivo para evitar solapamientos en el badge (ej: a las 14:00 es el siguiente turno)
+      if (s.hora_inicio < s.hora_fin) {
+        return timeStr >= s.hora_inicio && timeStr < s.hora_fin;
       } else {
-        return timeStr >= s.hora_inicio || timeStr <= s.hora_fin;
+        // Casos que cruzan medianoche (ej: 22:00 a 06:00)
+        return timeStr >= s.hora_inicio || timeStr < s.hora_fin;
       }
     });
+
+    // Si no hay un turno exacto (gap de minutos), buscamos el más cercano anterior
+    if (!currentShift && shifts.length > 0) {
+      const sortedShifts = [...shifts].sort((a, b) => a.hora_inicio.localeCompare(b.hora_inicio));
+      // Retornamos el último turno que comenzó antes de la hora actual
+      const lastStarted = [...sortedShifts].reverse().find(s => timeStr >= s.hora_inicio) || sortedShifts[sortedShifts.length - 1];
+      return { shift: lastStarted, startUTC: new Date() /* aproximado para este caso raro */ };
+    }
 
     if (!currentShift) return null;
 

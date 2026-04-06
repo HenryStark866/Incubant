@@ -62,6 +62,7 @@ export default function SupervisorDashboard() {
   const [shiftClosingCount, setShiftClosingCount] = useState(0);
   const [responsibleOperator, setResponsibleOperator] = useState('');
   const [onlineOperators, setOnlineOperators] = useState<any[]>([]);
+  const [allShifts, setAllShifts] = useState<any[]>([]);
   const [summaryData, setSummaryData] = useState<{
     lastReportTime: string | null;
     activeOperatorsCount: number;
@@ -163,8 +164,28 @@ export default function SupervisorDashboard() {
     return () => clearInterval(interval);
   }, []);
 
-  // REEMPLAZADO POR DATOS DE API: El nombre del turno y operarios ahora se obtienen de la tabla de asignaciones
-  const currentShiftName = summaryData.currentShift;
+  // Cálculo LOCAL del turno para sincronizar con la hora real (el reloj del frontend)
+  const currentShiftName = (() => {
+    if (allShifts.length === 0) return summaryData.currentShift;
+    
+    // Obtener hora actual en formato HH:mm según el reloj del frontend
+    const now = currentTime;
+    const bogotaTime = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'America/Bogota',
+      hour: '2-digit', minute: '2-digit', hour12: false
+    }).format(now);
+    
+    const matched = allShifts.find(s => {
+      const start = s.hora_inicio;
+      const end = s.hora_fin;
+      if (start < end) return bogotaTime >= start && bogotaTime < end;
+      return bogotaTime >= start || bogotaTime < end;
+    });
+    
+    if (matched) return `${matched.nombre} (${matched.hora_inicio} - ${matched.hora_fin})`;
+    return summaryData.currentShift;
+  })();
+
   const activeOperatorsList = summaryData.activeOperatorsNames;
 
   const handleTabChange = (tab: 'dashboard' | 'personal' | 'horarios' | 'solicitudes' | 'settings') => {
@@ -324,10 +345,11 @@ export default function SupervisorDashboard() {
     try {
       setDbError(null);
       
-      const [statusRes, operatorsRes, summaryRes] = await Promise.allSettled([
+      const [statusRes, operatorsRes, summaryRes, shiftsRes] = await Promise.allSettled([
         apiFetch(getApiUrl('/api/dashboard/status')),
         apiFetch(getApiUrl('/api/dashboard/operators')),
-        apiFetch(getApiUrl('/api/dashboard/summary'))
+        apiFetch(getApiUrl('/api/dashboard/summary')),
+        apiFetch(getApiUrl('/api/admin/shifts'))
       ]);
 
       if (statusRes.status === 'fulfilled' && statusRes.value.ok) {
@@ -356,6 +378,11 @@ export default function SupervisorDashboard() {
             currentShift: json.currentShift || prev.currentShift
           }));
         }
+      }
+
+      if (shiftsRes.status === 'fulfilled' && shiftsRes.value.ok) {
+        const json = await shiftsRes.value.json();
+        setAllShifts(Array.isArray(json) ? json : []);
       }
 
       if (statusRes.status === 'rejected' && summaryRes.status === 'rejected') {

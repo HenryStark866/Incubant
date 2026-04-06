@@ -1301,7 +1301,10 @@ export function createApiApp(): Express {
           photo_url: { not: null }
         },
         distinct: ['machine_id'],
-        orderBy: { fecha_hora: 'desc' },
+        orderBy: [
+          { machine_id: 'asc' },
+          { fecha_hora: 'desc' }
+        ],
         select: { machine_id: true, photo_url: true }
       });
 

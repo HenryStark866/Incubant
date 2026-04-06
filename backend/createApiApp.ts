@@ -204,11 +204,11 @@ async function getCurrentShiftForUser(userId: string): Promise<string> {
     const user = await prisma.user.findUnique({ where: { id: userId } });
     
     // Obtener hora actual en Colombia para el fallback sintético
-    const nowBogota = new Date(Date.now() - 5 * 60 * 60 * 1000);
-    return user?.turno || getShiftName(nowBogota);
+    const bogotaComps = getBogotaTimeComponents();
+    return user?.turno || getShiftNameFromHour(bogotaComps.hour);
   } catch {
-    const nowBogota = new Date(Date.now() - 5 * 60 * 60 * 1000);
-    return getShiftName(nowBogota);
+    const bogotaComps = getBogotaTimeComponents();
+    return getShiftNameFromHour(bogotaComps.hour);
   }
 }
 
@@ -1168,19 +1168,21 @@ export function createApiApp(): Express {
         currentShiftName = `${shiftData.shift.nombre} (${shiftData.shift.hora_inicio} - ${shiftData.shift.hora_fin})`;
       } else {
         // Fallback si no hay turnos configurados o no se encuentra uno actual
-        const nowBogota = getBogotaNow();
-        const hourCO = nowBogota.getUTCHours();
+        const bogotaComps = getBogotaTimeComponents();
+        const hourCO = bogotaComps.hour;
         let shiftStartHourCO: number;
         if (hourCO >= 6 && hourCO < 14)       shiftStartHourCO = 6;
         else if (hourCO >= 14 && hourCO < 22) shiftStartHourCO = 14;
         else                                   shiftStartHourCO = 22;
 
-        const todayCO = getTodayInBogota(); // Representa medianoche Bogota (en términos de UTC 00:00)
-        shiftStartUTC = new Date(todayCO.getTime() + (shiftStartHourCO + 5) * 60 * 60 * 1000);
+        const midnightBogotaUTC = new Date(Date.UTC(bogotaComps.year, bogotaComps.month - 1, bogotaComps.day, 5, 0, 0, 0));
+        shiftStartUTC = new Date(midnightBogotaUTC.getTime() + shiftStartHourCO * 60 * 60 * 1000);
         
         // Ajuste para el turno de 22h si ya es el día siguiente UTC
-        if (shiftStartUTC > new Date()) shiftStartUTC = new Date(shiftStartUTC.getTime() - 24 * 60 * 60 * 1000);
-        currentShiftName = getShiftName(new Date(Date.now() - 5*60*60*1000));
+        if (shiftStartUTC > new Date()) {
+          shiftStartUTC = new Date(shiftStartUTC.getTime() - 24 * 60 * 60 * 1000);
+        }
+        currentShiftName = getShiftNameFromHour(hourCO);
       }
 
       const reportCount = await prisma.hourlyLog.count({
@@ -2331,31 +2333,42 @@ export function createApiApp(): Express {
   return app;
 }
 
-function getShiftName(date: Date) {
-  const hour = date.getHours();
+function getBogotaTimeComponents(dateInput = new Date()) {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/Bogota',
+    year: 'numeric', month: 'numeric', day: 'numeric',
+    hour: 'numeric', minute: 'numeric', second: 'numeric',
+    hour12: false
+  }).formatToParts(dateInput);
+
+  const p: any = {};
+  for (const part of parts) p[part.type] = part.value;
+  
+  let h = parseInt(p.hour, 10);
+  if (h === 24) h = 0;
+
+  return {
+    year: parseInt(p.year, 10),
+    month: parseInt(p.month, 10),
+    day: parseInt(p.day, 10),
+    hour: h,
+    minute: parseInt(p.minute, 10),
+    second: parseInt(p.second, 10)
+  };
+}
+
+function getShiftNameFromHour(hour: number) {
   if (hour >= 6 && hour < 14) return 'Turno 1';
   if (hour >= 14 && hour < 22) return 'Turno 2';
   return 'Turno 3';
 }
 
-/**
- * Retorna un objeto Date con la hora actual en Colombia (UTC-5)
- * pero desplazado para que sus métodos getUTC* funcionen como locales de Colombia.
- */
-function getBogotaNow(): Date {
-  const colombiaOffset = -5 * 60 * 60 * 1000;
-  return new Date(Date.now() + colombiaOffset);
-}
-
-/**
- * Retorna el turno actual y su hora de inicio (UTC real) para filtrado den BD.
- */
 async function getCurrentShiftData(): Promise<{ shift: any; startUTC: Date } | null> {
   try {
     const prisma = await getPrismaClient();
-    const bogotaNow = getBogotaNow();
-    const timeStr = bogotaNow.getUTCHours().toString().padStart(2, '0') + ':' + 
-                    bogotaNow.getUTCMinutes().toString().padStart(2, '0');
+    const bogotaComps = getBogotaTimeComponents();
+    const timeStr = bogotaComps.hour.toString().padStart(2, '0') + ':' + 
+                    bogotaComps.minute.toString().padStart(2, '0');
 
     const shifts = await prisma.shift.findMany();
     
@@ -2371,18 +2384,17 @@ async function getCurrentShiftData(): Promise<{ shift: any; startUTC: Date } | n
     if (!currentShift) return null;
 
     const [h, m] = currentShift.hora_inicio.split(':').map(Number);
-    const startShiftBogota = getTodayInBogota(); // Medianoche hoy (UTC 00:00)
-    startShiftBogota.setUTCHours(h, m, 0, 0);
+    
+    // Medianoche de Bogota interpretada como UTC (ej: 00:00 Bogota es 05:00 UTC)
+    const midnightBogotaUTC = new Date(Date.UTC(bogotaComps.year, bogotaComps.month - 1, bogotaComps.day, 5, 0, 0, 0));
+    const startShiftUTC = new Date(midnightBogotaUTC.getTime() + (h * 60 + m) * 60 * 1000);
 
-    // Ajuste si el turno cruza medianoche y ya estamos en el día siguiente al inicio
+    // Ajuste si el turno cruza medianoche y estamos ANTES del cruce (ej: 01:00 am pertenece al turno anterior)
     if (currentShift.hora_inicio > currentShift.hora_fin && timeStr <= currentShift.hora_fin) {
-      startShiftBogota.setTime(startShiftBogota.getTime() - 24 * 60 * 60 * 1000);
+      startShiftUTC.setTime(startShiftUTC.getTime() - 24 * 60 * 60 * 1000);
     }
 
-    // Convertir a UTC real sumando el offset (+5h)
-    const startUTC = new Date(startShiftBogota.getTime() + 5 * 60 * 60 * 1000);
-
-    return { shift: currentShift, startUTC };
+    return { shift: currentShift, startUTC: startShiftUTC };
   } catch (error) {
     console.warn('[Shift] Error calculating current shift:', error);
     return null;
@@ -2394,11 +2406,8 @@ async function getCurrentShiftData(): Promise<{ shift: any; startUTC: Date } | n
  * normalizada a la medianoche UTC para coincidir con el almacenamiento de la BD.
  */
 function getTodayInBogota(): Date {
-  // Colombia es UTC-5 siempre
-  const now = new Date();
-  const colombiaOffset = -5 * 60 * 60 * 1000;
-  const colombiaTime = new Date(now.getTime() + colombiaOffset);
-  
-  colombiaTime.setUTCHours(0, 0, 0, 0);
-  return colombiaTime;
+  const bogotaComps = getBogotaTimeComponents();
+  // Retorna la fecha de hoy interpretando la medianoche de Bogotá (00:00) como hora UTC
+  // Dado que Bogotá es UTC-5, esto representa las 05:00 UTC realmente
+  return new Date(Date.UTC(bogotaComps.year, bogotaComps.month - 1, bogotaComps.day, 0, 0, 0, 0));
 }

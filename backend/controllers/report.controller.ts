@@ -116,18 +116,40 @@ export const processMachineReport = async (req: AuthenticatedRequest, res: Respo
     try {
       const prisma = await getPrisma();
 
-      // Resolución de máquina
+      // Resolución de máquina (Soporta B01, N01, INC-01, NAC-01, etc.)
       let dbType: 'INCUBADORA' | 'NACEDORA' = 'INCUBADORA';
       let machineNumber = 1;
-      const match = machineId.match(/(inc|nac)-(\d+)/i);
+      
+      const match = machineId.match(/(inc|nac|b|n)[-:_]?(\d+)/i);
       if (match) {
-        dbType = match[1].toLowerCase() === 'inc' ? 'INCUBADORA' : 'NACEDORA';
+        const prefix = match[1].toLowerCase();
+        dbType = (prefix === 'nac' || prefix === 'n') ? 'NACEDORA' : 'INCUBADORA';
         machineNumber = parseInt(match[2], 10);
       }
 
-      let machine = await prisma.machine.findFirst({ where: { tipo: dbType, numero_maquina: machineNumber } });
+      // Buscar máquina en la BD (todas tienen IDS como B01, N01)
+      const targetId = (dbType === 'INCUBADORA' ? 'B' : 'N') + machineNumber.toString().padStart(2, '0');
+      
+      let machine = await prisma.machine.findFirst({ 
+        where: { id: targetId } 
+      });
+
       if (!machine) {
-        machine = await prisma.machine.create({ data: { tipo: dbType, numero_maquina: machineNumber } });
+        // Fallback: buscar por tipo/numero si el ID no coincide exactamente
+        machine = await prisma.machine.findFirst({ 
+          where: { tipo: dbType, numero_maquina: machineNumber } 
+        });
+      }
+
+      if (!machine) {
+        // Si aún no existe, crearla
+        machine = await prisma.machine.create({ 
+          data: { 
+            id: targetId,
+            tipo: dbType, 
+            numero_maquina: machineNumber 
+          } 
+        });
       }
 
       const d = finalData;

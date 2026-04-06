@@ -1186,8 +1186,11 @@ export function createApiApp(): Express {
         currentShiftName = shiftName;
       }
 
+      // Ajuste de margen para reportes que ocurran exacto en el momento del cambio de turno
+      const shiftStartMarginUTC = new Date(shiftStartUTC.getTime() - 2 * 60 * 1000);
+
       const reportCount = await prisma.hourlyLog.count({
-        where: { fecha_hora: { gte: shiftStartUTC } }
+        where: { fecha_hora: { gte: shiftStartMarginUTC } }
       });
       const lastLog = await prisma.hourlyLog.findFirst({
         orderBy: { fecha_hora: 'desc' },
@@ -1417,14 +1420,14 @@ export function createApiApp(): Express {
           status = 'maintenance'; 
         }
 
-        // Fetch latest photo and its timestamp from the map we built above
         const latestPhoto = photoMap.get(machine.id);
-        photoUrl = latestPhoto?.url || null;
-        photoTimestamp = latestPhoto?.timestamp?.toISOString() || null;
+        // Prioridad: 1. La foto de este log (si es de hace pocos segs). 2. La foto más reciente histórica del mapa.
+        photoUrl = log?.photo_url || latestPhoto?.url || null;
+        photoTimestamp = log?.photo_url ? log.fecha_hora.toISOString() : (latestPhoto?.timestamp?.toISOString() || null);
 
         return {
           id: machine.id,
-          name: machine.id, // Use B01, N01 style IDs as names
+          name: machine.id, 
           type: machine.tipo.toLowerCase(),
           status,
           temp,

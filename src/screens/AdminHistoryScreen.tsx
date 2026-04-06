@@ -474,6 +474,27 @@ export default function AdminHistoryScreen() {
                       {dateStr} · {timeStr}
                     </div>
 
+                    {/* Metrics for Logs */}
+                    {item.itemType === 'log' && (
+                      <div className="mt-1 flex flex-wrap gap-1.5 border-t border-white/5 pt-1.5">
+                        {item.temp_principal_actual != null && (
+                          <div className={`px-1.5 py-0.5 rounded-md text-[8px] font-black ${isDark ? 'bg-white/5 text-brand-primary' : 'bg-brand-primary/10 text-brand-primary'}`}>
+                            {item.temp_principal_actual.toFixed(1)}°
+                          </div>
+                        )}
+                        {item.humedad_actual != null && (
+                          <div className={`px-1.5 py-0.5 rounded-md text-[8px] font-black ${isDark ? 'bg-white/5 text-blue-400' : 'bg-blue-50 text-blue-600'}`}>
+                            {item.humedad_actual.toFixed(1)}%
+                          </div>
+                        )}
+                        {item.co2_actual != null && (
+                          <div className={`px-1.5 py-0.5 rounded-md text-[8px] font-black ${isDark ? 'bg-white/5 text-emerald-400' : 'bg-emerald-50 text-emerald-600'}`}>
+                            {item.co2_actual.toFixed(0)}ppm
+                          </div>
+                        )}
+                      </div>
+                    )}
+
                     {/* Actions */}
                     {(item.itemType === 'log' && item.photo_url) ? (
                       <button

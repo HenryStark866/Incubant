@@ -1235,7 +1235,7 @@ export function createApiApp(): Express {
       }));
 
       const onlineNames = onlineUsers.map(u => u.nombre.split(' ')[0]);
-      const displayNames = onlineNames.length > 0 ? onlineNames.join(', ') : 'N/A';
+      const displayNames = onlineNames.length > 0 ? onlineNames.join(', ') : '';
 
       let shiftClosingCount = 0;
       try {
@@ -1266,7 +1266,7 @@ export function createApiApp(): Express {
         reportCount: 0, 
         lastReportTime: null, 
         activeOperatorsCount: 0,
-        activeOperatorsNames: 'N/A',
+        activeOperatorsNames: '',
         responsibleOperator: '',
         currentShift: getShiftNameFromHour(getBogotaTimeComponents().hour),
         shiftClosingCount: 0,
@@ -1308,10 +1308,12 @@ export function createApiApp(): Express {
           { machine_id: 'asc' },
           { fecha_hora: 'desc' }
         ],
-        select: { machine_id: true, photo_url: true }
+        select: { machine_id: true, photo_url: true, fecha_hora: true }
       });
 
-      const photoMap = new Map(machinePhotos.map(p => [p.machine_id, p.photo_url]));
+      const photoMap = new Map<string, { url: string; timestamp: Date }>(
+        machinePhotos.map(p => [p.machine_id, { url: p.photo_url!, timestamp: p.fecha_hora }])
+      );
 
       // Determinar el inicio del turno actual y el tiempo del último reporte global
       const shiftData = await getCurrentShiftData();
@@ -1332,6 +1334,7 @@ export function createApiApp(): Express {
         let humidity: string | null = null;
         let lastUpdate = 'Sin datos recientes';
         let photoUrl = null;
+        let photoTimestamp = null;
         let observaciones = null;
         let updatedBy = null;
         let data = null;
@@ -1368,9 +1371,8 @@ export function createApiApp(): Express {
             tiempoMinutos = mMatch ? mMatch[1] : '0';
           }
 
-          // Preferir humedad_actual (columna dedicada) sobre el texto parseado
           const humedadColumna = (log as any).humedad_actual;
-          humidity = humedadColumna > 0 ? humedadColumna.toFixed(1) : (humedadRelativa || log.co2_actual.toFixed(1));
+          humidity = (humedadColumna > 0) ? humedadColumna.toFixed(1) : (humedadRelativa || '--');
           const diffMins = Math.floor((Date.now() - log.fecha_hora.getTime()) / 60000);
           data = {
             tiempoIncubacion: { dias: tiempoDias, horas: tiempoHoras, minutos: tiempoMinutos },
@@ -1390,7 +1392,7 @@ export function createApiApp(): Express {
             version: 'v1.2.4-TOTAL-FIX',
             temperaturaReal: tempAire || temp,
             temperaturaSP: log.temp_secundaria_consigna.toFixed(1),
-            humedadReal: humedadRelativa || log.co2_actual.toFixed(1),
+            humedadReal: humedadRelativa || '--',
             humedadSP: log.co2_consigna.toFixed(1),
             co2Real: log.co2_actual.toFixed(1),
             co2SP: log.co2_consigna.toFixed(1),
@@ -1415,8 +1417,10 @@ export function createApiApp(): Express {
           status = 'maintenance'; 
         }
 
-        // Fetch latest photo from the map we built above
-        photoUrl = photoMap.get(machine.id) || null;
+        // Fetch latest photo and its timestamp from the map we built above
+        const latestPhoto = photoMap.get(machine.id);
+        photoUrl = latestPhoto?.url || null;
+        photoTimestamp = latestPhoto?.timestamp?.toISOString() || null;
 
         return {
           id: machine.id,
@@ -1427,6 +1431,7 @@ export function createApiApp(): Express {
           humidity,
           lastUpdate,
           photoUrl,
+          photoTimestamp,
           observaciones,
           updatedBy,
           data,
@@ -1436,45 +1441,12 @@ export function createApiApp(): Express {
       return res.json(statusData);
     } catch (error) {
       console.error('[Dashboard] Error al consultar BD para status:', error);
-      // Fallback: devolver las 36 máquinas predefinidas
-      const defaultMachines = [];
-      for (let i = 1; i <= 24; i++) {
-        defaultMachines.push({
-          id: `inc-${i}`,
-          name: `INC-${i.toString().padStart(2, '0')}`,
-          type: 'incubadora',
-          status: 'maintenance',
-          temp: 'N/A',
-          humidity: 'N/A',
-          lastUpdate: 'Sin datos recientes',
-          photoUrl: null,
-          observaciones: null,
-          updatedBy: null,
-          data: null,
-        });
-      }
-      for (let i = 1; i <= 12; i++) {
-        defaultMachines.push({
-          id: `nac-${i}`,
-          name: `NAC-${i.toString().padStart(2, '0')}`,
-          type: 'nacedora',
-          status: 'maintenance',
-          temp: 'N/A',
-          humidity: 'N/A',
-          lastUpdate: 'Sin datos recientes',
-          photoUrl: null,
-          observaciones: null,
-          updatedBy: null,
-          data: null,
-        });
-      }
-      return res.json(defaultMachines);
+      return res.json([]); // Return empty to allow frontend to handle it cleanly instead of N/A placeholders
     }
   });
 
   // ── Dashboard: Global History (Admin History Tab) ────────────────────────
-  // [NOTA] Esta ruta ha sido movida abajo (línea ~1950) para centralizar
-  // la lógica de reportes y evitar duplicados.
+  app.get('/api/reports/history', requireRoles(SUPERVISOR_ROLES), getHistory);
 
   // ── Dashboard: Trends ────────────────────────────────────────────────────
   app.get('/api/dashboard/trends', requireRoles(SUPERVISOR_ROLES), async (req, res) => {

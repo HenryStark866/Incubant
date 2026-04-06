@@ -68,7 +68,7 @@ export default function SupervisorDashboard() {
     activeOperatorsCount: number;
     activeOperatorsNames: string;
     currentShift: string;
-  }>({ lastReportTime: null, activeOperatorsCount: 0, activeOperatorsNames: 'N/A', currentShift: 'Turno 1' });
+  }>({ lastReportTime: null, activeOperatorsCount: 0, activeOperatorsNames: '', currentShift: 'Fuera de Turno' });
   const [isLoading, setIsLoading] = useState(true);
   const [dbError, setDbError] = useState<string | null>(null);
 
@@ -120,7 +120,7 @@ export default function SupervisorDashboard() {
   const [currentTime, setCurrentTime] = useState(new Date());
 
   useEffect(() => {
-    const timer = setInterval(() => setCurrentTime(new Date()), 30000);
+    const timer = setInterval(() => setCurrentTime(new Date()), 1000);
     return () => clearInterval(timer);
   }, []);
 
@@ -374,7 +374,7 @@ export default function SupervisorDashboard() {
           setSummaryData(prev => ({
             ...prev,
             ...json,
-            activeOperatorsNames: json.activeOperatorsNames || 'N/A',
+            activeOperatorsNames: json.activeOperatorsNames || '',
             currentShift: json.currentShift || prev.currentShift
           }));
         }
@@ -559,7 +559,7 @@ export default function SupervisorDashboard() {
             <div className="px-4 py-1 bg-brand-primary/10 rounded-full border border-brand-primary/20">
               <p className="text-[10px] text-brand-primary font-black uppercase tracking-[0.2em]">Sistema de Monitoreo</p>
             </div>
-            <span className="text-xs text-white/40 block mt-1">v1.2.4-TOTAL-FIX</span>
+            <span className="text-xs text-white/40 block mt-1">v1.2.5-HD-MONITOR</span>
           </div>
         </div>
 
@@ -1030,109 +1030,128 @@ export default function SupervisorDashboard() {
                   <div className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-6 gap-4">
                     {machinesData
                       .filter(m => m.type === machineViewTab)
-                      .map(machine => (
-                        <button
-                          key={machine.id}
-                          onClick={() => {
-                            if (machine.photoUrl) {
-                              setAdminPhotoViewer(machine);
-                            } else if (machine.status === 'alarm') {
-                              setSelectedMachine(machine);
-                            }
-                          }}
-                          className={`relative p-4 rounded-3xl border-2 flex flex-col items-center justify-end gap-1 transition-all ${
-                            machine.photoUrl
-                              ? 'hover:scale-105 active:scale-95 cursor-pointer shadow-xl border-brand-primary/40'
-                              : machine.status === 'alarm' ? 'hover:scale-105 active:scale-95 cursor-pointer shadow-xl border-red-500/50' : 'cursor-default border-transparent'
-                          } overflow-hidden shadow-md`}
-                          style={{ minHeight: '160px' }}
-                        >
-                          {/* Imagen de fondo dinámica */}
-                          <div className="absolute inset-0">
-                            {(() => {
-                              const bgImageUrl = machine.photoUrl || (machine.status === 'maintenance' ? '/imagen2.png' : '/imagen1.png');
+                      .map(machine => {
+                        const statusColors = {
+                          alarm: 'bg-red-500 shadow-red-500/20 text-white',
+                          maintenance: isDark ? 'bg-white/10 text-white/40' : 'bg-gray-100 text-gray-400',
+                          ok: 'bg-green-500 shadow-green-500/20 text-white'
+                        };
+                        const statusLabel = {
+                          alarm: 'ALARMA',
+                          maintenance: 'APAGADA',
+                          ok: 'OK'
+                        };
 
-                              return (
-                                <img
-                                  src={bgImageUrl}
-                                  alt={machine.name}
-                                  className="w-full h-full object-cover transition-transform duration-700 hover:scale-110"
-                                  style={{
-                                    filter: machine.status === 'maintenance' && !machine.photoUrl ? 'brightness(0.5) grayscale(1)' : 'brightness(1.1) contrast(1.1)',
-                                    imageRendering: '-webkit-optimize-contrast',
-                                  }}
-                                  onError={(e) => {
-                                    e.currentTarget.src = '/imagen1.png';
-                                  }}
-                                />
-                              );
-                            })()}
-                            
-                            {/* Overlay degradado mejorado para legibilidad total del texto inferior */}
-                            <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/40 to-transparent" />
-                            
-                            {/* Borde de estado de alarma */}
-                            {machine.status === 'alarm' && (
-                              <div className="absolute inset-0 border-[6px] border-red-500 animate-pulse pointer-events-none" />
-                            )}
-                          </div>
-
-                          {/* Badge de Foto Real */}
-                          {machine.photoUrl && (
-                            <div className="absolute top-3 left-3 z-20 px-2 py-1 bg-brand-primary/90 backdrop-blur-md rounded-lg flex items-center gap-1.5 shadow-lg border border-white/20">
-                              <Camera size={10} className="text-white" />
-                              <span className="text-[8px] font-black text-white uppercase tracking-tighter">VISTA REAL</span>
-                            </div>
-                          )}
-
-                          <div className="relative z-10 w-full flex flex-col items-center text-center">
-                            <span 
-                              className={`font-black text-sm tracking-tight ${machine.status === 'alarm' ? 'text-red-300 animate-pulse' : 'text-white'}`} 
-                              style={{ textShadow: '0 2px 10px rgba(0,0,0,1)' }}
-                            >
-                              {machine.name.replace(/(INC|NAC)-/, '')}
-                            </span>
-                            
-                            <div className="flex items-center gap-1.5">
-                              {machine.temp && machine.temp !== 'N/A' && (
-                                <span 
-                                  className={`text-base font-black ${machine.status === 'alarm' ? 'text-red-400' : 'text-brand-primary'}`} 
-                                  style={{ textShadow: '0 2px 8px rgba(0,0,0,1)' }}
-                                >
-                                  {machine.temp}°F
-                                </span>
-                              )}
-                              {machine.humidity && machine.humidity !== 'N/A' && (
-                                <span className="text-[10px] font-bold text-blue-300" style={{ textShadow: '0 1px 4px rgba(0,0,0,1)' }}>
-                                  {machine.humidity}%
-                                </span>
+                        return (
+                          <button
+                            key={machine.id || machine.name}
+                            onClick={() => setAdminPhotoViewer(machine)}
+                            className={`relative p-4 rounded-[2rem] border-2 flex flex-col items-center justify-end gap-1 transition-all hover:scale-[1.03] active:scale-95 cursor-pointer shadow-2xl group ${
+                              machine.status === 'alarm' 
+                                ? 'border-red-500/50 bg-red-500/5' 
+                                : machine.status === 'maintenance'
+                                  ? 'border-gray-500/20'
+                                  : 'border-brand-primary/20 shadow-brand-primary/5'
+                            } overflow-hidden`}
+                            style={{ minHeight: '210px' }}
+                          >
+                            {/* Imagen de fondo dinámica con resolución mejorada */}
+                            <div className="absolute inset-0">
+                              <img
+                                src={machine.photoUrl || (machine.status === 'maintenance' ? '/imagen2.png' : '/imagen1.png')}
+                                alt={machine.name}
+                                className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110 group-hover:rotate-1"
+                                style={{
+                                  filter: machine.status === 'maintenance' && !machine.photoUrl ? 'brightness(0.4) grayscale(1)' : 'brightness(1.05) contrast(1.1)',
+                                  imageRendering: 'auto',
+                                }}
+                                onError={(e) => {
+                                  e.currentTarget.src = '/imagen1.png';
+                                }}
+                              />
+                              
+                              {/* Overlay degradado ultra-profundo para legibilidad */}
+                              <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/30 to-transparent" />
+                              
+                              {/* Borde animado de estado de alarma */}
+                              {machine.status === 'alarm' && (
+                                <div className="absolute inset-0 border-[6px] border-red-600 animate-pulse pointer-events-none opacity-50" />
                               )}
                             </div>
-                            
-                            {machine.data && (
-                              <div className="mt-1 flex flex-col">
-                                <span 
-                                  className="text-[9px] text-white/80 font-black uppercase tracking-wider font-mono" 
-                                  style={{ textShadow: '0 1px 4px rgba(0,0,0,1)' }}
-                                >
-                                  {machine.data.lastUpdate || machine.lastUpdate}
-                                </span>
-                                {machine.updatedBy && (
-                                  <span className="text-[7px] text-white/40 font-bold uppercase" style={{ textShadow: '0 1px 2px rgba(0,0,0,0.5)' }}>
-                                    por {machine.updatedBy.split(' ')[0]}
-                                  </span>
+
+                            {/* Badge de Vista Real / Última Foto */}
+                            {machine.photoUrl && (
+                              <div className="absolute top-3 left-3 z-20 flex flex-col gap-1 items-start">
+                                <div className="px-2.5 py-1.5 bg-brand-primary/90 backdrop-blur-xl rounded-xl flex items-center gap-1.5 shadow-xl border border-white/20">
+                                  <Camera size={11} className="text-white" />
+                                  <span className="text-[9px] font-black text-white uppercase tracking-tighter">HD VIEW</span>
+                                </div>
+                                {machine.photoTimestamp && (
+                                  <div className="px-2 py-1 bg-black/60 backdrop-blur-md rounded-lg border border-white/10 shadow-sm">
+                                    <span className="text-[8px] font-black text-white/90 uppercase tracking-tighter">
+                                      {new Date(machine.photoTimestamp).toLocaleTimeString('es-CO', { 
+                                        hour: '2-digit', 
+                                        minute: '2-digit',
+                                        hour12: true 
+                                      })}
+                                    </span>
+                                  </div>
                                 )}
                               </div>
                             )}
-                          </div>
 
-                          {machine.status === 'alarm' && (
-                            <div className="absolute top-3 right-3 z-20 bg-red-600 text-white p-1.5 rounded-xl animate-bounce shadow-xl">
-                              <AlertTriangle size={14} />
+                            <div className="relative z-10 w-full flex flex-col items-center text-center gap-0.5">
+                              {/* Badge de Estado Visual Standard */}
+                              <div className={`mb-2 px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest border border-white/10 transition-transform group-hover:scale-110 ${statusColors[machine.status as keyof typeof statusColors] || statusColors.ok}`}>
+                                {statusLabel[machine.status as keyof typeof statusLabel] || statusLabel.ok}
+                              </div>
+
+                              <span 
+                                className={`font-black text-base tracking-tight ${machine.status === 'alarm' ? 'text-red-200' : 'text-white'}`} 
+                                style={{ textShadow: '0 4px 12px rgba(0,0,0,0.8)' }}
+                              >
+                                {machine.name.replace(/(INC|NAC)-/, '')}
+                              </span>
+                              
+                              <div className="flex items-center gap-2">
+                                {machine.temp != null && machine.temp !== 'N/A' && (
+                                  <span 
+                                    className={`text-xl font-black ${machine.status === 'alarm' ? 'text-red-400' : 'text-brand-primary'}`} 
+                                    style={{ textShadow: '0 4px 10px rgba(0,0,0,0.9)' }}
+                                  >
+                                    {machine.temp}°F
+                                  </span>
+                                )}
+                                {machine.humidity != null && machine.humidity !== 'N/A' && (
+                                  <span className="text-xs font-bold text-blue-300" style={{ textShadow: '0 2px 6px rgba(0,0,0,0.8)' }}>
+                                    {machine.humidity}% RH
+                                  </span>
+                                )}
+                              </div>
+                              
+                              <div className="mt-1 flex flex-col gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <span 
+                                  className="text-[9px] text-white/90 font-black uppercase tracking-widest" 
+                                  style={{ textShadow: '0 1px 4px rgba(0,0,0,1)' }}
+                                >
+                                  {machine.data?.lastUpdate || machine.lastUpdate}
+                                </span>
+                                {machine.updatedBy && (
+                                  <span className="text-[8px] text-brand-primary font-bold uppercase tracking-tighter">
+                                    Por {machine.updatedBy}
+                                  </span>
+                                )}
+                              </div>
                             </div>
-                          )}
-                        </button>
-                      ))}
+
+                            {machine.status === 'alarm' && (
+                              <div className="absolute top-3 right-3 z-20 bg-red-600 text-white p-2 rounded-xl animate-bounce shadow-2xl shadow-red-600/40">
+                                <AlertTriangle size={16} />
+                              </div>
+                            )}
+                          </button>
+                        );
+                      })}
                   </div>
                 </div>
               </section>
@@ -1144,49 +1163,87 @@ export default function SupervisorDashboard() {
                   onClick={() => setAdminPhotoViewer(null)}
                 >
                   <button
-                    className="absolute top-5 right-5 p-2.5 bg-white/10 hover:bg-white/20 rounded-xl text-white"
+                    className="absolute top-5 right-5 p-2.5 bg-white/10 hover:bg-white/20 rounded-xl text-white transition-all z-[210]"
                     onClick={() => setAdminPhotoViewer(null)}
                   >
                     <X size={22} />
                   </button>
-                  <img
-                    src={adminPhotoViewer.photoUrl}
-                    alt={adminPhotoViewer.name}
-                    className="max-w-full max-h-[72vh] object-contain rounded-xl shadow-2xl"
-                    onClick={e => e.stopPropagation()}
-                    onError={(e) => {
-                      e.currentTarget.src = '/imagen1.png';
-                    }}
-                  />
-                  <div
-                    className="mt-4 bg-white/10 backdrop-blur rounded-2xl px-5 py-3 flex flex-wrap items-center gap-4 text-sm text-white max-w-2xl w-full"
-                    onClick={e => e.stopPropagation()}
-                  >
-                    <div className="flex flex-col">
-                      <span className="text-[10px] text-white/50 font-black uppercase tracking-widest">Máquina</span>
-                      <span className="font-black">{adminPhotoViewer.name}</span>
+                  
+                  <div className="relative max-w-5xl w-full flex flex-col items-center gap-6" onClick={e => e.stopPropagation()}>
+                    <div className="relative group overflow-hidden rounded-3xl shadow-2xl bg-black/40 border border-white/5">
+                      <img
+                        src={adminPhotoViewer.photoUrl}
+                        alt={adminPhotoViewer.name}
+                        className="max-w-full max-h-[70vh] object-contain"
+                        onError={(e) => {
+                          const target = e.currentTarget as HTMLImageElement;
+                          target.style.display = 'none';
+                          const parent = target.parentElement;
+                          if (parent) {
+                            parent.innerHTML = `
+                              <div class="flex flex-col items-center justify-center p-20 gap-4 text-white/40">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>
+                                <p class="font-black uppercase tracking-widest text-xs">Error al cargar imagen</p>
+                              </div>
+                            `;
+                          }
+                        }}
+                      />
                     </div>
-                    {adminPhotoViewer.lastUpdate && (
+
+                    <div className="bg-[#0a0f20]/90 backdrop-blur-xl border border-white/10 rounded-[2.5rem] px-10 py-8 flex flex-wrap items-center gap-10 shadow-2xl w-full">
                       <div className="flex flex-col">
-                        <span className="text-[10px] text-white/50 font-black uppercase tracking-widest">Actualizado</span>
-                        <span className="font-bold">{adminPhotoViewer.lastUpdate}</span>
+                        <span className="text-[10px] text-brand-primary font-black uppercase tracking-widest mb-1.5">Máquina</span>
+                        <span className="text-3xl font-black text-white">{adminPhotoViewer.name}</span>
                       </div>
-                    )}
-                    <a
-                      href={adminPhotoViewer.photoUrl}
-                      download={`${adminPhotoViewer.name}-${Date.now()}.jpg`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="ml-auto flex items-center gap-2 px-4 py-2 bg-brand-primary hover:bg-brand-primary/80 rounded-xl font-black text-xs uppercase text-white"
-                      onClick={e => e.stopPropagation()}
-                    >
-                      <Download size={14} /> Descargar
-                    </a>
+                      
+                      <div className="flex gap-10 border-l border-white/10 pl-10">
+                        <div className="flex flex-col">
+                          <span className="text-[10px] text-white/40 font-bold uppercase tracking-wider mb-1.5">Temp</span>
+                          <span className="text-2xl font-black text-brand-primary">{adminPhotoViewer.temp || '--'}°F</span>
+                        </div>
+                        <div className="flex flex-col">
+                          <span className="text-[10px] text-white/40 font-bold uppercase tracking-wider mb-1.5">Hum</span>
+                          <span className="text-2xl font-black text-blue-400">{adminPhotoViewer.humidity || '--'} %</span>
+                        </div>
+                        {adminPhotoViewer.data?.co2Real && adminPhotoViewer.data.co2Real !== '--' && (
+                          <div className="flex flex-col">
+                            <span className="text-[10px] text-white/40 font-bold uppercase tracking-wider mb-1.5">CO2</span>
+                            <span className="text-2xl font-black text-emerald-400">{adminPhotoViewer.data.co2Real} ppm</span>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="flex flex-col border-l border-white/10 pl-10">
+                        <span className="text-[10px] text-white/40 font-black uppercase tracking-widest mb-1.5">Última Actualización</span>
+                        <span className="text-sm font-bold text-white/90">{adminPhotoViewer.lastUpdate}</span>
+                        {adminPhotoViewer.updatedBy && (
+                          <span className="text-[9px] text-white/30 font-medium uppercase mt-1">Reportado por {adminPhotoViewer.updatedBy}</span>
+                        )}
+                      </div>
+
+                      <div className="ml-auto flex items-center gap-4">
+                        <a
+                          href={adminPhotoViewer.photoUrl}
+                          download={`${adminPhotoViewer.name}-${Date.now()}.jpg`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-2.5 px-8 py-4 bg-white/5 hover:bg-white/10 border border-white/10 rounded-2xl font-black text-[10px] uppercase text-white transition-all shadow-xl"
+                          onClick={e => e.stopPropagation()}
+                        >
+                          <Download size={18} /> HD
+                        </a>
+                        <button
+                          onClick={() => setAdminPhotoViewer(null)}
+                          className="px-8 py-4 bg-brand-primary hover:bg-brand-primary/80 rounded-2xl font-black text-[10px] uppercase text-white shadow-lg shadow-brand-primary/20 transition-all border border-brand-primary/20"
+                        >
+                          Cerrar
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 </div>
               )}
-
-
             </div>
           ) : activeTab === 'history' ? (
             <AdminHistoryScreen />
@@ -1304,8 +1361,8 @@ export default function SupervisorDashboard() {
                 <div className="p-6 sm:p-8 grid gap-4 sm:grid-cols-2">
                   <div className={`rounded-3xl border p-5 ${isDark ? 'border-white/5 bg-white/5' : 'border-gray-100 bg-gray-50/70'}`}>
                     <p className={`text-[10px] font-black uppercase tracking-[0.2em] mb-3 ${isDark ? 'text-white/40' : 'text-brand-gray'}`}>Usuario autenticado</p>
-                    <p className={`text-xl font-black ${isDark ? 'text-white' : 'text-brand-dark'}`}>{currentUser?.name || 'Sin sesión'}</p>
-                    <p className={`text-sm font-medium mt-1 ${isDark ? 'text-white/40' : 'text-brand-gray'}`}>Rol actual: {currentUser?.role || 'N/A'}</p>
+                    <p className={`text-xl font-black ${isDark ? 'text-white' : 'text-brand-dark'}`}>{currentUser?.name || '—'}</p>
+                    <p className={`text-sm font-medium mt-1 ${isDark ? 'text-white/40' : 'text-brand-gray'}`}>Rol actual: {currentUser?.role || '—'}</p>
                   </div>
                   <div className={`rounded-3xl border p-5 ${isDark ? 'border-white/5 bg-white/5' : 'border-gray-100 bg-gray-50/70'}`}>
                     <p className={`text-[10px] font-black uppercase tracking-[0.2em] mb-3 ${isDark ? 'text-white/40' : 'text-brand-gray'}`}>Reportes en DB</p>
@@ -1353,52 +1410,52 @@ export default function SupervisorDashboard() {
       {/* Machine Detail Modal */}
       {selectedMachine && (
         <div
-          className="fixed inset-0 z-50 bg-black/60 backdrop-blur-md flex items-center justify-center p-3 sm:p-6"
+          className="fixed inset-0 z-[250] bg-black/60 backdrop-blur-md flex items-center justify-center p-3 sm:p-6"
           onClick={() => setSelectedMachine(null)}
         >
           <div
-            className={`${isDark ? 'bg-[#0a0f20] border-white/10' : 'bg-white border-gray-100'} border rounded-3xl w-full max-w-3xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh] animate-in fade-in zoom-in duration-300`}
+            className={`${isDark ? 'bg-[#0a0f20] border-white/10' : 'bg-white border-gray-100'} border rounded-[2.5rem] w-full max-w-4xl shadow-2xl overflow-hidden flex flex-col max-h-[94vh] animate-in fade-in zoom-in duration-300`}
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header */}
-            <div className={`p-5 sm:p-6 flex items-center justify-between gap-4 ${isDark ? 'border-white/5' : 'border-gray-100'} border-b`}>
+            <div className={`p-6 sm:p-8 flex items-center justify-between gap-4 ${isDark ? 'border-white/5' : 'border-gray-100'} border-b`}>
               <div className="flex items-center gap-4">
-                <div className={`w-14 h-14 rounded-2xl flex items-center justify-center font-black text-xl ${selectedMachine.type === 'incubadora' ? 'bg-brand-primary/10 text-brand-primary' : 'bg-blue-500/10 text-blue-500'}`}>
+                <div className={`w-16 h-16 rounded-2xl flex items-center justify-center font-black text-2xl ${selectedMachine.type === 'incubadora' ? 'bg-brand-primary/10 text-brand-primary' : 'bg-blue-500/10 text-blue-500'}`}>
                   {selectedMachine.name.replace(/(INC|NAC)-/, '')}
                 </div>
                 <div>
-                  <h2 className={`text-xl font-black flex items-center gap-3 ${isDark ? 'text-white' : 'text-brand-dark'}`}>
+                  <h2 className={`text-2xl font-black flex items-center gap-3 ${isDark ? 'text-white' : 'text-brand-dark'}`}>
                     {selectedMachine.type === 'incubadora' ? 'Incubadora' : 'Nacedora'} {selectedMachine.name.replace(/(INC|NAC)-/, '')}
-                    <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-wider border ${selectedMachine.status === 'alarm' ? 'bg-red-500/10 text-red-500 border-red-500/20' :
+                    <span className={`px-4 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border ${selectedMachine.status === 'alarm' ? 'bg-red-500/10 text-red-500 border-red-500/20' :
                         selectedMachine.status === 'maintenance' ? `${isDark ? 'bg-white/5 text-white/30 border-white/10' : 'bg-gray-100 text-gray-400 border-gray-200'}` :
                           'bg-green-500/10 text-green-500 border-green-500/20'
                       }`}>
                       {selectedMachine.status === 'alarm' ? 'Alarma' : selectedMachine.status === 'maintenance' ? 'Apagada' : 'Operativa'}
                     </span>
                   </h2>
-                  <p className={`text-xs font-bold mt-1 ${isDark ? 'text-white/40' : 'text-brand-gray'}`}>
+                  <p className={`text-sm font-bold mt-1 ${isDark ? 'text-white/40' : 'text-brand-gray'}`}>
                     {selectedMachine.data?.updatedBy ? `Responsable: ${selectedMachine.data.updatedBy}` : 'Sin reporte reciente'} · {selectedMachine.lastUpdate}
                   </p>
                 </div>
               </div>
               <button
                 onClick={() => setSelectedMachine(null)}
-                className={`p-2.5 rounded-xl transition-all ${isDark ? 'hover:bg-white/10 text-white/40' : 'hover:bg-gray-100 text-gray-400'}`}
+                className={`p-3 rounded-2xl transition-all ${isDark ? 'hover:bg-white/10 text-white/40' : 'hover:bg-gray-100 text-gray-400'}`}
               >
-                <X size={20} />
+                <X size={24} />
               </button>
             </div>
 
-            <div className="overflow-y-auto flex-1 p-5 sm:p-6">
+            <div className="overflow-y-auto flex-1 p-6 sm:p-8">
               {/* UNIFIED SECTION: Datos y Evidencia del Último Reporte */}
-              <h3 className={`text-[10px] font-black uppercase tracking-[0.2em] mb-5 ${isDark ? 'text-brand-primary' : 'text-brand-primary'}`}>
+              <h3 className={`text-[10px] font-black uppercase tracking-[0.2em] mb-6 ${isDark ? 'text-brand-primary' : 'text-brand-primary'}`}>
                 Datos y Evidencia del Último Reporte
               </h3>
 
-              <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+              <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
                 {/* Photo - 2 columns */}
                 <div className="lg:col-span-2">
-                  <div className={`rounded-2xl overflow-hidden relative aspect-[3/4] ${isDark ? 'bg-white/5' : 'bg-gray-100'}`}>
+                  <div className={`rounded-3xl overflow-hidden relative aspect-[3/4] shadow-xl ${isDark ? 'bg-white/5' : 'bg-gray-100'}`}>
                     {selectedMachine.photoUrl ? (
                       (() => {
                         const isBase64 = selectedMachine.photoUrl.startsWith('data:');
@@ -1424,8 +1481,8 @@ export default function SupervisorDashboard() {
                             />
                             {/* Photo footer */}
                             {selectedMachine.data?.updatedBy && (
-                              <div className="absolute bottom-0 inset-x-0 p-3 bg-gradient-to-t from-black/90 via-black/60 to-transparent">
-                                <p className="text-xs text-white font-black">
+                              <div className="absolute bottom-0 inset-x-0 p-4 bg-gradient-to-t from-black/90 via-black/40 to-transparent">
+                                <p className="text-sm text-white font-black">
                                   {selectedMachine.data.updatedBy}
                                 </p>
                                 <p className="text-[11px] text-white/80 font-bold mt-0.5">
@@ -1438,14 +1495,14 @@ export default function SupervisorDashboard() {
                       })()
                     ) : (
                       <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
-                        <ImageIcon size={40} className={isDark ? 'text-white/20' : 'text-gray-300'} />
-                        <p className={`text-xs font-bold ${isDark ? 'text-white/30' : 'text-gray-400'}`}>Sin foto registrada</p>
+                        <ImageIcon size={48} className={isDark ? 'text-white/20' : 'text-gray-300'} />
+                        <p className={`text-sm font-bold ${isDark ? 'text-white/30' : 'text-gray-400'}`}>Sin foto registrada</p>
                       </div>
                     )}
                   </div>
 
                   {/* Date/time + Responsible */}
-                  <div className={`mt-4 rounded-2xl p-4 ${isDark ? 'bg-white/5 border border-white/5' : 'bg-gray-50 border border-gray-100'}`}>
+                  <div className={`mt-6 rounded-3xl p-5 ${isDark ? 'bg-white/5 border border-white/5' : 'bg-gray-50 border border-gray-100'}`}>
                     <div className="flex items-center justify-between">
                       <div>
                         <p className={`text-[9px] font-black uppercase tracking-[0.2em] ${isDark ? 'text-white/40' : 'text-brand-gray'}`}>Fecha y Hora</p>
@@ -1464,17 +1521,17 @@ export default function SupervisorDashboard() {
                 </div>
 
                 {/* Data - 3 columns */}
-                <div className="lg:col-span-3 space-y-4">
+                <div className="lg:col-span-3 space-y-6">
                   {selectedMachine.data ? (
                     <>
                       {/* Parameters Grid */}
-                      <div className={`rounded-2xl overflow-hidden ${isDark ? 'border-white/5' : 'border-gray-100'} border`}>
+                      <div className={`rounded-3xl overflow-hidden ${isDark ? 'border-white/5' : 'border-gray-100'} border`}>
                         <table className="w-full text-sm">
                           <thead className={`${isDark ? 'bg-white/5' : 'bg-gray-50'}`}>
                             <tr>
-                              <th className={`text-left px-4 py-2.5 text-[9px] font-black uppercase tracking-wider ${isDark ? 'text-white/40' : 'text-brand-gray'}`}>Parámetro</th>
-                              <th className={`text-center px-4 py-2.5 text-[9px] font-black uppercase tracking-wider ${isDark ? 'text-white/40' : 'text-brand-gray'}`}>Real</th>
-                              <th className={`text-center px-4 py-2.5 text-[9px] font-black uppercase tracking-wider ${isDark ? 'text-white/40' : 'text-brand-gray'}`}>SP</th>
+                              <th className={`text-left px-5 py-3.5 text-[10px] font-black uppercase tracking-wider ${isDark ? 'text-white/40' : 'text-brand-gray'}`}>Parámetro</th>
+                              <th className={`text-center px-5 py-3.5 text-[10px] font-black uppercase tracking-wider ${isDark ? 'text-white/40' : 'text-brand-gray'}`}>Real</th>
+                              <th className={`text-center px-5 py-3.5 text-[10px] font-black uppercase tracking-wider ${isDark ? 'text-white/40' : 'text-brand-gray'}`}>SP</th>
                             </tr>
                           </thead>
                           <tbody className={`divide-y ${isDark ? 'divide-white/5' : 'divide-gray-50'}`}>
@@ -1493,9 +1550,9 @@ export default function SupervisorDashboard() {
                                 const isAlarm = row.real !== '--' && row.sp !== '--' && Math.abs(Number(row.real) - Number(row.sp)) >= 1.5;
                                 return (
                                   <tr key={i} className={isDark ? 'hover:bg-white/5' : 'hover:bg-gray-50'}>
-                                    <td className={`px-4 py-3 font-bold text-xs ${isDark ? 'text-white/70' : 'text-brand-dark'}`}>{row.name}</td>
-                                    <td className={`px-4 py-3 text-center font-black text-xs ${isAlarm ? 'text-red-500' : isDark ? 'text-white' : 'text-brand-dark'}`}>{row.real}</td>
-                                    <td className={`px-4 py-3 text-center font-bold text-xs ${isDark ? 'text-white/40' : 'text-brand-gray'}`}>{row.sp}</td>
+                                    <td className={`px-5 py-4 font-bold text-sm ${isDark ? 'text-white/70' : 'text-brand-dark'}`}>{row.name}</td>
+                                    <td className={`px-5 py-4 text-center font-black text-sm ${isAlarm ? 'text-red-500' : isDark ? 'text-white' : 'text-brand-dark'}`}>{row.real}</td>
+                                    <td className={`px-5 py-4 text-center font-bold text-sm ${isDark ? 'text-white/40' : 'text-brand-gray'}`}>{row.sp}</td>
                                   </tr>
                                 );
                               });
@@ -1505,11 +1562,11 @@ export default function SupervisorDashboard() {
                       </div>
 
                       {/* Checklist */}
-                      <div className={`rounded-2xl overflow-hidden ${isDark ? 'border-white/5' : 'border-gray-100'} border divide-y ${isDark ? 'divide-white/5' : 'divide-gray-50'}`}>
+                      <div className={`rounded-3xl overflow-hidden ${isDark ? 'border-white/5' : 'border-gray-100'} border divide-y ${isDark ? 'divide-white/5' : 'divide-gray-50'}`}>
                         {selectedMachine.data.tiempoIncubacion && (
-                          <div className={`flex items-center justify-between px-4 py-3 ${isDark ? 'hover:bg-white/5' : 'hover:bg-gray-50'}`}>
-                            <span className={`text-xs font-bold ${isDark ? 'text-white/70' : 'text-brand-dark'}`}>Tiempo de incubación</span>
-                            <span className={`text-xs font-black ${isDark ? 'text-white' : 'text-brand-dark'}`}>
+                          <div className={`flex items-center justify-between px-5 py-4 ${isDark ? 'hover:bg-white/5' : 'hover:bg-gray-50'}`}>
+                            <span className={`text-sm font-bold ${isDark ? 'text-white/70' : 'text-brand-dark'}`}>Tiempo de incubación</span>
+                            <span className={`text-sm font-black ${isDark ? 'text-white' : 'text-brand-dark'}`}>
                               {typeof selectedMachine.data.tiempoIncubacion === 'object'
                                 ? `${selectedMachine.data.tiempoIncubacion.dias || '0'}d ${selectedMachine.data.tiempoIncubacion.horas || '0'}h ${selectedMachine.data.tiempoIncubacion.minutos || '0'}m`
                                 : selectedMachine.data.tiempoIncubacion}
@@ -1517,23 +1574,23 @@ export default function SupervisorDashboard() {
                           </div>
                         )}
                         {selectedMachine.data.volteoNumero && (
-                          <div className={`flex items-center justify-between px-4 py-3 ${isDark ? 'hover:bg-white/5' : 'hover:bg-gray-50'}`}>
-                            <span className={`text-xs font-bold ${isDark ? 'text-white/70' : 'text-brand-dark'}`}>Volteo</span>
-                            <span className={`text-xs font-black ${isDark ? 'text-white' : 'text-brand-dark'}`}>#{selectedMachine.data.volteoNumero} / {selectedMachine.data.volteoPosicion || '--'}</span>
+                          <div className={`flex items-center justify-between px-5 py-4 ${isDark ? 'hover:bg-white/5' : 'hover:bg-gray-50'}`}>
+                            <span className={`text-sm font-bold ${isDark ? 'text-white/70' : 'text-brand-dark'}`}>Volteo</span>
+                            <span className={`text-sm font-black ${isDark ? 'text-white' : 'text-brand-dark'}`}>#{selectedMachine.data.volteoNumero} / {selectedMachine.data.volteoPosicion || '--'}</span>
                           </div>
                         )}
                         {selectedMachine.data.ventiladorPrincipal && (
-                          <div className={`flex items-center justify-between px-4 py-3 ${isDark ? 'hover:bg-white/5' : 'hover:bg-gray-50'}`}>
-                            <span className={`text-xs font-bold ${isDark ? 'text-white/70' : 'text-brand-dark'}`}>Ventilador principal</span>
-                            <span className={`text-xs font-black ${selectedMachine.data.ventiladorPrincipal === 'Si' ? 'text-green-500' : 'text-red-500'}`}>
+                          <div className={`flex items-center justify-between px-5 py-4 ${isDark ? 'hover:bg-white/5' : 'hover:bg-gray-50'}`}>
+                            <span className={`text-sm font-bold ${isDark ? 'text-white/70' : 'text-brand-dark'}`}>Ventilador principal</span>
+                            <span className={`text-sm font-black ${selectedMachine.data.ventiladorPrincipal === 'Si' ? 'text-green-500' : 'text-red-500'}`}>
                               {selectedMachine.data.ventiladorPrincipal === 'Si' ? '✓ OK' : '✗ FAIL'}
                             </span>
                           </div>
                         )}
                         {selectedMachine.data.alarma && (
-                          <div className={`flex items-center justify-between px-4 py-3 ${selectedMachine.data.alarma === 'Si' ? (isDark ? 'bg-red-500/5' : 'bg-red-50') : ''}`}>
-                            <span className={`text-xs font-bold ${isDark ? 'text-white/70' : 'text-brand-dark'}`}>Alarma</span>
-                            <span className={`text-xs font-black ${selectedMachine.data.alarma === 'Si' ? 'text-red-500' : 'text-green-500'}`}>
+                          <div className={`flex items-center justify-between px-5 py-4 ${selectedMachine.data.alarma === 'Si' ? (isDark ? 'bg-red-500/5' : 'bg-red-50') : ''}`}>
+                            <span className={`text-sm font-bold ${isDark ? 'text-white/70' : 'text-brand-dark'}`}>Alarma</span>
+                            <span className={`text-sm font-black ${selectedMachine.data.alarma === 'Si' ? 'text-red-500' : 'text-green-500'}`}>
                               {selectedMachine.data.alarma === 'Si' ? '⚠ ACTIVA' : '✓ Inactiva'}
                             </span>
                           </div>
@@ -1542,17 +1599,17 @@ export default function SupervisorDashboard() {
 
                       {/* Observaciones */}
                       <div>
-                        <h4 className={`text-[9px] font-black uppercase tracking-[0.2em] mb-2 ${isDark ? 'text-white/40' : 'text-brand-gray'}`}>Observaciones</h4>
-                        <div className={`rounded-2xl p-4 text-sm font-medium leading-relaxed ${isDark ? 'bg-white/5 text-white/70 border border-white/5' : 'bg-gray-50 text-brand-dark border border-gray-100'}`}>
+                        <h4 className={`text-[10px] font-black uppercase tracking-[0.2em] mb-3 ${isDark ? 'text-white/40' : 'text-brand-gray'}`}>Observaciones</h4>
+                        <div className={`rounded-3xl p-5 text-sm font-medium leading-relaxed shadow-inner ${isDark ? 'bg-white/5 text-white/70 border border-white/5' : 'bg-gray-50 text-brand-dark border border-gray-100'}`}>
                           {selectedMachine.data.observaciones || 'Sin novedad'}
                         </div>
                       </div>
                     </>
                   ) : (
-                    <div className={`flex flex-col items-center justify-center py-16 text-center ${isDark ? 'text-white/30' : 'text-gray-400'}`}>
-                      <FileText size={40} className="mb-4 opacity-40" />
-                      <p className="text-sm font-bold">Sin datos de reporte</p>
-                      <p className={`text-xs mt-1 ${isDark ? 'text-white/20' : 'text-gray-300'}`}>El operario aún no ha registrado datos</p>
+                    <div className={`flex flex-col items-center justify-center py-20 text-center ${isDark ? 'text-white/30' : 'text-gray-400'}`}>
+                      <FileText size={64} className="mb-4 opacity-40" />
+                      <p className="text-base font-black">Sin datos de reporte</p>
+                      <p className={`text-sm mt-1 ${isDark ? 'text-white/20' : 'text-gray-300'}`}>El operario aún no ha registrado datos para este periodo</p>
                     </div>
                   )}
                 </div>
@@ -1561,7 +1618,6 @@ export default function SupervisorDashboard() {
           </div>
         </div>
       )}
-
     </div>
   );
 }

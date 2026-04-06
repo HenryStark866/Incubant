@@ -110,13 +110,28 @@ export default function AdminHistoryScreen() {
     setError(null);
     try {
       const res = await apiFetch(getApiUrl('/api/reports/history'));
-      if (!res.ok) throw new Error('Error al obtener el historial');
+      const contentType = res.headers.get('content-type');
+      
+      if (!res.ok) {
+        throw new Error(`Error ${res.status}: Fallo al conectar con el servidor.`);
+      }
+      
+      if (!contentType || !contentType.includes('application/json')) {
+        const text = await res.text();
+        console.error('Expected JSON, got:', text.slice(0, 500));
+        throw new Error('El servidor devolvió un formato incorrecto (HTML). Verifique la ruta API.');
+      }
+      
       const data = await res.json();
       setLogs(data.logs || []);
       setIncidents(data.incidents || []);
       setReports(data.reports || []);
     } catch (err: any) {
-      setError(err.message);
+      console.error('[History] Fetch failed:', err);
+      setError(err.message === 'Unexpected token < in JSON at position 0' 
+        ? 'Error de ruta: El servidor devolvió una página HTML en lugar de datos JSON.' 
+        : err.message
+      );
     } finally {
       setLoading(false);
     }
@@ -344,10 +359,20 @@ export default function AdminHistoryScreen() {
             </p>
           </div>
         ) : error ? (
-          <div className="flex flex-col items-center justify-center h-60 gap-4 text-center">
-            <AlertTriangle className="text-red-500" size={32} />
-            <p className="font-bold text-red-500">{error}</p>
-          </div>
+          <div className="flex-1 flex flex-col items-center justify-center p-8 text-center bg-red-500/5 rounded-3xl border border-red-500/10">
+          <AlertTriangle size={64} className="text-red-500 mb-4 opacity-40" />
+          <h3 className="text-lg font-black text-red-500 mb-2">Error de Sincronización</h3>
+          <p className="max-w-md text-sm font-medium text-red-500/80 mb-6 leading-relaxed">
+            {error} <br/>
+            <span className="text-xs opacity-60">Esto sucede si el servidor de reportes no responde con los datos esperados (JSON).</span>
+          </p>
+          <button
+            onClick={fetchHistory}
+            className="flex items-center gap-2 px-6 py-3 bg-red-500 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-red-600 transition-all shadow-lg active:scale-95"
+          >
+            <RefreshCw size={16} /> Reintentar Conexión
+          </button>
+        </div>
         ) : filteredData.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-60 gap-4 text-center">
             <FileText className={isDark ? 'text-white/20' : 'text-gray-300'} size={48} />

@@ -135,11 +135,25 @@ export default function SupervisorDashboard() {
     return () => clearInterval(timer);
   }, []);
 
-  // Cambio automático para modo monitor en pantalla
+  const dashboardContentRef = useRef<HTMLDivElement>(null);
+
+  // Cambio automático y auto-scroll para modo monitor en pantalla
   useEffect(() => {
     if (activeTab === 'dashboard' && !selectedMachine && !adminPhotoViewer) {
       const interval = setInterval(() => {
         setMachineViewTab(prev => prev === 'incubadora' ? 'nacedora' : 'incubadora');
+        
+        // Auto-scroll vertical si hay desbordamiento (útil para móviles en monitor)
+        if (dashboardContentRef.current) {
+          const container = dashboardContentRef.current;
+          const isAtBottom = container.scrollHeight - container.scrollTop <= container.clientHeight + 50;
+          
+          if (isAtBottom) {
+            container.scrollTo({ top: 0, behavior: 'smooth' });
+          } else {
+            container.scrollBy({ top: 300, behavior: 'smooth' });
+          }
+        }
       }, 10000); // Cambia cada 10 segundos
       return () => clearInterval(interval);
     }
@@ -929,7 +943,16 @@ export default function SupervisorDashboard() {
                   </div>
                 </div>
 
-                  {/* Reportes horarios + cierres */}
+                {/* Monitoreo en tiempo real indicación */}
+                <div>
+                  <p className={`text-[7px] uppercase font-black tracking-wider leading-none mb-0.5 ${isDark ? 'text-white/30' : 'text-brand-gray'}`}>Monitor</p>
+                  <div className="flex items-center gap-1.5 bg-green-500/10 px-2 py-0.5 rounded-full">
+                    <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
+                    <span className="text-[9px] font-black uppercase text-green-500 tracking-tighter">Activo</span>
+                  </div>
+                </div>
+
+                {/* Reportes horarios + cierres */}
                 <div>
                   <p className={`text-[7px] uppercase font-black tracking-wider leading-none mb-0.5 ${isDark ? 'text-white/30' : 'text-brand-gray'}`}>Reportes turno</p>
                   <div className="flex items-center gap-2">
@@ -950,7 +973,10 @@ export default function SupervisorDashboard() {
           </div>
         </header>
 
-        <div className={`flex-1 overflow-auto p-4 sm:p-6 lg:p-10 ${isDark ? 'bg-[#060b18]' : 'bg-gray-50/30'}`}>
+        <div 
+          ref={dashboardContentRef}
+          className={`flex-1 overflow-auto p-4 sm:p-6 lg:p-10 ${isDark ? 'bg-[#060b18]' : 'bg-gray-50/30'}`}
+        >
           {activeTab === 'dashboard' ? (
             <div className="space-y-8 lg:space-y-10">
               <section>

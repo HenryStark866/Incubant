@@ -140,7 +140,10 @@ async function seedDatabase() {
   }
 
   // Ensure some machines exist for testing
-  const machineIds = ['B01', 'B02', 'B03', 'N01', 'N02'];
+  const machineIds = [];
+  for (let i=1; i<=24; i++) machineIds.push(`B${i.toString().padStart(2, '0')}`);
+  for (let i=1; i<=12; i++) machineIds.push(`N${i.toString().padStart(2, '0')}`);
+
   for (const mid of machineIds) {
     await prisma.machine.upsert({
       where: { id: mid },
@@ -526,33 +529,28 @@ async function seedMachines() {
     const prisma = await getPrismaClient();
     let created = 0;
     for (let i = 1; i <= 24; i++) {
+      const id = `B${i.toString().padStart(2, '0')}`;
       await prisma.machine.upsert({
-        where: { id: `fixed-inc-${i}` }, // Using a stable ID or findFirst
+        where: { id }, 
         update: {},
         create: {
-          id: `fixed-inc-${i}`,
+          id,
           tipo: 'INCUBADORA',
           numero_maquina: i,
         },
-      }).catch(async () => {
-        // Fallback if ID strategy fails, use findFirst + create
-        const exists = await prisma.machine.findFirst({ where: { tipo: 'INCUBADORA', numero_maquina: i } });
-        if (!exists) await prisma.machine.create({ data: { tipo: 'INCUBADORA', numero_maquina: i } });
       });
       created++;
     }
     for (let i = 1; i <= 12; i++) {
+      const id = `N${i.toString().padStart(2, '0')}`;
       await prisma.machine.upsert({
-        where: { id: `fixed-nac-${i}` },
+        where: { id },
         update: {},
         create: {
-          id: `fixed-nac-${i}`,
+          id,
           tipo: 'NACEDORA',
           numero_maquina: i,
         },
-      }).catch(async () => {
-        const exists = await prisma.machine.findFirst({ where: { tipo: 'NACEDORA', numero_maquina: i } });
-        if (!exists) await prisma.machine.create({ data: { tipo: 'NACEDORA', numero_maquina: i } });
       });
       created++;
     }
@@ -600,6 +598,43 @@ export function createApiApp(): Express {
   // ── Health Check ──────────────────────────────────────────────────────────
   app.get('/api/health', (_req, res) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
+  });
+
+  // ── Admin History Endpoint (Moved UP for priority) ─────────────────────────
+  app.get('/api/reports/history', requireAuthenticatedUser, async (req, res) => {
+    try {
+      const prisma = await getPrismaClient();
+      const [logs, incidents, reports] = await Promise.all([
+        prisma.hourlyLog.findMany({
+          orderBy: { fecha_hora: 'desc' },
+          take: 200,
+          include: {
+            user: { select: { nombre: true, rol: true, turno: true } },
+            machine: true
+          }
+        }),
+        prisma.incident.findMany({
+          orderBy: { fecha_hora: 'desc' },
+          take: 100,
+          include: {
+            user: { select: { nombre: true, rol: true, turno: true } },
+            machine: true
+          }
+        }),
+        prisma.report.findMany({
+          orderBy: { fecha_hora: 'desc' },
+          take: 100,
+          include: {
+            user: { select: { nombre: true, rol: true, turno: true } },
+            machine: true
+          }
+        })
+      ]);
+      return res.json({ logs, incidents, reports });
+    } catch (err: any) {
+      console.error('[Admin History] Error details:', err?.message || err);
+      return res.status(500).json({ error: 'Error cargando historial', details: err?.message });
+    }
   });
 
   // ── Admin: Seed Operations ───────────────────────────────────────────────
@@ -1258,6 +1293,20 @@ export function createApiApp(): Express {
         },
       });
 
+      // Optimization: Fetch the latest photo for each machine independently 
+      // because the most recent log might not be the one with the photo.
+      const machinePhotos = await prisma.hourlyLog.findMany({
+        where: {
+          machine_id: { in: machines.map(m => m.id) },
+          photo_url: { not: null }
+        },
+        distinct: ['machine_id'],
+        orderBy: { fecha_hora: 'desc' },
+        select: { machine_id: true, photo_url: true }
+      });
+
+      const photoMap = new Map(machinePhotos.map(p => [p.machine_id, p.photo_url]));
+
       // Determinar el inicio del turno actual y el tiempo del último reporte global
       const shiftData = await getCurrentShiftData();
       const shiftStartUTC = shiftData?.startUTC || new Date(Date.now() - 8 * 60 * 60 * 1000);
@@ -1360,9 +1409,12 @@ export function createApiApp(): Express {
           status = 'maintenance'; 
         }
 
+        // Fetch latest photo from the map we built above
+        photoUrl = photoMap.get(machine.id) || null;
+
         return {
           id: machine.id,
-          name: `${machine.tipo === 'INCUBADORA' ? 'INC' : 'NAC'}-${machine.numero_maquina.toString().padStart(2, '0')}`,
+          name: machine.id, // Use B01, N01 style IDs as names
           type: machine.tipo.toLowerCase(),
           status,
           temp,
@@ -1990,46 +2042,7 @@ export function createApiApp(): Express {
     return res.json({ message: `${predefinedUsers.length} usuarios sincronizados.` });
   });
 
-  // ── Admin History Endpoint ─────────────────────────────────────────────────
-  // Nota: esta es la ÚNICA definición de GET /api/reports/history en la app.
-  // La importación del controller (getHistory) fue eliminada de la doble-ruta.
-  app.get('/api/reports/history', requireAuthenticatedUser, async (req, res) => {
-    try {
-      const prisma = await getPrismaClient();
-      
-      const [logs, incidents, reports] = await Promise.all([
-        prisma.hourlyLog.findMany({
-          orderBy: { fecha_hora: 'desc' },
-          take: 200,
-          include: {
-            user: { select: { nombre: true, rol: true, turno: true } },
-            machine: true
-          }
-        }),
-        prisma.incident.findMany({
-          orderBy: { fecha_hora: 'desc' },
-          take: 100,
-          include: {
-            user: { select: { nombre: true, rol: true, turno: true } },
-            machine: true
-          }
-        }),
-        prisma.report.findMany({
-          orderBy: { fecha_hora: 'desc' },
-          take: 100,
-          include: {
-            user: { select: { nombre: true, rol: true, turno: true } },
-            machine: true
-          }
-        })
-      ]);
-      
-      return res.json({ logs, incidents, reports });
-    } catch (err: any) {
-      console.error('[Admin History] Error details:', err?.message || err);
-      return res.status(500).json({ error: 'Error cargando historial', details: err?.message });
-    }
-  });
+  // Registrado arriba para prioridad.
 
   // ==========================================================================
   // SOLICITUDES Y PERMISOS (LeaveRequest)

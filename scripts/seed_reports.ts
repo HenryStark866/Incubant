@@ -11,12 +11,12 @@ async function seedReports() {
   
   const prisma = new PrismaClient();
   const userName = 'Admin Seed';
-  const userId = '00000000-0000-0000-0000-000000000000'; // Fallback
+  const userId = 'admin'; // Valid user ID from predefinedUsers
   
   // 1. Ensure machine
-  let machine = await prisma.machine.findFirst({ where: { tipo: 'INCUBADORA', numero_maquina: 1 } });
+  let machine = await prisma.machine.findFirst({ where: { id: 'B01' } });
   if (!machine) {
-    machine = await prisma.machine.create({ data: { tipo: 'INCUBADORA', numero_maquina: 1 } });
+    machine = await prisma.machine.create({ data: { id: 'B01', tipo: 'INCUBADORA', numero_maquina: 1 } });
   }
 
   // 1. Upload photo 

@@ -46,10 +46,9 @@ async function startServer() {
   // Database connectivity health check
   app.get('/api/health-db', async (_req, res) => {
     try {
-      const { PrismaClient } = await import('@prisma/client');
-      const prisma = new PrismaClient();
+      const { getPrismaClient } = await import('./backend/prisma');
+      const prisma = await getPrismaClient();
       await prisma.$queryRaw`SELECT 1`;
-      await prisma.$disconnect();
       res.status(200).json({ 
         status: 'ok', 
         database: 'connected', 

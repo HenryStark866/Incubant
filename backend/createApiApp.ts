@@ -8,6 +8,7 @@ import type { PrismaClient } from '@prisma/client';
 
 import { processMachineReport, requestClosingReport, getHistory } from './controllers/report.controller';
 import { seedShifts } from './controllers/admin.controller';
+import { getPrismaClient } from './prisma';
 import { uploadToSupabase } from './services/supabase_storage.service';
 
 type UserRole = 'OPERARIO' | 'SUPERVISOR' | 'JEFE';
@@ -97,27 +98,7 @@ const predefinedUsers: PredefinedUser[] = [
 
 // ==========================================================================
 // PRISMA CLIENT & DB INIT
-const globalForPrisma = globalThis as typeof globalThis & {
-  prisma?: PrismaClient;
-};
 
-export async function getPrismaClient() {
-  if (!globalForPrisma.prisma) {
-    const { PrismaClient } = await import('@prisma/client');
-    // Sanitizar la URL: eliminar caracteres ocultos (\r) y espacios
-    const dbUrl = (process.env.DATABASE_URL || '').replace(/\r/g, '').trim().replace(/^"(.*)"$/, '$1');
-    
-    globalForPrisma.prisma = new PrismaClient({
-      log: process.env.NODE_ENV === 'development' ? ['error', 'warn'] : ['error'],
-      datasources: {
-        db: {
-          url: dbUrl,
-        },
-      },
-    });
-  }
-  return globalForPrisma.prisma;
-}
 
 // Helper to seed database from predefined users
 async function seedDatabase() {
@@ -125,18 +106,26 @@ async function seedDatabase() {
   console.log('[Seed] Initializing database...');
   
   for (const user of predefinedUsers) {
-    await prisma.user.upsert({
-      where: { id: user.id },
-      update: { nombre: user.nombre, rol: user.rol, turno: user.turno, pin_acceso: user.pin_acceso },
-      create: {
-        id: user.id,
-        nombre: user.nombre,
-        pin_acceso: user.pin_acceso,
-        rol: user.rol,
-        turno: user.turno,
-        estado: 'Activo'
+    try {
+      await prisma.user.upsert({
+        where: { id: user.id },
+        update: { nombre: user.nombre, rol: user.rol, turno: user.turno, pin_acceso: user.pin_acceso },
+        create: {
+          id: user.id,
+          nombre: user.nombre,
+          pin_acceso: user.pin_acceso,
+          rol: user.rol,
+          turno: user.turno,
+          estado: 'Activo'
+        }
+      });
+    } catch (err: any) {
+      if (err.code === 'P2002') {
+        console.warn(`[Seed] User ${user.nombre} (${user.id}) saltado: conflicto de PIN único.`);
+      } else {
+        console.error(`[Seed] Error sembrando usuario ${user.nombre}:`, err.message);
       }
-    });
+    }
   }
 
   // Ensure some machines exist for testing
@@ -145,17 +134,21 @@ async function seedDatabase() {
   for (let i=1; i<=12; i++) machineIds.push(`N${i.toString().padStart(2, '0')}`);
 
   for (const mid of machineIds) {
-    await prisma.machine.upsert({
-      where: { id: mid },
-      update: {},
-      create: {
-        id: mid,
-        tipo: mid.startsWith('B') ? 'INCUBADORA' : 'NACEDORA',
-        numero_maquina: parseInt(mid.substring(1))
-      }
-    });
+    try {
+      await prisma.machine.upsert({
+        where: { id: mid },
+        update: {},
+        create: {
+          id: mid,
+          tipo: mid.startsWith('B') ? 'INCUBADORA' : 'NACEDORA',
+          numero_maquina: parseInt(mid.substring(1))
+        }
+      });
+    } catch (err: any) {
+      console.error(`[Seed] Error sembrando máquina ${mid}:`, err.message);
+    }
   }
-  console.log('[Seed] Database seeded successfully.');
+  console.log('[Seed] Database sync process finished.');
 }
 
 // ==========================================================================
@@ -500,75 +493,6 @@ async function resolveDatabaseMachine(machine: SubmittedMachine) {
 // ==========================================================================
 // SEED - Poblar la BD con los usuarios predefinidos
 // ==========================================================================
-async function seedPredefinedUsers() {
-  try {
-    const prisma = await getPrismaClient();
-    for (const u of predefinedUsers) {
-      try {
-        await prisma.user.upsert({
-          where: { id: u.id },
-          update: {
-            nombre: u.nombre,
-            rol: u.rol,
-            turno: u.turno,
-          },
-          create: {
-            id: u.id,
-            nombre: u.nombre,
-            pin_acceso: u.pin_acceso,
-            rol: u.rol,
-            turno: u.turno,
-            estado: 'Activo',
-          },
-        });
-      } catch (userError) {
-        console.warn(`[Seed] Saltando usuario '${u.nombre}' (ID o PIN duplicado).`);
-      }
-    }
-    console.log(`[Seed] Sincronización de usuarios predefinidos finalizada.`);
-  } catch (error) {
-    console.warn('[Seed] No se pudo conectar a la base de datos para sembrar usuarios.', error instanceof Error ? error.message : '');
-  }
-}
-
-// ==========================================================================
-// SEED - 24 Incubadoras + 12 Nacedoras fijas en la DB
-// ==========================================================================
-async function seedMachines() {
-  try {
-    const prisma = await getPrismaClient();
-    let created = 0;
-    for (let i = 1; i <= 24; i++) {
-      const id = `B${i.toString().padStart(2, '0')}`;
-      await prisma.machine.upsert({
-        where: { id }, 
-        update: {},
-        create: {
-          id,
-          tipo: 'INCUBADORA',
-          numero_maquina: i,
-        },
-      });
-      created++;
-    }
-    for (let i = 1; i <= 12; i++) {
-      const id = `N${i.toString().padStart(2, '0')}`;
-      await prisma.machine.upsert({
-        where: { id },
-        update: {},
-        create: {
-          id,
-          tipo: 'NACEDORA',
-          numero_maquina: i,
-        },
-      });
-      created++;
-    }
-    console.log(`[Seed] ${created} máquinas sembradas (24 INC + 12 NAC).`);
-  } catch (error) {
-    console.warn('[Seed] No se pudo sembrar máquinas:', error instanceof Error ? error.message : '');
-  }
-}
 
 // ==========================================================================
 // EXPRESS APP
@@ -581,9 +505,8 @@ export function createApiApp(app: Express): void {
 
   app.use(attachSessionUser);
 
-  // Intentar semillado al arrancar (no bloquea el arranque)
-  void seedPredefinedUsers();
-  void seedMachines();
+  // Intentar semillado al arrancar
+  seedDatabase().catch(err => console.error('[Init] Seed failed during startup:', err));
 
 
   // ── Admin History Endpoint (Moved UP for priority) ─────────────────────────
@@ -682,9 +605,6 @@ export function createApiApp(app: Express): void {
     }
   });
 
-  // Initialize DB and Predefined Users
-  console.log('[Init] Running startup database seed...');
-  seedDatabase().catch(err => console.error('[Init] Seed failed during startup:', err));
 
   // ── Auth ──────────────────────────────────────────────────────────────────
   app.post('/api/login', async (req, res) => {
@@ -2045,18 +1965,18 @@ export function createApiApp(app: Express): void {
   app.get('/api/health-db', async (_req, res) => {
     try {
       const prisma = await getPrismaClient();
-      await prisma.$executeRaw`SELECT 1`;
-      return res.status(200).json({ status: 'Connected! Supabase DB reached.', users: predefinedUsers.length });
+      await prisma.$queryRaw`SELECT 1`;
+      return res.status(200).json({ status: 'Connected', users: predefinedUsers.length });
     } catch (error: any) {
       console.error('[Health] DB Error:', error);
-      return res.status(500).json({ status: 'Failed', error: error.message || 'Error de conexion' });
+      return res.status(503).json({ status: 'Disconnected', error: error.message });
     }
   });
 
   // ── Seed endpoint (útil para forzar semillado desde panel admin) ─────────
   app.post('/api/seed', requireRoles(['JEFE']), async (_req, res) => {
-    await seedPredefinedUsers();
-    return res.json({ message: `${predefinedUsers.length} usuarios sincronizados.` });
+    await seedDatabase();
+    return res.json({ message: `Sincronización de base de datos finalizada.` });
   });
 
   // Registrado arriba para prioridad.

@@ -1,5 +1,5 @@
 import { type Response } from 'express';
-import { getPrismaClient as getPrisma } from '../createApiApp';
+import { getPrismaClient as getPrisma } from '../prisma';
 import { analyzeIncubatorImage } from '../services/vision.service';
 import { generateReportPDF, generateSummaryPDF } from '../services/pdf.service';
 import { uploadToSupabase } from '../services/supabase_storage.service';

@@ -563,31 +563,11 @@ async function seedMachines() {
 // ==========================================================================
 // EXPRESS APP
 // ==========================================================================
-export function createApiApp(): Express {
-  const app = express();
-
+export function createApiApp(app: Express): void {
   const upload = multer({ storage: multer.memoryStorage() });
 
   app.use(express.json({ limit: '50mb' }));
   
-  // CORS Configuration
-  const allowedOrigins = [
-    'https://incubantmonitor.vercel.app',
-    'http://localhost:3000',
-    'http://localhost:3001',
-    'http://localhost:5173'
-  ];
-
-  app.use(cors({
-    origin: (origin, callback) => {
-      if (!origin || allowedOrigins.includes(origin) || origin.endsWith('.vercel.app')) {
-        callback(null, true);
-      } else {
-        callback(new Error('Not allowed by CORS'));
-      }
-    },
-    credentials: true
-  }));
 
   app.use(attachSessionUser);
 
@@ -595,10 +575,6 @@ export function createApiApp(): Express {
   void seedPredefinedUsers();
   void seedMachines();
 
-  // ── Health Check ──────────────────────────────────────────────────────────
-  app.get('/api/health', (_req, res) => {
-    res.json({ status: 'ok', timestamp: new Date().toISOString() });
-  });
 
   // ── Admin History Endpoint (Moved UP for priority) ─────────────────────────
   app.get('/api/reports/history', requireAuthenticatedUser, async (req, res) => {
@@ -791,6 +767,7 @@ export function createApiApp(): Express {
   app.post('/api/sync-hourly', requireAuthenticatedUser, async (req: AuthenticatedRequest, res) => {
     try {
       const { machines } = req.body as { machines?: SubmittedMachine[] };
+      const userName = req.user?.name || 'Operario';
 
       if (!machines || !Array.isArray(machines)) {
         return res.status(400).json({ error: 'Datos inválidos o incompletos' });
@@ -857,7 +834,12 @@ export function createApiApp(): Express {
           data: logsToInsert,
         });
 
-        sendEventToAll({ type: 'NEW_REPORT', message: 'Nuevo reporte sincronizado', timestamp: new Date().toISOString() });
+        sendEventToAll({ 
+          type: 'NEW_REPORT', 
+          message: `Reporte sincronizado por ${userName}`, 
+          timestamp: new Date().toISOString(),
+          userName: userName
+        });
 
         return res.status(200).json({
           message: 'Sincronización exitosa',
@@ -996,7 +978,7 @@ export function createApiApp(): Express {
           const logsForPdf = await prisma.hourlyLog.findMany({
             where: {
               user_id: databaseUser.id,
-              fecha_hora: { gte: new Date(Date.now() - 5 * 60 * 1000) } // Logs de los últimos 5 min
+              fecha_hora: { gte: new Date(Date.now() - 10 * 60 * 1000) } // Logs de los últimos 10 min
             },
             include: { machine: true, user: true },
             orderBy: { fecha_hora: 'desc' }
@@ -1022,7 +1004,24 @@ export function createApiApp(): Express {
           console.error('[Sync Storage] Error generando PDF horario:', pdfErr);
         }
 
-        sendEventToAll({ type: 'NEW_REPORT', message: 'Nuevo reporte sincronizado', timestamp: new Date().toISOString() });
+        // Actualizar último acceso del operario que está sincronizando
+        await prisma.user.update({
+          where: { id: databaseUser.id },
+          data: { ultimo_acceso: new Date() }
+        }).catch(() => null);
+
+        sendEventToAll({ 
+          type: 'NEW_REPORT', 
+          message: `Reporte sincronizado por ${userName}`, 
+          timestamp: new Date().toISOString(),
+          userName: userName
+        });
+
+        // Forzar actualización de operarios en línea en el dashboard
+        sendEventToAll({
+          type: 'USER_STATUS_UPDATE',
+          timestamp: new Date().toISOString()
+        });
       } catch (dbError) {
         console.error('[Sync Storage] Error BD:', dbError);
       }
@@ -1045,13 +1044,13 @@ export function createApiApp(): Express {
 
       // 1. Ensure all operators exist
       const operators = [
-        { nombre: 'Luis Cortés', pin: '1001', rol: 'OPERARIO', turno: 'Turno Mañana' },
-        { nombre: 'Juan Suaza', pin: '1002', rol: 'OPERARIO', turno: 'Turno Tarde' },
-        { nombre: 'Juan Alejandro', pin: '1003', rol: 'OPERARIO', turno: 'Turno Tarde' },
-        { nombre: 'Ferney', pin: '1004', rol: 'OPERARIO', turno: 'Turno Noche' },
-        { nombre: 'Kierson', pin: '1005', rol: 'OPERARIO', turno: 'Turno Noche' },
-        { nombre: 'Manuel', pin: '1006', rol: 'OPERARIO', turno: 'Turno Mañana' },
-        { nombre: 'Jerrson', pin: '1007', rol: 'OPERARIO', turno: 'Turno Mañana' },
+        { nombre: 'Luis Cortés', pin_acceso: '1001', rol: 'OPERARIO', turno: 'Turno Mañana' },
+        { nombre: 'Juan Suaza', pin_acceso: '1002', rol: 'OPERARIO', turno: 'Turno Tarde' },
+        { nombre: 'Juan Alejandro', pin_acceso: '1003', rol: 'OPERARIO', turno: 'Turno Tarde' },
+        { nombre: 'Ferney', pin_acceso: '1004', rol: 'OPERARIO', turno: 'Turno Noche' },
+        { nombre: 'Kierson', pin_acceso: '1005', rol: 'OPERARIO', turno: 'Turno Noche' },
+        { nombre: 'Manuel', pin_acceso: '1006', rol: 'OPERARIO', turno: 'Turno Mañana' },
+        { nombre: 'Jerrson', pin_acceso: '1007', rol: 'OPERARIO', turno: 'Turno Mañana' },
       ];
 
       const createdUsers: Record<string, any> = {};
@@ -1059,8 +1058,8 @@ export function createApiApp(): Express {
         const slugId = op.nombre.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, '-');
         const user = await prisma.user.upsert({
           where: { id: slugId },
-          update: { nombre: op.nombre, pin_acceso: op.pin, rol: op.rol as any, turno: op.turno },
-          create: { id: slugId, nombre: op.nombre, pin_acceso: op.pin, rol: op.rol as any, turno: op.turno, estado: 'Activo' },
+          update: { nombre: op.nombre, pin_acceso: op.pin_acceso, rol: op.rol as any, turno: op.turno },
+          create: { id: slugId, nombre: op.nombre, pin_acceso: op.pin_acceso, rol: op.rol as any, turno: op.turno, estado: 'Activo' },
         });
         createdUsers[op.nombre] = user;
       }
@@ -1344,90 +1343,76 @@ export function createApiApp(): Express {
 
         if (log) {
           temp = log.temp_principal_actual.toFixed(1);
+          const logTime = log.fecha_hora.getTime();
+          const logDateOrig = log.fecha_hora;
+          const maxDateOrig = lastOverallLog?.fecha_hora || new Date();
           
-          // 1. Mostrar siempre la última foto registrada.
-          photoUrl = log.photo_url || null;
+          const logBucket = `${logDateOrig.getUTCFullYear()}-${logDateOrig.getUTCMonth()}-${logDateOrig.getUTCDate()}-${logDateOrig.getUTCHours()}`;
+          const maxBucket = `${maxDateOrig.getUTCFullYear()}-${maxDateOrig.getUTCMonth()}-${maxDateOrig.getUTCDate()}-${maxDateOrig.getUTCHours()}`;
           
+          const isSameBucket = logBucket === maxBucket;
+          const isRecentlyReported = (maxLogTime - logTime) < (45 * 60 * 1000); 
+
           observaciones = log.observaciones;
           updatedBy = log.user?.nombre || null;
 
-          const humedadRelativa = extractObservationValue(observaciones, 'Humedad');
-          const tiempoIncubacion = extractObservationValue(observaciones, 'Tiempo');
-          const tempAire = extractObservationValue(observaciones, 'Temp Aire');
-          const volteoNumero = extractObservationValue(observaciones, 'Volteos');
-          const alarmaActiva = extractObservationValue(observaciones, 'Alarma');
-          const ventilador = extractObservationValue(observaciones, 'Ventilador');
-          const volteoPosicion = extractObservationValue(observaciones, 'Posicion');
-          const notaOperario = extractObservationValue(observaciones, 'Nota');
+          const humRel = extractObservationValue(observaciones, 'Humedad');
+          const tIncub = extractObservationValue(observaciones, 'Tiempo');
+          const tAire = extractObservationValue(observaciones, 'Temp Aire');
+          const vNum = extractObservationValue(observaciones, 'Volteos');
+          const alActive = extractObservationValue(observaciones, 'Alarma');
+          const vent = extractObservationValue(observaciones, 'Ventilador');
+          const vPos = extractObservationValue(observaciones, 'Posicion');
+          const note = extractObservationValue(observaciones, 'Nota');
 
-          // Verificamos si el log es "actual" (< 2 horas)
           const isLogRecent = log.fecha_hora.getTime() > twoHoursAgo.getTime();
-
-          // Parse tiempo incubacion string like "20d 12h 30m" into parts
-          let tiempoDias = '0', tiempoHoras = '0', tiempoMinutos = '0';
-          if (tiempoIncubacion) {
-            const dMatch = tiempoIncubacion.match(/(\d+)d/);
-            const hMatch = tiempoIncubacion.match(/(\d+)h/);
-            const mMatch = tiempoIncubacion.match(/(\d+)m/);
-            tiempoDias = dMatch ? dMatch[1] : '0';
-            tiempoHoras = hMatch ? hMatch[1] : '0';
-            tiempoMinutos = mMatch ? mMatch[1] : '0';
-          }
-
-          const humedadColumna = (log as any).humedad_actual;
-          humidity = (humedadColumna > 0) ? humedadColumna.toFixed(1) : (humedadRelativa || '--');
           const diffMins = Math.floor((Date.now() - log.fecha_hora.getTime()) / 60000);
+          lastUpdate = `Hace ${diffMins} min`;
+
+          const humActual = (log as any).humedad_actual;
+          humidity = (humActual > 0) ? humActual.toFixed(1) : (humRel || '--');
+
           data = {
-            tiempoIncubacion: { dias: tiempoDias, horas: tiempoHoras, minutos: tiempoMinutos },
-            humedadRelativa: humedadColumna > 0 ? humedadColumna.toFixed(1) : (humedadRelativa || '0'),
             temperatura: temp,
-            tempAire: tempAire || temp,
-            volteoNumero: volteoNumero || '0',
-            alarma: alarmaActiva || 'No',
-            ventiladorPrincipal: ventilador || 'No',
+            humedadRelativa: humidity,
+            tempAire: tAire || temp,
+            volteoNumero: vNum || '0',
+            alarma: alActive || 'No',
+            ventiladorPrincipal: vent || 'No',
+            volteoPosicion: vPos || '',
+            observaciones: note || '',
+            lastUpdate,
+            updatedBy,
             timestamp: log.fecha_hora.toISOString(),
-            tempOvoscanReal: temp,
-            tempOvoscanSP: log.temp_principal_consigna.toFixed(1),
-            tempAireReal: tempAire || temp,
-            tempAireSP: log.temp_secundaria_consigna.toFixed(1),
-            tempSynchroReal: temp,
-            tempSynchroSP: log.temp_principal_consigna.toFixed(1),
-            version: 'v1.2.4-TOTAL-FIX',
-            temperaturaReal: tempAire || temp,
-            temperaturaSP: log.temp_secundaria_consigna.toFixed(1),
-            humedadReal: humedadRelativa || '--',
-            humedadSP: log.co2_consigna.toFixed(1),
-            co2Real: log.co2_actual.toFixed(1),
-            co2SP: log.co2_consigna.toFixed(1),
-            volteoPosicion: volteoPosicion || '',
-            observaciones: notaOperario || '',
-            lastUpdate: `Hace ${diffMins} min`,
-            updatedBy: updatedBy,
+            version: 'v1.2.7-FIX',
           };
 
-          if (alarmaActiva === 'Si' || Math.abs(log.temp_principal_actual - log.temp_principal_consigna) > 0.5) {
+          if (alActive === 'Si' || Math.abs(log.temp_principal_actual - log.temp_principal_consigna) > 0.5) {
             status = 'alarm';
           }
 
-          // Si el log es muy viejo, marcar como mantenimiento/sin-datos para los números,
-          // pero conservamos la foto si existe.
-          if (!isLogRecent) {
-             status = 'maintenance';
+          const isApagada = log.observaciones?.includes('MÁQUINA APAGADA');
+          if (isApagada) {
+            status = 'maintenance';
+            photoUrl = null;
+            photoTimestamp = null;
+          } else {
+            if (!isLogRecent) status = 'maintenance';
+            if ((isSameBucket || isRecentlyReported) && log.photo_url) {
+              photoUrl = log.photo_url;
+              photoTimestamp = log.fecha_hora.toISOString();
+            } else {
+              photoUrl = null;
+              photoTimestamp = null;
+            }
           }
-
-          lastUpdate = `Hace ${diffMins} min`;
         } else {
-          status = 'maintenance'; 
+          status = 'maintenance';
         }
-
-        const latestPhoto = photoMap.get(machine.id);
-        // Prioridad: 1. La foto de este log (si es de hace pocos segs). 2. La foto más reciente histórica del mapa.
-        photoUrl = log?.photo_url || latestPhoto?.url || null;
-        photoTimestamp = log?.photo_url ? log.fecha_hora.toISOString() : (latestPhoto?.timestamp?.toISOString() || null);
 
         return {
           id: machine.id,
-          name: machine.id, 
+          name: `${machine.tipo === 'INCUBADORA' ? 'INC' : 'NAC'}-${machine.numero_maquina.toString().padStart(2, '0')}`,
           type: machine.tipo.toLowerCase(),
           status,
           temp,
@@ -1444,7 +1429,7 @@ export function createApiApp(): Express {
       return res.json(statusData);
     } catch (error) {
       console.error('[Dashboard] Error al consultar BD para status:', error);
-      return res.json([]); // Return empty to allow frontend to handle it cleanly instead of N/A placeholders
+      return res.json([]);
     }
   });
 
@@ -2344,7 +2329,6 @@ export function createApiApp(): Express {
     }
   });
 
-  return app;
 }
 
 function getBogotaTimeComponents(dateInput = new Date()) {

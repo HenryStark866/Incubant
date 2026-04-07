@@ -71,6 +71,8 @@ export default function SupervisorDashboard() {
   }>({ lastReportTime: null, activeOperatorsCount: 0, activeOperatorsNames: '', currentShift: 'Fuera de Turno' });
   const [isLoading, setIsLoading] = useState(true);
   const [dbError, setDbError] = useState<string | null>(null);
+  const [updatedMachineId, setUpdatedMachineId] = useState<string | null>(null);
+  const updatedTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Modal states
   const [showCreateOperator, setShowCreateOperator] = useState(false);
@@ -425,10 +427,21 @@ export default function SupervisorDashboard() {
             if (data.targetUserId && data.targetUserId !== currentUser.id) return;
             console.log('[SSE] Evento recibido:', data.type);
             // Increment pending badge immediately for new requests
-            if (data.type === 'NEW_REQUEST') {
+            if (data.type === 'NEW_REPORT') {
+              // Si el evento trae un machineId específico, resaltarlo
+              if (data.machineId) {
+                setUpdatedMachineId(data.machineId);
+                if (updatedTimeoutRef.current) clearTimeout(updatedTimeoutRef.current);
+                updatedTimeoutRef.current = setTimeout(() => setUpdatedMachineId(null), 8000);
+              }
+              void fetchData();
+            } else if (data.type === 'NEW_REQUEST') {
               setPendingRequestsCount(c => c + 1);
+              void fetchData();
+            } else if (data.type === 'USER_STATUS_UPDATE') {
+              // Actualizar de inmediato la lista de personal en línea
+              void fetchData();
             }
-            void fetchData();
           } catch {
             void fetchData();
           }
@@ -1048,11 +1061,11 @@ export default function SupervisorDashboard() {
                             onClick={() => setAdminPhotoViewer(machine)}
                             className={`relative p-4 rounded-[2rem] border-2 flex flex-col items-center justify-end gap-1 transition-all hover:scale-[1.03] active:scale-95 cursor-pointer shadow-2xl group ${
                               machine.status === 'alarm' 
-                                ? 'border-red-500/50 bg-red-500/5' 
+                                ? 'border-red-500/50 bg-red-500/5 shadow-[0_0_30px_rgba(239,68,68,0.15)]' 
                                 : machine.status === 'maintenance'
                                   ? 'border-gray-500/20'
                                   : 'border-brand-primary/20 shadow-brand-primary/5'
-                            } overflow-hidden`}
+                            } ${updatedMachineId === (machine.id || machine.name) ? 'ring-4 ring-brand-primary ring-offset-4 ring-offset-[#060b18] animate-pulse scale-105 z-20' : ''} overflow-hidden`}
                             style={{ minHeight: '210px' }}
                           >
                             {/* Imagen de fondo dinámica con resolución mejorada */}
@@ -1107,8 +1120,8 @@ export default function SupervisorDashboard() {
                               </div>
 
                               <span 
-                                className={`font-black text-base tracking-tight ${machine.status === 'alarm' ? 'text-red-200' : 'text-white'}`} 
-                                style={{ textShadow: '0 4px 12px rgba(0,0,0,0.8)' }}
+                                className={`font-black text-base tracking-tight drop-shadow-xl ${machine.status === 'alarm' ? 'text-red-100' : 'text-white'}`} 
+                                style={{ textShadow: '0 4px 12px rgba(0,0,0,0.9)' }}
                               >
                                 {machine.name.replace(/(INC|NAC)-/, '')}
                               </span>
@@ -1172,7 +1185,7 @@ export default function SupervisorDashboard() {
                   <div className="relative max-w-5xl w-full flex flex-col items-center gap-6" onClick={e => e.stopPropagation()}>
                     <div className="relative group overflow-hidden rounded-3xl shadow-2xl bg-black/40 border border-white/5">
                       <img
-                        src={adminPhotoViewer.photoUrl}
+                        src={adminPhotoViewer.photoUrl || (adminPhotoViewer.status === 'maintenance' ? '/imagen2.png' : '/imagen1.png')}
                         alt={adminPhotoViewer.name}
                         className="max-w-full max-h-[70vh] object-contain"
                         onError={(e) => {
@@ -1223,16 +1236,22 @@ export default function SupervisorDashboard() {
                       </div>
 
                       <div className="ml-auto flex items-center gap-4">
-                        <a
-                          href={adminPhotoViewer.photoUrl}
-                          download={`${adminPhotoViewer.name}-${Date.now()}.jpg`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex items-center gap-2.5 px-8 py-4 bg-white/5 hover:bg-white/10 border border-white/10 rounded-2xl font-black text-[10px] uppercase text-white transition-all shadow-xl"
-                          onClick={e => e.stopPropagation()}
-                        >
-                          <Download size={18} /> HD
-                        </a>
+                        {adminPhotoViewer.photoUrl ? (
+                          <a
+                            href={adminPhotoViewer.photoUrl}
+                            download={`${adminPhotoViewer.name}-${Date.now()}.jpg`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-2.5 px-8 py-4 bg-brand-primary/10 hover:bg-brand-primary/20 border border-brand-primary/20 rounded-2xl font-black text-[10px] uppercase text-brand-primary transition-all shadow-xl"
+                            onClick={e => e.stopPropagation()}
+                          >
+                            <Download size={18} /> Descargar HD
+                          </a>
+                        ) : (
+                          <div className="flex items-center gap-2.5 px-8 py-4 bg-gray-500/10 border border-gray-500/20 rounded-2xl font-black text-[10px] uppercase text-gray-500 cursor-not-allowed opacity-50">
+                            <Download size={18} /> Sin Foto HD
+                          </div>
+                        )}
                         <button
                           onClick={() => setAdminPhotoViewer(null)}
                           className="px-8 py-4 bg-brand-primary hover:bg-brand-primary/80 rounded-2xl font-black text-[10px] uppercase text-white shadow-lg shadow-brand-primary/20 transition-all border border-brand-primary/20"

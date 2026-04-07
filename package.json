@@ -10,10 +10,9 @@
     "preview": "vite preview",
     "clean": "rm -rf dist",
     "postinstall": "prisma generate",
-    "start": "tsx server.ts"
+    "start": "npx tsx server.ts"
   },
   "dependencies": {
-    "@google/genai": "^1.29.0",
     "@google/generative-ai": "^0.24.1",
     "@prisma/client": "^6.19.2",
     "@supabase/supabase-js": "^2.100.0",

@@ -187,9 +187,9 @@ export default function AdminHistoryScreen() {
 
   // Combine and filter
   const combinedData = [
-    ...logs.map(l => ({ ...l, itemType: 'log' })),
-    ...incidents.map(i => ({ ...i, itemType: 'incident' })),
-    ...reports.map(r => ({ ...r, itemType: 'report' })),
+    ...logs.map(l => ({ ...l, itemType: 'log', uniqueId: `log_${l.id}` })),
+    ...incidents.map(i => ({ ...i, itemType: 'incident', uniqueId: `inc_${i.id}` })),
+    ...reports.map(r => ({ ...r, itemType: 'report', uniqueId: `rep_${r.id}` })),
   ].sort((a, b) => new Date(b.fecha_hora).getTime() - new Date(a.fecha_hora).getTime());
 
   const filteredData = combinedData.filter(item => {
@@ -397,7 +397,7 @@ export default function AdminHistoryScreen() {
 
               return (
                 <div
-                  key={item.id || idx}
+                  key={item.uniqueId}
                   className={`rounded-2xl border flex flex-col overflow-hidden transition-all hover:shadow-xl group ${
                     isDark
                       ? 'bg-white/5 border-white/5 hover:border-white/20'

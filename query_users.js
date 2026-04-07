@@ -8,7 +8,7 @@ async function main() {
       id: true,
       nombre: true,
       rol: true,
-      pin: true,
+      pin_acceso: true,
       turno: true
     }
   });

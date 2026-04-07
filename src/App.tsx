@@ -138,7 +138,7 @@ export default function App() {
       }
     };
 
-    const interval = setInterval(syncProfile, 10000);
+    const interval = setInterval(syncProfile, 2000); // Sincronización cada 2 segundos para visibilidad en tiempo real
     return () => clearInterval(interval);
   }, [currentUser, login, logout]);
 

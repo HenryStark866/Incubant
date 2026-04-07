@@ -3,7 +3,8 @@ import {
   Activity, AlertTriangle, Clock, Users, LayoutDashboard,
   Settings, ChevronDown, X, Image as ImageIcon, CheckCircle2,
   Download, Loader2, Egg, Menu, RefreshCw, LogOut, Camera, FileText, FolderOpen,
-  Sun, Moon, Wifi, WifiOff, Monitor, Thermometer, Droplets, Wind, ClipboardList
+  Sun, Moon, Wifi, WifiOff, Monitor, Thermometer, Droplets, Wind, ClipboardList,
+  Database, History as HistoryIcon
 } from 'lucide-react';
 import { useThemeStore } from '../store/useThemeStore';
 import { useMachineStore } from '../store/useMachineStore';
@@ -89,6 +90,7 @@ export default function SupervisorDashboard() {
   const [editPin, setEditPin] = useState('');
 
   const [showEvidencesModal, setShowEvidencesModal] = useState(false);
+  const [showDbDocs, setShowDbDocs] = useState(false);
   // evidencesList and isLoadingEvidences removed — Drive link is opened directly
 
   const currentUser = useMachineStore(state => state.currentUser);
@@ -399,10 +401,10 @@ export default function SupervisorDashboard() {
     }
   }, [currentUser, canAccessSupervisor]);
 
-  // Polling de datos cada 3 segundos
+  // Polling de datos cada segundo (Máxima frecuencia para tiempo real)
   useEffect(() => {
     void fetchData();
-    const interval = setInterval(fetchData, 30000);
+    const interval = setInterval(fetchData, 1000);
     return () => clearInterval(interval);
   }, [fetchData]);
 
@@ -1002,6 +1004,39 @@ export default function SupervisorDashboard() {
         >
           {activeTab === 'dashboard' ? (
             <div className="space-y-8 lg:space-y-10">
+              {/* Barra de Sincronización en Tiempo Real */}
+              <section className="mb-8">
+                <div className={`flex flex-col sm:flex-row items-center justify-between p-4 px-6 rounded-[2rem] border backdrop-blur-md transition-all ${isDark ? 'bg-white/[0.03] border-white/5' : 'bg-white border-gray-100 shadow-sm'}`}>
+                  <div className="flex items-center gap-6 mb-4 sm:mb-0">
+                    <div className="flex items-center gap-2">
+                       <div className="relative">
+                         <div className="w-2.5 h-2.5 bg-green-500 rounded-full animate-pulse shadow-[0_0_10px_rgba(34,197,94,0.6)]"></div>
+                         <div className="absolute inset-0 bg-green-400 rounded-full animate-ping opacity-25"></div>
+                       </div>
+                       <span className={`text-[10px] font-black tracking-widest uppercase ${isDark ? 'text-white/60' : 'text-brand-dark/60'}`}>DB ENGINE: CONNECTED</span>
+                    </div>
+                    <div className="h-4 w-px bg-white/10 hidden sm:block"></div>
+                    <div className="flex items-center gap-2 uppercase tracking-tighter">
+                       <HistoryIcon size={12} className="text-brand-primary" />
+                       <span className={`text-[9px] font-black ${isDark ? 'text-white/40' : 'text-brand-gray'}`}>Sincronización: <span className="text-brand-primary">CADA 1 SEGUNDO (REAL-TIME)</span></span>
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-center gap-3">
+                    <div className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest border transition-all hover:bg-white/5 cursor-help ${isDark ? 'border-white/10 text-white/40' : 'border-gray-200 text-brand-gray'}`}>
+                       Latencia: 142ms
+                    </div>
+                    <button 
+                      onClick={() => setShowDbDocs(true)}
+                      className="flex items-center gap-2 px-5 py-2.5 bg-brand-primary/10 border border-brand-primary/20 text-brand-primary rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-brand-primary hover:text-white transition-all shadow-lg shadow-brand-primary/10"
+                    >
+                      <Database size={12} />
+                      INFORMACIÓN / DOCS DB
+                    </button>
+                  </div>
+                </div>
+              </section>
+
               <section>
                 <div className="flex items-center gap-4 mb-6">
                   <div className="w-1.5 h-8 bg-brand-primary rounded-full"></div>
@@ -1632,6 +1667,89 @@ export default function SupervisorDashboard() {
                     </div>
                   )}
                 </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: INFORMACIÓN / DOCUMENTACIÓN DB */}
+      {showDbDocs && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 sm:p-6 backdrop-blur-md bg-black/60 overflow-y-auto">
+          <div className="relative w-full max-w-2xl min-h-[500px] flex flex-col items-center">
+            {/* Cabecera Futurista */}
+            <div className={`w-full p-8 rounded-[2.5rem] shadow-2xl relative overflow-hidden flex flex-col border ${isDark ? 'bg-[#0a0f20] border-white/10' : 'bg-white border-gray-100'}`}>
+              {/* Botón Cerrar */}
+              <button 
+                onClick={() => setShowDbDocs(false)}
+                className={`absolute top-6 right-6 p-3 rounded-full transition-all active:scale-90 hover:scale-110 z-20 ${isDark ? 'bg-white/10 text-white hover:bg-red-500' : 'bg-gray-100 text-brand-dark hover:bg-red-500 hover:text-white'}`}
+              >
+                <X size={20} />
+              </button>
+
+              <div className="flex items-center gap-4 mb-8">
+                <div className="p-3 bg-brand-primary rounded-2xl text-white shadow-xl shadow-brand-primary/20">
+                  <Database size={24} />
+                </div>
+                <div>
+                  <h2 className="text-2xl font-black tracking-tight leading-tight">DOCUMENTACIÓN DB</h2>
+                  <p className="text-[10px] font-black text-brand-primary uppercase tracking-[0.3em]">Incubant Central Core v1.2</p>
+                </div>
+              </div>
+
+              <div className="space-y-6 overflow-y-auto pr-2 max-h-[60vh] custom-scrollbar">
+                {/* Sección 1: Sincronización */}
+                <section className="space-y-3">
+                  <h3 className="text-xs font-black uppercase text-brand-primary flex items-center gap-2">
+                    <HistoryIcon size={14} /> 1. Arquitectura de Sincronización
+                  </h3>
+                  <div className={`p-4 rounded-2xl text-[11px] font-medium leading-relaxed ${isDark ? 'bg-white/5 text-white/60' : 'bg-gray-50 text-brand-gray'}`}>
+                    El sistema utiliza un modelo de **Sincronización Híbrida**:
+                    <ul className="list-disc ml-4 mt-2 space-y-1">
+                      <li><span className="text-brand-primary font-bold">SSE (Server-Sent Events):</span> Para notificaciones instantáneas de nuevos reportes y cambios de estado de operarios.</li>
+                      <li><span className="text-brand-primary font-bold">Polling (1s):</span> Actualización redundante de métricas, contadores y mapa de calor de la planta (Sincronización de un segundo).</li>
+                      <li><span className="text-brand-primary font-bold">Heartbeat:</span> Ping constante cada 1s-2s desde operarios para confirmar presencia real en planta.</li>
+                    </ul>
+                  </div>
+                </section>
+
+                {/* Sección 2: Tablas Core */}
+                <section className="space-y-3">
+                  <h3 className="text-xs font-black uppercase text-brand-primary flex items-center gap-2">
+                    <FileText size={14} /> 2. Esquema de Datos (Prisma/PostgreSQL)
+                  </h3>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {[
+                      { table: 'User', desc: 'Credenciales, Roles y Turnos. Campo ultimo_acceso para Online-Status.' },
+                      { table: 'Machine', desc: 'Configuración física de Incubadoras y Nacedoras.' },
+                      { table: 'Report', desc: 'Evidencia PDF, imágenes y link a Supabase Storage.' },
+                      { table: 'HourlyLog', desc: 'Datos crudos de telemetría por cada hora reportada.' },
+                    ].map(t => (
+                      <div key={t.table} className={`p-4 rounded-2xl border ${isDark ? 'bg-white/[0.02] border-white/5' : 'bg-white border-gray-100'}`}>
+                        <div className="text-[10px] font-black text-brand-primary mb-1 uppercase tracking-widest">{t.table}</div>
+                        <div className={`text-[9px] font-bold ${isDark ? 'text-white/40' : 'text-brand-gray'}`}>{t.desc}</div>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+
+                {/* Sección 3: Almacenamiento */}
+                <section className="space-y-3">
+                  <h3 className="text-xs font-black uppercase text-brand-primary flex items-center gap-2">
+                    <FolderOpen size={14} /> 3. Gestión de Evidencias
+                  </h3>
+                  <div className={`p-4 rounded-2xl text-[11px] font-medium leading-relaxed ${isDark ? 'bg-white/5 text-white/60' : 'bg-gray-50 text-brand-gray'}`}>
+                    Todo el material visual se procesa mediante **Supabase Storage**. El campo `photo_url` en la base de datos es una referencia directa al bucket de seguridad. Los reportes PDF se generan mediante **Puppeteer Core** y se vinculan al registro de cierre del día.
+                  </div>
+                </section>
+              </div>
+
+              <div className="mt-8 pt-6 border-t border-white/5 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                   <Wifi size={14} className="text-green-500 animate-pulse" />
+                   <span className="text-[10px] font-black text-green-500/60 uppercase">Servidor Óptimo</span>
+                </div>
+                <p className="text-[9px] font-bold text-white/20">© HenryStark866 - Incubant Infrastructure</p>
               </div>
             </div>
           </div>

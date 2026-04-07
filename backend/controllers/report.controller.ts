@@ -72,18 +72,47 @@ export const processMachineReport = async (req: AuthenticatedRequest, res: Respo
     let dbType: 'INCUBADORA' | 'NACEDORA' = 'INCUBADORA';
     let machineNumber = 1;
     
+    // Extraer tipo y número del machineId enviado (ej: "inc-1" o "INC-01")
     const match = machineId.match(/(inc|nac|b|n)[-:_]?(\d+)/i);
     if (match) {
       const prefix = match[1].toLowerCase();
       dbType = (prefix === 'nac' || prefix === 'n') ? 'NACEDORA' : 'INCUBADORA';
       machineNumber = parseInt(match[2], 10);
     }
-    const targetId = (dbType === 'INCUBADORA' ? 'B' : 'N') + machineNumber.toString().padStart(2, '0');
 
-    // Upsert máquina
-    let machine = await prisma.machine.findUnique({ where: { id: targetId } });
+    // Buscar máquina por la restricción única [tipo, numero_maquina]
+    // Esto garantiza que usemos las máquinas existentes (generalmente con UUIDs)
+    let machine = await prisma.machine.findUnique({
+      where: {
+        tipo_numero_maquina: {
+          tipo: dbType,
+          numero_maquina: machineNumber
+        }
+      }
+    });
+
     if (!machine) {
-      machine = await prisma.machine.create({ data: { id: targetId, tipo: dbType, numero_maquina: machineNumber } });
+      // Fallback: Si no existe, la creamos (aquí sí podemos proponer un ID amigable si queremos, pero mejor dejar que UUID actúe si no hay ID)
+      // Sin embargo, para consistencia con el dashboard, intentamos crearla con el ID esperado si no hay colisión
+      const fallbackId = (dbType === 'INCUBADORA' ? 'B' : 'N') + machineNumber.toString().padStart(2, '0');
+      try {
+        machine = await prisma.machine.create({
+          data: {
+            id: fallbackId,
+            tipo: dbType,
+            numero_maquina: machineNumber
+          }
+        });
+      } catch {
+        // Si falla por ID duplicado, volvemos a buscar (redundancia de seguridad)
+        machine = await prisma.machine.findFirst({
+          where: { tipo: dbType, numero_maquina: machineNumber }
+        });
+      }
+    }
+
+    if (!machine) {
+      throw new Error(`No se pudo identificar ni crear la máquina: ${machineId}`);
     }
 
     const d = finalData;
@@ -253,7 +282,7 @@ export const requestClosingReport = async (req: AuthenticatedRequest, res: Respo
 export const getHistory = async (_req: any, res: Response) => {
   try {
     const prisma = await getPrisma();
-    const [logs, incidents, rawReports] = await Promise.all([
+    const [rawLogs, incidents, rawReports] = await Promise.all([
       prisma.hourlyLog.findMany({
         orderBy: { fecha_hora: 'desc' },
         take: 200,
@@ -271,9 +300,16 @@ export const getHistory = async (_req: any, res: Response) => {
       }),
     ]);
 
+    // Asegurar que las URLs vacías sean null para evitar lógica falsy incorrecta en el frontend
     const reports = rawReports.map(r => ({
       ...r,
-      photo_url: r.imageUrl || null
+      photo_url: (r.imageUrl && r.imageUrl.trim() !== '') ? r.imageUrl : null,
+      pdfUrl: (r.pdfUrl && r.pdfUrl.trim() !== '') ? r.pdfUrl : null
+    }));
+
+    const logs = rawLogs.map(l => ({
+      ...l,
+      photo_url: (l.photo_url && l.photo_url.trim() !== '') ? l.photo_url : null
     }));
 
     return res.status(200).json({ logs, incidents, reports });

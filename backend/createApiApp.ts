@@ -101,7 +101,7 @@ const globalForPrisma = globalThis as typeof globalThis & {
   prisma?: PrismaClient;
 };
 
-async function getPrismaClient() {
+export async function getPrismaClient() {
   if (!globalForPrisma.prisma) {
     const { PrismaClient } = await import('@prisma/client');
     // Sanitizar la URL: eliminar caracteres ocultos (\r) y espacios
@@ -434,11 +434,21 @@ async function resolveDatabaseUser(sessionUser: SessionUser) {
 
     // 1. Buscar primero por ID estable (slug)
     const byId = await prisma.user.findUnique({ where: { id: sessionUser.id } }).catch(() => null);
-    if (byId) return byId;
+    if (byId) {
+      return await prisma.user.update({
+        where: { id: byId.id },
+        data: { ultimo_acceso: new Date() }
+      }).catch(() => byId); // Fallback to found user if update fails
+    }
 
     // 2. Buscar por nombre
     const byName = await prisma.user.findFirst({ where: { nombre: sessionUser.name } }).catch(() => null);
-    if (byName) return byName;
+    if (byName) {
+      return await prisma.user.update({
+        where: { id: byName.id },
+        data: { ultimo_acceso: new Date() }
+      }).catch(() => byName);
+    }
 
     // 3. Crear el usuario en BD usando los datos del predefinido si existe, o datos sintéticos
     const predefined = predefinedUsers.find(u => u.id === sessionUser.id || u.nombre === sessionUser.name);
@@ -577,41 +587,8 @@ export function createApiApp(app: Express): void {
 
 
   // ── Admin History Endpoint (Moved UP for priority) ─────────────────────────
-  app.get('/api/reports/history', requireAuthenticatedUser, async (req, res) => {
-    try {
-      const prisma = await getPrismaClient();
-      const [logs, incidents, reports] = await Promise.all([
-        prisma.hourlyLog.findMany({
-          orderBy: { fecha_hora: 'desc' },
-          take: 200,
-          include: {
-            user: { select: { nombre: true, rol: true, turno: true } },
-            machine: true
-          }
-        }),
-        prisma.incident.findMany({
-          orderBy: { fecha_hora: 'desc' },
-          take: 100,
-          include: {
-            user: { select: { nombre: true, rol: true, turno: true } },
-            machine: true
-          }
-        }),
-        prisma.report.findMany({
-          orderBy: { fecha_hora: 'desc' },
-          take: 100,
-          include: {
-            user: { select: { nombre: true, rol: true, turno: true } },
-            machine: true
-          }
-        })
-      ]);
-      return res.json({ logs, incidents, reports });
-    } catch (err: any) {
-      console.error('[Admin History] Error details:', err?.message || err);
-      return res.status(500).json({ error: 'Error cargando historial', details: err?.message });
-    }
-  });
+  app.get('/api/reports/history', requireAuthenticatedUser, getHistory);
+
 
   // ── Admin: Seed Operations ───────────────────────────────────────────────
   app.post('/api/admin/seed-shifts', seedShifts);
@@ -649,15 +626,36 @@ export function createApiApp(app: Express): void {
       return res.status(401).json({ error: 'No hay sesión activa' });
     }
 
-    // Mantener al usuario "online" actualizando su último acceso (touch)
-    // Se dispara cada 10 seg (heartbeat del frontend)
+    // Mantener al usuario "online" actualizando su último acceso (heartbeat)
     try {
       const prisma = await getPrismaClient();
-      await prisma.user.update({
+      // Intentar actualizar por ID, y si falla (por desajuste de ID predefinido vs DB), intentar por nombre
+      const touchUser = await prisma.user.update({
         where: { id: req.user.id },
         data: { ultimo_acceso: new Date() }
-      }).catch(err => console.warn('[Session Touch] Error:', err.message));
-    } catch { /* ignore */ }
+      }).catch(async (err) => {
+        // Fallback: buscar por nombre si el ID no coincide
+        const user = await prisma.user.findFirst({ where: { nombre: req.user!.name } });
+        if (user) {
+          return await prisma.user.update({ where: { id: user.id }, data: { ultimo_acceso: new Date() } });
+        } else {
+          console.warn('[Session Heartbeat] Usuario no encontrado para "touch":', req.user!.name);
+          return null;
+        }
+      });
+
+      if (touchUser) {
+        // Notificar al dashboard el cambio de estado (throttled logic exists in some clients)
+        const { sendEventToAll } = await import('./services/event.service');
+        sendEventToAll({ 
+          type: 'USER_STATUS_UPDATE', 
+          message: `${req.user.name} está activo`,
+          userId: touchUser.id 
+        });
+      }
+    } catch (e) {
+      console.error('[Session Heartbeat] Error fatal:', e);
+    }
 
     return res.json({ user: req.user });
   });
@@ -1397,10 +1395,25 @@ export function createApiApp(app: Express): void {
             photoUrl = null;
             photoTimestamp = null;
           } else {
+            // Si el log es antiguo pero es el más reciente, marcamos como mantenimiento (falta reporte actual)
             if (!isLogRecent) status = 'maintenance';
-            if ((isSameBucket || isRecentlyReported) && log.photo_url) {
+
+            // Lógica de Foto: Si el log actual (más reciente) tiene foto y es del ciclo actual, úsala.
+            // Si no tiene foto, busca en el photoMap (última foto histórica) pero solo muéstrala 
+            // si es del ciclo actual para cumplir con el "reinicio horario".
+            const latestPhoto = photoMap.get(machine.id);
+            const isPhotoInCurrentCycle = latestPhoto && (
+              (maxLogTime - latestPhoto.timestamp.getTime()) < (60 * 60 * 1000) || 
+              latestPhoto.timestamp.getTime() > shiftStartUTC.getTime()
+            );
+
+            if (log.photo_url && (isSameBucket || isRecentlyReported)) {
               photoUrl = log.photo_url;
               photoTimestamp = log.fecha_hora.toISOString();
+            } else if (isPhotoInCurrentCycle) {
+              // "Sticky" photo logic: mantener la foto si pertenece al turno o ciclo actual
+              photoUrl = latestPhoto.url;
+              photoTimestamp = latestPhoto.timestamp.toISOString();
             } else {
               photoUrl = null;
               photoTimestamp = null;
@@ -1434,7 +1447,7 @@ export function createApiApp(app: Express): void {
   });
 
   // ── Dashboard: Global History (Admin History Tab) ────────────────────────
-  app.get('/api/reports/history', requireRoles(SUPERVISOR_ROLES), getHistory);
+
 
   // ── Temporary Test Endpoint (Populate Photos) ───────────────────────────
   // Use it only for testing, visit /api/test/populate-photos once

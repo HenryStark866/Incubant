@@ -15,6 +15,9 @@ export const API_BASE_URL = '';
  * Normalizes a URL ensuring it uses the API_BASE_URL if needed.
  */
 export function getApiUrl(path: string): string {
+  if (!path) return '';
+  if (path.startsWith('http') || path.startsWith('data:')) return path;
+  
   const cleanPath = path.startsWith('/') ? path : `/${path}`;
   if (!API_BASE_URL) return cleanPath;
   return `${API_BASE_URL}${cleanPath}`;

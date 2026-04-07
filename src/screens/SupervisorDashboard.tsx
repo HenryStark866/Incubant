@@ -1071,7 +1071,7 @@ export default function SupervisorDashboard() {
                             {/* Imagen de fondo dinámica con resolución mejorada */}
                             <div className="absolute inset-0">
                               <img
-                                src={machine.photoUrl || (machine.status === 'maintenance' ? '/imagen2.png' : '/imagen1.png')}
+                                src={getApiUrl(machine.photoUrl) || (machine.status === 'maintenance' ? '/imagen2.png' : '/imagen1.png')}
                                 alt={machine.name}
                                 className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110 group-hover:rotate-1"
                                 style={{
@@ -1185,7 +1185,7 @@ export default function SupervisorDashboard() {
                   <div className="relative max-w-5xl w-full flex flex-col items-center gap-6" onClick={e => e.stopPropagation()}>
                     <div className="relative group overflow-hidden rounded-3xl shadow-2xl bg-black/40 border border-white/5">
                       <img
-                        src={adminPhotoViewer.photoUrl || (adminPhotoViewer.status === 'maintenance' ? '/imagen2.png' : '/imagen1.png')}
+                        src={getApiUrl(adminPhotoViewer.photoUrl) || (adminPhotoViewer.status === 'maintenance' ? '/imagen2.png' : '/imagen1.png')}
                         alt={adminPhotoViewer.name}
                         className="max-w-full max-h-[70vh] object-contain"
                         onError={(e) => {
@@ -1238,7 +1238,7 @@ export default function SupervisorDashboard() {
                       <div className="ml-auto flex items-center gap-4">
                         {adminPhotoViewer.photoUrl ? (
                           <a
-                            href={adminPhotoViewer.photoUrl}
+                            href={getApiUrl(adminPhotoViewer.photoUrl)}
                             download={`${adminPhotoViewer.name}-${Date.now()}.jpg`}
                             target="_blank"
                             rel="noopener noreferrer"
@@ -1482,7 +1482,7 @@ export default function SupervisorDashboard() {
                           <>
                             <img
                               key={isBase64 ? 'base64' : selectedMachine.photoUrl}
-                              src={selectedMachine.photoUrl}
+                              src={getApiUrl(selectedMachine.photoUrl)}
                               alt={`Evidencia ${selectedMachine.name}`}
                               className="w-full h-full object-cover"
                               loading="eager"

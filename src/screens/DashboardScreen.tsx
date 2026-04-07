@@ -152,7 +152,7 @@ const MachineCard = ({
       {/* Imagen de máquina real */}
       <div className="absolute inset-0">
         <img
-          src={machine.photoUrl || '/imagen1.png'}
+          src={getApiUrl(machine.photoUrl) || '/imagen1.png'}
           alt={`Máquina ${machineCode}`}
           className="w-full h-full object-cover"
           style={{

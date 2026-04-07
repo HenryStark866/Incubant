@@ -41,7 +41,7 @@ function PhotoViewer({
 
       {/* Image */}
       <img
-        src={item.photo_url}
+        src={getApiUrl(item.photo_url)}
         alt="Evidencia"
         className="max-w-full max-h-[72vh] object-contain rounded-xl shadow-2xl select-none"
         onClick={e => e.stopPropagation()}
@@ -405,13 +405,13 @@ export default function AdminHistoryScreen() {
                   }`}
                 >
                   {/* Thumbnail */}
-                  {item.itemType === 'log' && item.photo_url ? (
+                  {(item.itemType === 'log' || item.itemType === 'report') && item.photo_url ? (
                     <div
                       className="aspect-square relative cursor-pointer bg-black/10 overflow-hidden"
                       onClick={() => setSelectedPhoto(item)}
                     >
                       <img
-                        src={item.photo_url}
+                        src={getApiUrl(item.photo_url)}
                         alt="Evidencia"
                         loading="lazy"
                         className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
@@ -501,7 +501,7 @@ export default function AdminHistoryScreen() {
                         onClick={e => {
                           e.stopPropagation();
                           handleDownloadPhoto(
-                            item.photo_url,
+                            getApiUrl(item.photo_url),
                             `${machineName}_${new Date(item.fecha_hora).getTime()}.jpg`
                           );
                         }}
@@ -517,7 +517,7 @@ export default function AdminHistoryScreen() {
                       <button
                         onClick={e => {
                           e.stopPropagation();
-                          if (item.pdfUrl) window.open(item.pdfUrl, '_blank');
+                          if (item.pdfUrl) window.open(getApiUrl(item.pdfUrl), '_blank');
                         }}
                         disabled={!item.pdfUrl}
                         className={`mt-1 flex items-center justify-center gap-1 w-full py-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider transition-colors ${

@@ -5,7 +5,7 @@ import { generateReportPDF, generateSummaryPDF } from '../services/pdf.service';
 import { uploadToSupabase } from '../services/supabase_storage.service';
 
 // Tipos locales para evitar dependencias circulares
-type AuthenticatedRequest = any; 
+type AuthenticatedRequest = any;
 
 // Obtener fecha hoy en Bogotá para reportes de cierre
 function getTodayBogotaMidnight() {
@@ -71,7 +71,7 @@ export const processMachineReport = async (req: AuthenticatedRequest, res: Respo
     const prisma = await getPrisma();
     let dbType: 'INCUBADORA' | 'NACEDORA' = 'INCUBADORA';
     let machineNumber = 1;
-    
+
     // Extraer tipo y número del machineId enviado (ej: "inc-1" o "INC-01")
     const match = machineId.match(/(inc|nac|b|n)[-:_]?(\d+)/i);
     if (match) {
@@ -120,11 +120,11 @@ export const processMachineReport = async (req: AuthenticatedRequest, res: Respo
     const calcDiff = (r: any, s: any) => Math.abs(toNum(r) - toNum(s));
 
     const tempPrincipalReal = toNum(d.tempOvoscanReal ?? d.tempSynchroReal);
-    const tempPrincipalSP   = toNum(d.tempOvoscanSP  ?? d.tempSynchroSP);
-    const humidityReal      = toNum(d.humedadReal    ?? d.humedadRelativa ?? d.humidity);
-    const humiditySP        = toNum(d.humedadSP);
-    const tempAireReal      = toNum(d.tempAireReal);
-    const tempAireSP        = toNum(d.tempAireSP);
+    const tempPrincipalSP = toNum(d.tempOvoscanSP ?? d.tempSynchroSP);
+    const humidityReal = toNum(d.humedadReal ?? d.humedadRelativa ?? d.humidity);
+    const humiditySP = toNum(d.humedadSP);
+    const tempAireReal = toNum(d.tempAireReal);
+    const tempAireSP = toNum(d.tempAireSP);
 
     const isAlarm =
       calcDiff(tempPrincipalReal, tempPrincipalSP) >= 1.5 ||
@@ -134,39 +134,39 @@ export const processMachineReport = async (req: AuthenticatedRequest, res: Respo
     const [savedReport] = await prisma.$transaction([
       prisma.report.create({
         data: {
-          machine_id:       machine.id,
-          user_id:          userId,
+          machine_id: machine.id,
+          user_id: userId,
           tempPrincipalReal,
           tempPrincipalSP,
           humidityReal,
           humiditySP,
           tempAireReal,
           tempAireSP,
-          co2Real:          toNum(d.co2Real),
-          co2SP:            toNum(d.co2SP),
+          co2Real: toNum(d.co2Real),
+          co2SP: toNum(d.co2SP),
           isAlarm,
-          processStatus:    isAlarm ? 'ALARMA' : 'NORMAL',
+          processStatus: isAlarm ? 'ALARMA' : 'NORMAL',
           imageUrl,
-          temperature:      tempPrincipalReal, // Alias legacy
-          humidity:         humidityReal,      // Alias legacy
-          observaciones:    String(d.observaciones || ''),
+          temperature: tempPrincipalReal, // Alias legacy
+          humidity: humidityReal,      // Alias legacy
+          observaciones: String(d.observaciones || ''),
         },
       }),
       prisma.hourlyLog.create({
         data: {
-          user_id:                  userId,
-          machine_id:               machine.id,
-          photo_url:                imageUrl || null,
-          temp_principal_actual:    tempPrincipalReal,
-          temp_principal_consigna:  tempPrincipalSP,
-          humedad_actual:           humidityReal,
-          humedad_consigna:         humiditySP,
-          co2_actual:               toNum(d.co2Real),
-          co2_consigna:             toNum(d.co2SP),
-          temp_secundaria_actual:   tempAireReal,
+          user_id: userId,
+          machine_id: machine.id,
+          photo_url: imageUrl || null,
+          temp_principal_actual: tempPrincipalReal,
+          temp_principal_consigna: tempPrincipalSP,
+          humedad_actual: humidityReal,
+          humedad_consigna: humiditySP,
+          co2_actual: toNum(d.co2Real),
+          co2_consigna: toNum(d.co2SP),
+          temp_secundaria_actual: tempAireReal,
           temp_secundaria_consigna: tempAireSP,
-          is_na:                    dbType === 'NACEDORA',
-          observaciones:            d.observaciones ? String(d.observaciones).slice(0, 500) : null,
+          is_na: dbType === 'NACEDORA',
+          observaciones: d.observaciones ? String(d.observaciones).slice(0, 500) : null,
         },
       })
     ]);
@@ -183,18 +183,18 @@ export const processMachineReport = async (req: AuthenticatedRequest, res: Respo
       try {
         const { sendEventToAll } = await import('../services/event.service');
         sendEventToAll({
-          type:      'NEW_REPORT',
-          message:   `Reporte de ${machineId} (${userName}) recibido.`,
+          type: 'NEW_REPORT',
+          message: `Reporte de ${machineId} (${userName}) recibido.`,
           timestamp: new Date().toISOString(),
           machineId: machine.id,
-          status:    isAlarm ? 'alarm' : 'ok',
+          status: isAlarm ? 'alarm' : 'ok',
         });
-        
+
         // También marcar al usuario como activo de inmediato
-        sendEventToAll({ 
-          type: 'USER_STATUS_UPDATE', 
+        sendEventToAll({
+          type: 'USER_STATUS_UPDATE',
           message: `${userName} reportó máquina ${machineId}`,
-          userId: userId 
+          userId: userId
         });
       } catch (e) {
         console.warn('[Report SSE] Error en notificación inicial:', e);
@@ -212,7 +212,7 @@ export const processMachineReport = async (req: AuthenticatedRequest, res: Respo
           file.buffer
         );
         const pdfResult = await uploadToSupabase(pdfBuffer, userName, 'reports', 'application/pdf');
-        
+
         // B. Actualizar registro con pdfUrl
         await prisma.report.update({
           where: { id: savedReport.id },
@@ -237,7 +237,7 @@ export const processMachineReport = async (req: AuthenticatedRequest, res: Respo
 // ──────────────────────────────────────────────────────────────────────────────
 export const requestClosingReport = async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const userId   = req.user?.id;
+    const userId = req.user?.id;
     const userName = req.user?.name || 'Operario';
     const userShift = req.user?.shift || 'Turno';
 

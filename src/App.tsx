@@ -1,5 +1,4 @@
 import { useEffect, useState, useRef, useCallback, lazy, Suspense } from 'react';
-import UpdatePrompt from './components/UpdatePrompt';
 import { useMachineStore } from './store/useMachineStore';
 import { useThemeStore } from './store/useThemeStore';
 import { canUseSupervisorPanel } from './lib/fallbackAuth';
@@ -31,7 +30,7 @@ export default function App() {
 
   const theme = useThemeStore(state => state.theme);
   const isDark = theme === 'dark';
-  
+
   const activeMachineId = useMachineStore(state => state.activeMachineId);
   const capturedPhoto = useMachineStore(state => state.capturedPhoto);
   const currentUser = useMachineStore(state => state.currentUser);
@@ -71,7 +70,7 @@ export default function App() {
     const validateSession = async () => {
       let healthy = await checkHealth();
       let attempts = 0;
-      
+
       while (!healthy && attempts < 12) {
         await new Promise(r => setTimeout(r, 5000));
         healthy = await checkHealth();
@@ -96,7 +95,7 @@ export default function App() {
           console.error('Session validation error:', error);
         }
       }
-      
+
       if (isMounted) setIsSessionReady(true);
     };
 
@@ -108,7 +107,7 @@ export default function App() {
 
   useEffect(() => {
     if (!currentUser) return;
-    
+
     const syncProfile = async () => {
       if (isSyncingRef.current) return;
       isSyncingRef.current = true;
@@ -118,13 +117,13 @@ export default function App() {
           const { user } = await res.json();
           if (user && JSON.stringify(user) !== JSON.stringify(currentUser)) {
             if (user.shift !== currentUser.shift) {
-               try {
-                  const { showAppNotification } = await import('./utils/notifications');
-                  void showAppNotification('¡Cambio de Turno!', {
-                    body: `Has sido reasignado al ${user.shift}.`,
-                    icon: '/pwa-192x192.png'
-                  });
-               } catch (notifErr) { console.warn('Notificaciones no disponibles'); }
+              try {
+                const { showAppNotification } = await import('./utils/notifications');
+                void showAppNotification('¡Cambio de Turno!', {
+                  body: `Has sido reasignado al ${user.shift}.`,
+                  icon: '/pwa-192x192.png'
+                });
+              } catch (notifErr) { console.warn('Notificaciones no disponibles'); }
             }
             login(user);
           }
@@ -177,7 +176,7 @@ export default function App() {
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       if (wakeLock) {
-        wakeLock.release().catch(() => {});
+        wakeLock.release().catch(() => { });
       }
     };
   }, [currentUser, canAccessSupervisor]);
@@ -198,45 +197,45 @@ export default function App() {
       <div className="min-h-screen bg-[#060b18] flex items-center justify-center p-8 relative overflow-hidden font-mono">
         <div className="absolute inset-0 circuit-bg opacity-20 pointer-events-none" />
         <div className="absolute -top-40 -left-40 w-96 h-96 rounded-full bg-brand-primary blur-[160px] opacity-10 animate-float-slow" />
-        
+
         <div className="max-w-xs w-full flex flex-col items-center text-center gap-10 relative z-10">
           <div className="relative w-32 h-32 flex items-center justify-center">
-             <div className="absolute inset-0 rounded-full border-2 border-brand-primary/20 animate-spin-slow" />
-             <div className="absolute inset-[-8px] rounded-full border border-brand-secondary/10 animate-spin-reverse" style={{ borderStyle: 'dashed' }} />
-             <div className="absolute inset-0 animate-pulse-glow rounded-full" style={{ background: 'radial-gradient(circle, rgba(247,147,26,0.1) 0%, transparent 70%)' }} />
-             
-             <div className="relative z-10 w-24 h-24 flex items-center justify-center animate-float">
-                <img src="/logo.png" alt="Incubant" className="w-full h-full object-contain drop-shadow-[0_0_20px_rgba(247,147,26,0.5)]" />
-             </div>
+            <div className="absolute inset-0 rounded-full border-2 border-brand-primary/20 animate-spin-slow" />
+            <div className="absolute inset-[-8px] rounded-full border border-brand-secondary/10 animate-spin-reverse" style={{ borderStyle: 'dashed' }} />
+            <div className="absolute inset-0 animate-pulse-glow rounded-full" style={{ background: 'radial-gradient(circle, rgba(247,147,26,0.1) 0%, transparent 70%)' }} />
+
+            <div className="relative z-10 w-24 h-24 flex items-center justify-center animate-float">
+              <img src="/logo.png" alt="Incubant" className="w-full h-full object-contain drop-shadow-[0_0_20px_rgba(247,147,26,0.5)]" />
+            </div>
           </div>
-          
+
           <div className="space-y-4">
-             <div className="flex items-center justify-center gap-2 mb-2">
-                <Cpu size={12} className="text-brand-primary animate-blink" />
-                <span className="text-[9px] font-black uppercase tracking-[0.4em] text-brand-primary/60 font-mono-display">Corporacion CDH Maker</span>
-             </div>
-             <h2 className="text-2xl font-black text-white tracking-widest uppercase font-mono-display holo-text">
-               INICIANDO APP INCUBANT
-             </h2>
-             <div className="h-px w-20 bg-brand-primary/20 mx-auto" />
-             <p className="text-[10px] text-white/30 font-medium leading-relaxed uppercase tracking-widest max-w-[200px] mx-auto font-mono">
-               {isWaitingApi 
-                 ? `Estableciendo enlace seguro con el nucleo central. Intento ${retryCount}/12` 
-                 : 'Cargando protocolos de seguridad y validando sesion de operario...'}
-             </p>
+            <div className="flex items-center justify-center gap-2 mb-2">
+              <Cpu size={12} className="text-brand-primary animate-blink" />
+              <span className="text-[9px] font-black uppercase tracking-[0.4em] text-brand-primary/60 font-mono-display">Corporacion CDH Maker</span>
+            </div>
+            <h2 className="text-2xl font-black text-white tracking-widest uppercase font-mono-display holo-text">
+              INICIANDO APP INCUBANT
+            </h2>
+            <div className="h-px w-20 bg-brand-primary/20 mx-auto" />
+            <p className="text-[10px] text-white/30 font-medium leading-relaxed uppercase tracking-widest max-w-[200px] mx-auto font-mono">
+              {isWaitingApi
+                ? `Estableciendo enlace seguro con el nucleo central. Intento ${retryCount}/12`
+                : 'Cargando protocolos de seguridad y validando sesion de operario...'}
+            </p>
           </div>
 
           <div className="w-full space-y-2">
             <div className="w-full bg-white/5 h-[3px] rounded-full overflow-hidden relative border border-white/5">
-              <div 
+              <div
                 className="h-full bg-brand-primary transition-all duration-700 ease-out shadow-[0_0_15px_rgba(247,147,26,0.8)]"
                 style={{ width: isWaitingApi ? `${(retryCount / 12) * 100}%` : '45%' }}
               />
             </div>
             <div className="flex justify-between text-[7px] font-black text-white/20 tracking-tighter font-mono uppercase">
-               <span>BITRATE: 104.22 KB/S</span>
-               <span>{isWaitingApi ? (retryCount*8.3).toFixed(1) : '45.0'}%</span>
-               <span>STATUS: {isWaitingApi ? 'PENDING' : 'READY'}</span>
+              <span>BITRATE: 104.22 KB/S</span>
+              <span>{isWaitingApi ? (retryCount * 8.3).toFixed(1) : '45.0'}%</span>
+              <span>STATUS: {isWaitingApi ? 'PENDING' : 'READY'}</span>
             </div>
           </div>
         </div>
@@ -249,9 +248,9 @@ export default function App() {
       {viewMode === 'supervisor' && canAccessSupervisor ? (
         <div className={`relative h-screen w-full font-sans flex flex-col ${isDark ? 'bg-[#060b18]' : 'bg-gray-50'}`}>
           <div className="flex-1 overflow-hidden relative">
-             <SupervisorDashboard />
+            <SupervisorDashboard />
           </div>
-          <button 
+          <button
             onClick={handleSwitchToMobile}
             className={`fixed bottom-6 right-6 z-50 flex items-center gap-2 border-2 px-5 py-3 rounded-2xl font-bold text-xs shadow-xl transition-all active:scale-95 ${isDark ? 'bg-white/10 border-brand-primary/20 text-white hover:bg-brand-primary hover:text-white hover:border-brand-primary' : 'bg-white border-brand-primary/20 text-brand-dark hover:bg-brand-primary hover:text-white hover:border-brand-primary'}`}
           >
@@ -261,7 +260,6 @@ export default function App() {
         </div>
       ) : (
         <div className={`h-full w-full relative flex flex-col items-center justify-center overscroll-none overflow-hidden font-mono ${isDark ? 'bg-[#060b18]' : 'bg-gray-50'}`}>
-          <UpdatePrompt />
           <div className={`w-full h-full relative overflow-hidden safe-top safe-bottom ${isDark ? 'bg-white shadow-[0_0_100px_rgba(0,0,0,0.5)]' : 'bg-white shadow-[0_0_100px_rgba(0,0,0,0.15)]'}`}>
             {!currentUser ? (
               <LoginScreen />

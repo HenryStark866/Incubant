@@ -7,6 +7,7 @@ import multer from 'multer';
 import type { PrismaClient } from '@prisma/client';
 
 import { processMachineReport, requestClosingReport, getHistory } from './controllers/report.controller';
+import { createConversation, getConversations, getMessages, sendMessage, deleteMessage, getChatHistory } from './controllers/chat.controller';
 import { seedShifts } from './controllers/admin.controller';
 import { getPrismaClient } from './prisma';
 import { uploadToSupabase } from './services/supabase_storage.service';
@@ -87,13 +88,13 @@ type PredefinedUser = {
 };
 
 const predefinedUsers: PredefinedUser[] = [
-  { id: 'admin',          nombre: 'Administrador',  pin_acceso: '4753',   rol: 'JEFE',       turno: 'Gestión' },
-  { id: 'elkin-cavadia',  nombre: 'Elkin Cavadia',  pin_acceso: '11168',  rol: 'JEFE',       turno: 'Gestión' },
-  { id: 'juan-alejandro', nombre: 'Juan Alejandro', pin_acceso: '1111',   rol: 'OPERARIO',   turno: 'Turno 3' },
-  { id: 'juan-suaza',     nombre: 'Juan Suaza',     pin_acceso: '2222',   rol: 'OPERARIO',   turno: 'Turno 1' },
-  { id: 'ferney-tabares', nombre: 'Ferney Tabares', pin_acceso: '3333',   rol: 'OPERARIO',   turno: 'Turno 2' },
-  { id: 'luis-cortes',        nombre: 'Luis Cortes',        pin_acceso: '4444',   rol: 'OPERARIO',   turno: 'Turno 2' },
-  { id: 'jhon-piedrahita',nombre: 'Jhon Piedrahita',pin_acceso: 'jp2026', rol: 'SUPERVISOR', turno: 'Turno 1' },
+  { id: 'admin', nombre: 'Administrador', pin_acceso: '4753', rol: 'JEFE', turno: 'Gestión' },
+  { id: 'elkin-cavadia', nombre: 'Elkin Cavadia', pin_acceso: '11168', rol: 'JEFE', turno: 'Gestión' },
+  { id: 'juan-alejandro', nombre: 'Juan Alejandro', pin_acceso: '1111', rol: 'OPERARIO', turno: 'Turno 3' },
+  { id: 'juan-suaza', nombre: 'Juan Suaza', pin_acceso: '2222', rol: 'OPERARIO', turno: 'Turno 1' },
+  { id: 'ferney-tabares', nombre: 'Ferney Tabares', pin_acceso: '3333', rol: 'OPERARIO', turno: 'Turno 2' },
+  { id: 'luis-cortes', nombre: 'Luis Cortes', pin_acceso: '4444', rol: 'OPERARIO', turno: 'Turno 2' },
+  { id: 'jhon-piedrahita', nombre: 'Jhon Piedrahita', pin_acceso: 'jp2026', rol: 'SUPERVISOR', turno: 'Turno 1' },
 ];
 
 // ==========================================================================
@@ -104,7 +105,7 @@ const predefinedUsers: PredefinedUser[] = [
 async function seedDatabase() {
   const prisma = await getPrismaClient();
   console.log('[Seed] Initializing database...');
-  
+
   for (const user of predefinedUsers) {
     try {
       await prisma.user.upsert({
@@ -130,8 +131,8 @@ async function seedDatabase() {
 
   // Ensure some machines exist for testing
   const machineIds = [];
-  for (let i=1; i<=24; i++) machineIds.push(`B${i.toString().padStart(2, '0')}`);
-  for (let i=1; i<=12; i++) machineIds.push(`N${i.toString().padStart(2, '0')}`);
+  for (let i = 1; i <= 24; i++) machineIds.push(`B${i.toString().padStart(2, '0')}`);
+  for (let i = 1; i <= 12; i++) machineIds.push(`N${i.toString().padStart(2, '0')}`);
 
   for (const mid of machineIds) {
     try {
@@ -190,12 +191,12 @@ async function getCurrentShiftForUser(userId: string): Promise<string> {
   } catch (error) {
     console.warn('[Shift] Error querying assignment:', error);
   }
-  
+
   // Fallback to static user turno if no assignment or DB error
   try {
     const prisma = await getPrismaClient();
     const user = await prisma.user.findUnique({ where: { id: userId } });
-    
+
     // Obtener hora actual en Colombia para el fallback sintético
     const bogotaComps = getBogotaTimeComponents();
     return user?.turno || getShiftNameFromHour(bogotaComps.hour);
@@ -243,7 +244,7 @@ async function createSession(user_id: string, maxAge: number) {
   const prisma = await getPrismaClient();
   const token = crypto.randomUUID();
   const expiresAt = new Date(Date.now() + maxAge);
-  
+
   await prisma.session.create({
     data: {
       token,
@@ -251,7 +252,7 @@ async function createSession(user_id: string, maxAge: number) {
       expiresAt
     }
   });
-  
+
   return token;
 }
 
@@ -329,7 +330,7 @@ async function sendAuthenticatedUser(res: Response, user: { id: string, nombre: 
   const maxAge = 12 * 60 * 60 * 1000;
   const token = await createSession(user.id, maxAge);
   res.setHeader('Set-Cookie', buildSessionCookie(token));
-  
+
   const prisma = await getPrismaClient();
   const today = getTodayInBogota();
   const assignment = await prisma.scheduleAssignment.findFirst({
@@ -337,7 +338,7 @@ async function sendAuthenticatedUser(res: Response, user: { id: string, nombre: 
     include: { shift: true }
   });
 
-  return res.status(200).json({ 
+  return res.status(200).json({
     user: {
       id: user.id,
       name: user.nombre,
@@ -501,7 +502,7 @@ export function createApiApp(app: Express): void {
   const upload = multer({ storage: multer.memoryStorage() });
 
   app.use(express.json({ limit: '50mb' }));
-  
+
 
   app.use(attachSessionUser);
 
@@ -570,10 +571,10 @@ export function createApiApp(app: Express): void {
       if (touchUser) {
         // Notificar al dashboard el cambio de estado (throttled logic exists in some clients)
         const { sendEventToAll } = await import('./services/event.service');
-        sendEventToAll({ 
-          type: 'USER_STATUS_UPDATE', 
+        sendEventToAll({
+          type: 'USER_STATUS_UPDATE',
           message: `${req.user.name} está activo`,
-          userId: touchUser.id 
+          userId: touchUser.id
         });
       }
     } catch (e) {
@@ -587,8 +588,8 @@ export function createApiApp(app: Express): void {
     const cookies = parseCookies(req.headers.cookie);
     const token = cookies[SESSION_COOKIE_NAME];
     if (token) {
-       const prisma = await getPrismaClient();
-       await prisma.session.delete({ where: { token } }).catch(() => null);
+      const prisma = await getPrismaClient();
+      await prisma.session.delete({ where: { token } }).catch(() => null);
     }
     res.setHeader('Set-Cookie', clearSessionCookie());
     res.status(204).end();
@@ -703,7 +704,7 @@ export function createApiApp(app: Express): void {
 
         const logsToInsert = await Promise.all(completedMachines.map(async (machine) => {
           const resolvedMachine = await resolveDatabaseMachine(machine);
-          
+
           // Para máquinas apagadas, usar 0
           const d = machine.data!;
           // Accept both Real-suffixed and legacy field names
@@ -752,9 +753,9 @@ export function createApiApp(app: Express): void {
           data: logsToInsert,
         });
 
-        sendEventToAll({ 
-          type: 'NEW_REPORT', 
-          message: `Reporte sincronizado por ${userName}`, 
+        sendEventToAll({
+          type: 'NEW_REPORT',
+          message: `Reporte sincronizado por ${userName}`,
           timestamp: new Date().toISOString(),
           userName: userName
         });
@@ -804,7 +805,7 @@ export function createApiApp(app: Express): void {
           try {
             const base64Data = photoStr.replace(/^data:image\/\w+;base64,/, '');
             const buffer = Buffer.from(base64Data, 'base64');
-            
+
             const uploadResult = await uploadToSupabase(
               buffer, userName, 'photos', 'image/jpeg', machine.id
             );
@@ -891,7 +892,7 @@ export function createApiApp(app: Express): void {
         try {
           const { generateSummaryPDF } = await import('./services/pdf.service');
           const { uploadToSupabase } = await import('./services/supabase_storage.service');
-          
+
           // Obtener los logs recién creados para el PDF (con relaciones)
           const logsForPdf = await prisma.hourlyLog.findMany({
             where: {
@@ -906,7 +907,7 @@ export function createApiApp(app: Express): void {
             const pdfBuffer = await generateSummaryPDF(userName, (req.user as any)?.shift || 'Turno Actual', logsForPdf);
             const pdfResult = await uploadToSupabase(pdfBuffer, userName, 'reports', 'application/pdf');
             console.log(`[Sync Storage] ✅ PDF Horario generado y subido: ${pdfResult.publicUrl}`);
-            
+
             // También lo guardamos en la tabla Report para el historial administrativo
             await prisma.report.create({
               data: {
@@ -928,9 +929,9 @@ export function createApiApp(app: Express): void {
           data: { ultimo_acceso: new Date() }
         }).catch(() => null);
 
-        sendEventToAll({ 
-          type: 'NEW_REPORT', 
-          message: `Reporte sincronizado por ${userName}`, 
+        sendEventToAll({
+          type: 'NEW_REPORT',
+          message: `Reporte sincronizado por ${userName}`,
           timestamp: new Date().toISOString(),
           userName: userName
         });
@@ -1075,7 +1076,7 @@ export function createApiApp(app: Express): void {
 
       // Determinar el turno actual dinámicamente según la tabla de Shifts
       const shiftData = await getCurrentShiftData();
-      
+
       let shiftStartUTC: Date;
       let currentShiftName: string;
 
@@ -1088,15 +1089,15 @@ export function createApiApp(app: Express): void {
         const bogotaComps = getBogotaTimeComponents();
         const hourCO = bogotaComps.hour;
         const shiftName = getShiftNameFromHour(hourCO);
-        
+
         let shiftStartHourCO: number;
-        if (hourCO >= 6 && hourCO < 14)       shiftStartHourCO = 6;
+        if (hourCO >= 6 && hourCO < 14) shiftStartHourCO = 6;
         else if (hourCO >= 14 && hourCO < 22) shiftStartHourCO = 14;
-        else                                   shiftStartHourCO = 22;
+        else shiftStartHourCO = 22;
 
         const midnightBogotaUTC = new Date(Date.UTC(bogotaComps.year, bogotaComps.month - 1, bogotaComps.day, 5, 0, 0, 0));
         shiftStartUTC = new Date(midnightBogotaUTC.getTime() + shiftStartHourCO * 60 * 60 * 1000);
-        
+
         if (shiftStartUTC > new Date()) {
           shiftStartUTC = new Date(shiftStartUTC.getTime() - 24 * 60 * 60 * 1000);
         }
@@ -1115,7 +1116,7 @@ export function createApiApp(app: Express): void {
       });
 
       const currentTime = new Date();
-      
+
       // Intentar obtener el objeto Shift específico para colores etc.
       const currentShiftObj = await prisma.shift.findFirst({
         where: { nombre: currentShiftName }
@@ -1169,9 +1170,9 @@ export function createApiApp(app: Express): void {
         shiftClosingCount = 0;
       }
 
-      return res.json({ 
+      return res.json({
         version: '1.2.4-TOTAL-FIX',
-        reportCount, 
+        reportCount,
         lastReportTime: lastLog?.fecha_hora || null,
         activeOperatorsCount: onlineNames.length,
         activeOperatorsNames: displayNames,
@@ -1182,9 +1183,9 @@ export function createApiApp(app: Express): void {
       });
     } catch (error) {
       console.error('[Dashboard] Error al consultar resumen:', error);
-      return res.json({ 
-        reportCount: 0, 
-        lastReportTime: null, 
+      return res.json({
+        reportCount: 0,
+        lastReportTime: null,
         activeOperatorsCount: 0,
         activeOperatorsNames: '',
         responsibleOperator: '',
@@ -1238,7 +1239,7 @@ export function createApiApp(app: Express): void {
       // Determinar el inicio del turno actual y el tiempo del último reporte global
       const shiftData = await getCurrentShiftData();
       const shiftStartUTC = shiftData?.startUTC || new Date(Date.now() - 8 * 60 * 60 * 1000);
-      
+
       // Obtener el tiempo del registro más caliente en el sistema para detectar el "ciclo actual"
       const lastOverallLog = await prisma.hourlyLog.findFirst({
         orderBy: { fecha_hora: 'desc' },
@@ -1264,12 +1265,12 @@ export function createApiApp(app: Express): void {
           const logTime = log.fecha_hora.getTime();
           const logDateOrig = log.fecha_hora;
           const maxDateOrig = lastOverallLog?.fecha_hora || new Date();
-          
+
           const logBucket = `${logDateOrig.getUTCFullYear()}-${logDateOrig.getUTCMonth()}-${logDateOrig.getUTCDate()}-${logDateOrig.getUTCHours()}`;
           const maxBucket = `${maxDateOrig.getUTCFullYear()}-${maxDateOrig.getUTCMonth()}-${maxDateOrig.getUTCDate()}-${maxDateOrig.getUTCHours()}`;
-          
+
           const isSameBucket = logBucket === maxBucket;
-          const isRecentlyReported = (maxLogTime - logTime) < (45 * 60 * 1000); 
+          const isRecentlyReported = (maxLogTime - logTime) < (45 * 60 * 1000);
 
           observaciones = log.observaciones;
           updatedBy = log.user?.nombre || null;
@@ -1323,7 +1324,7 @@ export function createApiApp(app: Express): void {
             // si es del ciclo actual para cumplir con el "reinicio horario".
             const latestPhoto = photoMap.get(machine.id);
             const isPhotoInCurrentCycle = latestPhoto && (
-              (maxLogTime - latestPhoto.timestamp.getTime()) < (60 * 60 * 1000) || 
+              (maxLogTime - latestPhoto.timestamp.getTime()) < (60 * 60 * 1000) ||
               latestPhoto.timestamp.getTime() > shiftStartUTC.getTime()
             );
 
@@ -1376,10 +1377,10 @@ export function createApiApp(app: Express): void {
       const prisma = await getPrismaClient();
       const user = await prisma.user.findFirst({ where: { rol: 'OPERARIO' } });
       if (!user) return res.status(404).send('No se encontró operario para el login de prueba');
-      
+
       const machines = await prisma.machine.findMany();
       const timestamp = new Date(); // Use current time
-      
+
       for (const machine of machines) {
         const seed = Math.floor(Math.random() * 10000);
         await prisma.hourlyLog.create({
@@ -1433,19 +1434,19 @@ export function createApiApp(app: Express): void {
         return {
           time: timeStr,
           // Temperatura principal (Ovoscan/Synchro) - REAL y SP
-          tempOvoscan:  log.temp_principal_actual   ?? 0,
+          tempOvoscan: log.temp_principal_actual ?? 0,
           tempOvoscanSP: log.temp_principal_consigna ?? 0,
           // Temperatura secundaria (Aire) - REAL y SP
-          tempAire:     log.temp_secundaria_actual   ?? 0,
-          tempAireSP:   log.temp_secundaria_consigna ?? 0,
+          tempAire: log.temp_secundaria_actual ?? 0,
+          tempAireSP: log.temp_secundaria_consigna ?? 0,
           // Humedad - ahora desde columna dedicada
-          humedad:      (log as any).humedad_actual   ?? 0,
-          humedadSP:    (log as any).humedad_consigna ?? 0,
+          humedad: (log as any).humedad_actual ?? 0,
+          humedadSP: (log as any).humedad_consigna ?? 0,
           // CO2 - REAL y SP
-          co2:          log.co2_actual   ?? 0,
-          co2SP:        log.co2_consigna ?? 0,
+          co2: log.co2_actual ?? 0,
+          co2SP: log.co2_consigna ?? 0,
           // Aliases para nacedoras
-          temp:   log.temp_principal_actual   ?? 0,
+          temp: log.temp_principal_actual ?? 0,
           tempSP: log.temp_principal_consigna ?? 0,
         };
       });
@@ -1661,7 +1662,7 @@ export function createApiApp(app: Express): void {
 
       // Verificar si tiene logs asociados para evitar errores de integridad
       const logsCount = await prisma.hourlyLog.count({ where: { user_id: id } });
-      
+
       if (logsCount > 0) {
         // En lugar de borrar, desactivamos para mantener historial
         await prisma.user.update({
@@ -1778,11 +1779,11 @@ export function createApiApp(app: Express): void {
     try {
       const { id } = req.params;
       const prisma = await getPrismaClient();
-      
+
       const assignments = await prisma.scheduleAssignment.count({
         where: { shift_id: id }
       });
-      
+
       if (assignments > 0) {
         return res.status(400).json({ error: 'Turno en uso: No se puede eliminar porque tiene operarios asignados.' });
       }
@@ -1826,12 +1827,12 @@ export function createApiApp(app: Express): void {
         update: { shift_id },
         create: { user_id, shift_id, fecha: dateObj }
       });
-      
+
       const shift = await prisma.shift.findUnique({ where: { id: shift_id } });
-      sendEventToUser(user_id, { 
-        type: 'NEW_ASSIGNMENT', 
+      sendEventToUser(user_id, {
+        type: 'NEW_ASSIGNMENT',
         message: `Tu horario para el ${dateObj.toLocaleDateString()} ha sido actualizado al turno "${shift?.nombre}".`,
-        assignment 
+        assignment
       });
 
       return res.json(assignment);
@@ -1874,7 +1875,7 @@ export function createApiApp(app: Express): void {
   app.get('/api/admin/users', requireRoles(SUPERVISOR_ROLES), async (_req, res) => {
     try {
       const prisma = await getPrismaClient();
-      const users = await prisma.user.findMany({ 
+      const users = await prisma.user.findMany({
         where: { estado: 'Activo' },
         orderBy: { nombre: 'asc' }
       });
@@ -1897,7 +1898,7 @@ export function createApiApp(app: Express): void {
       });
       return res.json(assignments);
     } catch (error) {
-       return res.status(500).json({ error: 'Error al consultar mi horario' });
+      return res.status(500).json({ error: 'Error al consultar mi horario' });
     }
   });
 
@@ -1908,14 +1909,14 @@ export function createApiApp(app: Express): void {
       const prisma = await getPrismaClient();
       const now = new Date();
       const timeStr = now.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', hour12: false });
-      
+
       // 1. Alertas de 15 minutos antes
       const targetTime = new Date(now.getTime() + 15 * 60 * 1000);
       const targetTimeStr = targetTime.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', hour12: false });
-      
+
       const assignmentsStartingSoon = await prisma.scheduleAssignment.findMany({
-        where: { 
-          fecha: { gte: new Date(now.toDateString()), lt: new Date(now.getTime() + 24*60*60*1000) },
+        where: {
+          fecha: { gte: new Date(now.toDateString()), lt: new Date(now.getTime() + 24 * 60 * 60 * 1000) },
           shift: { hora_inicio: targetTimeStr }
         },
         include: { user: true, shift: true }
@@ -2055,9 +2056,9 @@ export function createApiApp(app: Express): void {
       return res.status(201).json(newRequest);
     } catch (error) {
       console.error('[Requests] Error creating:', error);
-      return res.status(500).json({ 
-        error: 'Error creando solicitud', 
-        details: error instanceof Error ? error.message : String(error) 
+      return res.status(500).json({
+        error: 'Error creando solicitud',
+        details: error instanceof Error ? error.message : String(error)
       });
     }
   });
@@ -2262,6 +2263,40 @@ export function createApiApp(app: Express): void {
     }
   });
 
+  // ────────────────────────────────────────────────────────────────────────────
+  // CHAT & MESSAGING SYSTEM
+  // ────────────────────────────────────────────────────────────────────────────
+
+  // POST /api/chat/conversations — Crear nueva conversación
+  app.post('/api/chat/conversations', requireAuthenticatedUser, async (req: AuthenticatedRequest, res) => {
+    await createConversation(req, res);
+  });
+
+  // GET /api/chat/conversations — Obtener todas las conversaciones del usuario
+  app.get('/api/chat/conversations', requireAuthenticatedUser, async (req: AuthenticatedRequest, res) => {
+    await getConversations(req, res);
+  });
+
+  // GET /api/chat/conversations/:id/messages — Obtener mensajes de una conversación
+  app.get('/api/chat/conversations/:id/messages', requireAuthenticatedUser, async (req: AuthenticatedRequest, res) => {
+    await getMessages(req, res);
+  });
+
+  // POST /api/chat/messages — Enviar un mensaje
+  app.post('/api/chat/messages', requireAuthenticatedUser, async (req: AuthenticatedRequest, res) => {
+    await sendMessage(req, res);
+  });
+
+  // DELETE /api/chat/messages/:id — Eliminar un mensaje
+  app.delete('/api/chat/messages/:id', requireAuthenticatedUser, async (req: AuthenticatedRequest, res) => {
+    await deleteMessage(req, res);
+  });
+
+  // GET /api/chat/history — Obtener historial completo de chat (admin)
+  app.get('/api/chat/history', requireRoles(SUPERVISOR_ROLES), async (req: AuthenticatedRequest, res) => {
+    await getChatHistory(req, res);
+  });
+
 }
 
 function getBogotaTimeComponents(dateInput = new Date()) {
@@ -2274,7 +2309,7 @@ function getBogotaTimeComponents(dateInput = new Date()) {
 
   const p: any = {};
   for (const part of parts) p[part.type] = part.value;
-  
+
   let h = parseInt(p.hour, 10);
   if (h === 24) h = 0;
 
@@ -2298,11 +2333,11 @@ async function getCurrentShiftData(): Promise<{ shift: any; startUTC: Date } | n
   try {
     const prisma = await getPrismaClient();
     const bogotaComps = getBogotaTimeComponents();
-    const timeStr = bogotaComps.hour.toString().padStart(2, '0') + ':' + 
-                    bogotaComps.minute.toString().padStart(2, '0');
+    const timeStr = bogotaComps.hour.toString().padStart(2, '0') + ':' +
+      bogotaComps.minute.toString().padStart(2, '0');
 
     const shifts = await prisma.shift.findMany();
-    
+
     const currentShift = shifts.find(s => {
       // El fin de turno es exclusivo para evitar solapamientos en el badge (ej: a las 14:00 es el siguiente turno)
       if (s.hora_inicio < s.hora_fin) {
@@ -2324,7 +2359,7 @@ async function getCurrentShiftData(): Promise<{ shift: any; startUTC: Date } | n
     if (!currentShift) return null;
 
     const [h, m] = currentShift.hora_inicio.split(':').map(Number);
-    
+
     // Medianoche de Bogota interpretada como UTC (ej: 00:00 Bogota es 05:00 UTC)
     const midnightBogotaUTC = new Date(Date.UTC(bogotaComps.year, bogotaComps.month - 1, bogotaComps.day, 5, 0, 0, 0));
     const startShiftUTC = new Date(midnightBogotaUTC.getTime() + (h * 60 + m) * 60 * 1000);

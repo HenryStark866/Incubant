@@ -9,22 +9,24 @@ datasource db {
 }
 
 model User {
-  id              String               @id @default(uuid())
-  nombre          String
-  pin_acceso      String               @unique
-  rol             Role                 @default(OPERARIO)
-  turno           String               @default("Turno 1")
-  estado          String               @default("Activo")
-  ultimo_acceso   DateTime?
-  session_expires DateTime?
-  breaks          Break[]
-  logs            HourlyLog[]
-  incidents       Incident[]
-  reports         Report[]
-  assignments     ScheduleAssignment[]
-  sessions        Session[]
-  leaveRequests   LeaveRequest[]       @relation("RequesterRelation")
-  reviewedRequests LeaveRequest[]      @relation("ReviewerRelation")
+  id                String                      @id @default(uuid())
+  nombre            String
+  pin_acceso        String                      @unique
+  rol               Role                        @default(OPERARIO)
+  turno             String                      @default("Turno 1")
+  estado            String                      @default("Activo")
+  ultimo_acceso     DateTime?
+  session_expires   DateTime?
+  breaks            Break[]
+  logs              HourlyLog[]
+  incidents         Incident[]
+  reports           Report[]
+  assignments       ScheduleAssignment[]
+  sessions          Session[]
+  leaveRequests     LeaveRequest[]              @relation("RequesterRelation")
+  reviewedRequests  LeaveRequest[]              @relation("ReviewerRelation")
+  sentMessages      Message[]                   @relation("SentMessages")
+  conversations     ConversationParticipant[]
 }
 
 model LeaveRequest {
@@ -149,6 +151,55 @@ model Session {
   user_id   String
   expiresAt DateTime
   user      User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+}
+
+// ════════════════════════════════════════════════════════════════════════════════
+// CHAT SYSTEM MODELS
+// ════════════════════════════════════════════════════════════════════════════════
+
+model Conversation {
+  id           String                      @id @default(uuid())
+  titulo       String?                     // Nombre de la conversación (grupal)
+  tipo         ConversationType            @default(PRIVADO)
+  createdAt    DateTime                    @default(now())
+  updatedAt    DateTime                    @updatedAt
+  participants ConversationParticipant[]
+  messages     Message[]
+
+  @@index([createdAt])
+}
+
+model ConversationParticipant {
+  id             String        @id @default(uuid())
+  conversation_id String
+  user_id        String
+  joined_at      DateTime      @default(now())
+  conversation   Conversation  @relation(fields: [conversation_id], references: [id], onDelete: Cascade)
+  user           User          @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([conversation_id, user_id])
+}
+
+model Message {
+  id              String       @id @default(uuid())
+  conversation_id String
+  sender_id       String
+  contenido       String       @db.Text
+  createdAt       DateTime     @default(now())
+  isEdited        Boolean      @default(false)
+  editedAt        DateTime?
+  conversation    Conversation @relation(fields: [conversation_id], references: [id], onDelete: Cascade)
+  sender          User         @relation("SentMessages", fields: [sender_id], references: [id], onDelete: Cascade)
+
+  @@index([conversation_id, createdAt])
+  @@index([sender_id])
+}
+
+enum ConversationType {
+  PRIVADO     // 1:1
+  REPORTES    // Entre admin y operarios
+  GENERAL     // Grupo general
+  TURNO       // Por turno
 }
 
 enum Role {

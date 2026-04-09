@@ -8,9 +8,10 @@ import type { PrismaClient } from '@prisma/client';
 
 import { processMachineReport, requestClosingReport, getHistory } from './controllers/report.controller';
 import { createConversation, getConversations, getMessages, sendMessage, deleteMessage, getChatHistory } from './controllers/chat.controller';
-import { seedShifts } from './controllers/admin.controller';
+import { seedShifts, getAllUsers, createUser, updateUser, deleteUser } from './controllers/admin.controller';
 import { getPrismaClient } from './prisma';
 import { uploadToSupabase } from './services/supabase_storage.service';
+import { verifyPin } from './services/auth.service';
 
 type UserRole = 'OPERARIO' | 'SUPERVISOR' | 'JEFE';
 
@@ -110,11 +111,11 @@ async function seedDatabase() {
     try {
       await prisma.user.upsert({
         where: { id: user.id },
-        update: { nombre: user.nombre, rol: user.rol, turno: user.turno, pin_acceso: user.pin_acceso },
+        update: { nombre: user.nombre, rol: user.rol, turno: user.turno, pin_hash: (user as any).pin_hash } as any,
         create: {
           id: user.id,
           nombre: user.nombre,
-          pin_acceso: user.pin_acceso,
+          pin_hash: (user as any).pin_hash,
           rol: user.rol,
           turno: user.turno,
           estado: 'Activo'
@@ -451,7 +452,7 @@ async function resolveDatabaseUser(sessionUser: SessionUser) {
       data: {
         id: sessionUser.id,
         nombre: sessionUser.name,
-        pin_acceso: predefined?.pin_acceso || `ext-${crypto.createHash('sha1').update(sessionUser.id).digest('hex').slice(0, 8)}`,
+        pin_hash: predefined?.pin_acceso || `ext-${crypto.createHash('sha1').update(sessionUser.id).digest('hex').slice(0, 8)}` as any,
         rol: sessionUser.role,
         turno: sessionUser.shift || predefined?.turno || 'Turno 1',
         estado: 'Activo',
@@ -606,6 +607,11 @@ export function createApiApp(app: Express): void {
     }
   });
 
+  // ── User Management ──────────────────────────────────────────────────────
+  app.get('/api/admin/users', requireRoles(SUPERVISOR_ROLES), getAllUsers);
+  app.post('/api/admin/users', requireRoles(SUPERVISOR_ROLES), createUser);
+  app.put('/api/admin/users/:id', requireRoles(SUPERVISOR_ROLES), updateUser);
+  app.delete('/api/admin/users/:id', requireRoles(SUPERVISOR_ROLES), deleteUser);
 
   // ── Auth ──────────────────────────────────────────────────────────────────
   app.post('/api/login', async (req, res) => {
@@ -615,7 +621,7 @@ export function createApiApp(app: Express): void {
       return res.status(400).json({ error: 'Credenciales incompletas' });
     }
 
-    // 1. Intentar autenticación desde la BD
+    // 1. Intentar autenticación desde la BD con hashing seguro
     try {
       const prisma = await getPrismaClient();
       const user = await prisma.user.findFirst({
@@ -627,24 +633,29 @@ export function createApiApp(app: Express): void {
         },
       });
 
-      if (user && user.pin_acceso === String(pin) && ['OPERARIO', 'SUPERVISOR', 'JEFE'].includes(user.rol)) {
-        console.log(`[Login] Autenticado desde BD: ${user.nombre}`);
-        await prisma.user.update({
-          where: { id: user.id },
-          data: { ultimo_acceso: new Date() }
-        });
-        return sendAuthenticatedUser(res, {
-          id: user.id,
-          nombre: user.nombre,
-          rol: user.rol,
-          turno: user.turno,
-        });
+      if (user && ['OPERARIO', 'SUPERVISOR', 'JEFE'].includes(user.rol)) {
+        // Verificar PIN hasheado
+        const isValid = await verifyPin(String(pin), (user as any).pin_hash || (user as any).pin_acceso);
+        if (isValid) {
+          console.log(`[Login] Autenticado desde BD: ${user.nombre}`);
+          await prisma.user.update({
+            where: { id: user.id },
+            data: { ultimo_acceso: new Date() }
+          });
+          return sendAuthenticatedUser(res, {
+            id: user.id,
+            nombre: user.nombre,
+            rol: user.rol,
+            turno: user.turno,
+          });
+        }
       }
     } catch (error) {
       console.warn('[Login] Error de BD, usando fallback local:', error instanceof Error ? error.message : error);
     }
 
-    // 2. Fallback: credenciales predefinidas locales (buscar por id slug, nombre o pin)
+    // 2. Fallback: credenciales predefinidas locales (buscar por id slug, nombre o pin texto plano)
+    // NOTA: Los usuarios predefinidos aún usan PIN en texto plano para compatibilidad
     const localUser = predefinedUsers.find(u =>
       (u.id === String(id) || u.nombre.toLowerCase() === String(id).toLowerCase()) &&
       u.pin_acceso === String(pin)
@@ -655,17 +666,20 @@ export function createApiApp(app: Express): void {
       // Intentar registrar en BD para que esté disponible en sincronizaciones
       try {
         const prisma = await getPrismaClient();
+        const { hashPin } = await import('./services/auth.service');
+        const pinHash = await hashPin(localUser.pin_acceso);
+
         await prisma.user.upsert({
           where: { id: localUser.id },
-          update: { nombre: localUser.nombre, rol: localUser.rol, turno: localUser.turno },
+          update: { nombre: localUser.nombre, rol: localUser.rol, turno: localUser.turno, pin_hash: pinHash as any },
           create: {
             id: localUser.id,
             nombre: localUser.nombre,
-            pin_acceso: localUser.pin_acceso,
+            pin_hash: pinHash as any,
             rol: localUser.rol,
             turno: localUser.turno,
             estado: 'Activo',
-          },
+          } as any,
         });
       } catch {
         // No crítico

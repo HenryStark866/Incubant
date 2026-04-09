@@ -11,12 +11,14 @@ datasource db {
 model User {
   id                String                      @id @default(uuid())
   nombre            String
-  pin_acceso        String                      @unique
+  pin_hash          String                      @unique
   rol               Role                        @default(OPERARIO)
   turno             String                      @default("Turno 1")
   estado            String                      @default("Activo")
   ultimo_acceso     DateTime?
   session_expires   DateTime?
+  createdAt         DateTime                    @default(now())
+  updatedAt         DateTime                    @updatedAt
   breaks            Break[]
   logs              HourlyLog[]
   incidents         Incident[]
@@ -72,6 +74,7 @@ model Report {
   co2SP             Float?   @default(0)
   isAlarm           Boolean? @default(false)
   isClosingReport   Boolean? @default(false)
+  hasNovelties      Boolean? @default(false)
   processStatus     String?  @default("NORMAL")
   observaciones     String?  @default("")
   temperature       Float?   @default(0)

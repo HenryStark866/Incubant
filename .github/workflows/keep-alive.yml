@@ -1,0 +1,18 @@
+name: Keep Render Alive
+
+on:
+  schedule:
+    # Ejecutar cada 10 minutos (cron syntax: minute hour day month day-of-week)
+    - cron: '*/10 * * * *'
+  workflow_dispatch: # Permitir ejecución manual
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Ping Render Service
+      run: |
+        echo "Pinging Render service to keep it alive..."
+        curl -f https://incubant.onrender.com/api/health || echo "Ping failed, but continuing..."
+        echo "Ping completed"

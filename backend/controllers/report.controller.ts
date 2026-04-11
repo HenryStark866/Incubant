@@ -175,6 +175,8 @@ export const processMachineReport = async (req: AuthenticatedRequest, res: Respo
     res.status(201).json({
       success: true,
       reportId: savedReport.id,
+      imageUrl: imageUrl || null,
+      photoUploaded: Boolean(imageUrl),
       message: 'Reporte recibido y datos guardados. El PDF se generará en breve.'
     });
 

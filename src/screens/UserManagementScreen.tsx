@@ -16,10 +16,15 @@ export default function UserManagementScreen() {
     const [isLoading, setIsLoading] = useState(true);
     const [showForm, setShowForm] = useState(false);
     const [editingId, setEditingId] = useState<string | null>(null);
-    const [formData, setFormData] = useState({
+    const [formData, setFormData] = useState<{
+        nombre: string;
+        pin: string;
+        rol: 'OPERARIO' | 'SUPERVISOR' | 'JEFE';
+        turno: string;
+    }>({
         nombre: '',
         pin: '',
-        rol: 'OPERARIO' as const,
+        rol: 'OPERARIO',
         turno: 'Turno 1'
     });
     const [error, setError] = useState<string | null>(null);

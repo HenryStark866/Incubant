@@ -4,9 +4,15 @@ import { Camera, Check, X, RefreshCw, AlertTriangle, Loader2 } from 'lucide-reac
 import { useThemeStore } from '../store/useThemeStore';
 import { getApiUrl, apiFetch } from '../lib/api';
 
-/**
- * Utility to convert base64/dataURL to Blob for multipart upload
- */
+const REPORT_QUEUE_KEY = 'incubant-pending-report-queue';
+
+interface PendingReport {
+  machineId: string;
+  reportData: Record<string, any>;
+  photoBase64: string;
+  timestamp: string;
+}
+
 const dataURLtoBlob = (dataurl: string) => {
   const arr = dataurl.split(',');
   const mime = arr[0].match(/:(.*?);/)?.[1] || 'image/jpeg';
@@ -24,7 +30,7 @@ export default function PhotoConfirmScreen() {
   const activeMachineId = useMachineStore(state => state.activeMachineId);
   const capturedPhoto = useMachineStore(state => state.capturedPhoto);
   const machines = useMachineStore(state => state.machines);
-  
+
   const setActiveMachine = useMachineStore(state => state.setActiveMachine);
   const setCapturedPhoto = useMachineStore(state => state.setCapturedPhoto);
   const saveMachineData = useMachineStore(state => state.saveMachineData);
@@ -41,18 +47,17 @@ export default function PhotoConfirmScreen() {
   };
 
   const handleConfirm = async () => {
+    const reportData = {
+      observaciones: 'Reporte visual automático'
+    };
+
     setIsUploading(true);
     try {
       // 1. Prepare data for the single report
       const formData = new FormData();
       formData.append('machineId', machine.id);
-      
-      // Default dummy data for fields (Zero-Touch logic)
-      const reportData = {
-        observaciones: 'Reporte visual automático'
-      };
       formData.append('reportData', JSON.stringify(reportData));
-      
+
       // Convert captured photo to file
       const blob = dataURLtoBlob(capturedPhoto);
       formData.append('evidence', blob, `report_${machine.id}.jpg`);
@@ -70,14 +75,40 @@ export default function PhotoConfirmScreen() {
       const result = await response.json();
       console.log('[Direct Upload] Success:', result);
 
+      const serverPhotoUrl = result.imageUrl || null;
+      const photoUrlToSave = serverPhotoUrl || capturedPhoto;
+
+      if (!serverPhotoUrl) {
+        const pendingReport: PendingReport = {
+          machineId: machine.id,
+          reportData,
+          photoBase64: capturedPhoto,
+          timestamp: new Date().toISOString(),
+        };
+        const existingQueue = JSON.parse(localStorage.getItem(REPORT_QUEUE_KEY) || '[]');
+        existingQueue.push(pendingReport);
+        localStorage.setItem(REPORT_QUEUE_KEY, JSON.stringify(existingQueue));
+        alert('La foto se guardó localmente; se reintentará enviar al servidor cuando haya conexión.');
+      }
+
       // 3. Update local state to show it's completed
-      saveMachineData(machine.id, { observaciones: 'Sincronizado' } as any, capturedPhoto);
-      
+      saveMachineData(machine.id, { observaciones: serverPhotoUrl ? 'Sincronizado' : 'Pendiente de sincronización' } as any, photoUrlToSave);
+
       // 4. Close screen (done by saveMachineData which sets activeMachineId to null)
     } catch (error) {
       console.error('[Direct Upload] Error:', error);
       alert('Error al guardar la foto. El reporte se guardó localmente y se reintentará en la sincronización final.');
-      
+
+      const pendingReport: PendingReport = {
+        machineId: machine.id,
+        reportData,
+        photoBase64: capturedPhoto,
+        timestamp: new Date().toISOString(),
+      };
+      const existingQueue = JSON.parse(localStorage.getItem(REPORT_QUEUE_KEY) || '[]');
+      existingQueue.push(pendingReport);
+      localStorage.setItem(REPORT_QUEUE_KEY, JSON.stringify(existingQueue));
+
       // Fallback: save locally anyway to not block the user
       saveMachineData(machine.id, { observaciones: 'Pendiente de sincronización' } as any, capturedPhoto);
     } finally {
@@ -94,7 +125,7 @@ export default function PhotoConfirmScreen() {
 
   return (
     <div className={`flex flex-col h-full relative overflow-hidden font-mono ${isDark ? 'bg-[#060b18]' : 'bg-gray-50'}`}>
-      
+
       {/* Background HUD Layer */}
       {isDark && (
         <div className="absolute inset-0 pointer-events-none z-0">
@@ -127,24 +158,24 @@ export default function PhotoConfirmScreen() {
       {/* Photo Viewport */}
       <div className="flex-1 relative p-4 z-10 flex flex-col items-center justify-center">
         <div className={`w-full max-w-sm aspect-[3/4] relative rounded-3xl overflow-hidden shadow-2xl border-4 ${isDark ? 'border-white/10 shadow-[0_0_50px_rgba(0,0,0,0.5)]' : 'border-white shadow-xl'} ${isUploading ? 'opacity-50 grayscale' : ''}`}>
-          <img 
-            src={capturedPhoto} 
-            alt="Evidencia" 
+          <img
+            src={capturedPhoto}
+            alt="Evidencia"
             className="w-full h-full object-cover"
           />
-          
+
           {/* Progress Overlay while uploading */}
           {isUploading && (
             <div className="absolute inset-0 bg-brand-primary/20 flex flex-col items-center justify-center p-6 text-center">
-               <div className="w-16 h-16 rounded-full border-2 border-white/30 border-t-white animate-spin mb-4" />
-               <p className="text-white text-xs font-black uppercase tracking-[0.2em] drop-shadow-lg">Transmitiendo Datos...</p>
+              <div className="w-16 h-16 rounded-full border-2 border-white/30 border-t-white animate-spin mb-4" />
+              <p className="text-white text-xs font-black uppercase tracking-[0.2em] drop-shadow-lg">Transmitiendo Datos...</p>
             </div>
           )}
 
           {/* Overlay HUD on photo */}
           {isDark && (
             <div className="absolute inset-0 pointer-events-none box-border border border-brand-primary/30"
-                 style={{ boxShadow: 'inset 0 0 40px rgba(247,147,26,0.2)' }} />
+              style={{ boxShadow: 'inset 0 0 40px rgba(247,147,26,0.2)' }} />
           )}
           <div className="absolute bottom-4 left-4 right-4 flex justify-between items-end pointer-events-none">
             <div className="bg-black/50 backdrop-blur-md rounded-lg py-1 px-2 border border-white/20">
@@ -159,7 +190,7 @@ export default function PhotoConfirmScreen() {
 
       {/* Controls */}
       <div className={`p-6 pb-8 z-10 rounded-t-3xl border-t ${isDark ? 'bg-black/40 backdrop-blur-xl border-white/10' : 'bg-white border-gray-200 shadow-[0_-10px_40px_rgba(0,0,0,0.05)]'}`}>
-        
+
         <h3 className={`text-center font-black uppercase tracking-wider mb-6 font-mono-display ${isDark ? 'text-white' : 'text-gray-800'}`}>
           {isUploading ? 'Guardando Evidencia...' : '¿La imagen es clara?'}
         </h3>
@@ -173,7 +204,7 @@ export default function PhotoConfirmScreen() {
             <RefreshCw size={24} />
             <span className="text-[10px] font-black uppercase tracking-widest">Re-tomar</span>
           </button>
-          
+
           <button
             onClick={handleConfirm}
             disabled={isUploading}

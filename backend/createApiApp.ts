@@ -11,7 +11,7 @@ import { createConversation, getConversations, getMessages, sendMessage, deleteM
 import { seedShifts, getAllUsers, createUser, updateUser, deleteUser } from './controllers/admin.controller';
 import { getPrismaClient } from './prisma';
 import { uploadToSupabase } from './services/supabase_storage.service';
-import { verifyPin } from './services/auth.service';
+import { verifyPin, hashPin } from './services/auth.service';
 
 type UserRole = 'OPERARIO' | 'SUPERVISOR' | 'JEFE';
 
@@ -991,8 +991,8 @@ export function createApiApp(app: Express): void {
         const slugId = op.nombre.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, '-');
         const user = await prisma.user.upsert({
           where: { id: slugId },
-          update: { nombre: op.nombre, pin_acceso: op.pin_acceso, rol: op.rol as any, turno: op.turno },
-          create: { id: slugId, nombre: op.nombre, pin_acceso: op.pin_acceso, rol: op.rol as any, turno: op.turno, estado: 'Activo' },
+          update: { nombre: op.nombre, pin_hash: await hashPin(op.pin_acceso), rol: op.rol as any, turno: op.turno },
+          create: { id: slugId, nombre: op.nombre, pin_hash: await hashPin(op.pin_acceso), rol: op.rol as any, turno: op.turno, estado: 'Activo' },
         });
         createdUsers[op.nombre] = user;
       }
@@ -1579,9 +1579,16 @@ export function createApiApp(app: Express): void {
         return res.status(400).json({ error: 'Rol inválido' });
       }
 
-      const existingUser = await prisma.user.findUnique({ where: { pin_acceso: String(pin) } });
+      const allUsers = await prisma.user.findMany({ select: { pin_hash: true } });
+      let isDuplicate = false;
+      for (const u of allUsers) {
+        if (await verifyPin(String(pin), u.pin_hash)) {
+          isDuplicate = true;
+          break;
+        }
+      }
 
-      if (existingUser) {
+      if (isDuplicate) {
         return res.status(400).json({ error: 'El PIN ya está en uso por otro usuario' });
       }
 
@@ -1598,7 +1605,7 @@ export function createApiApp(app: Express): void {
         data: {
           id: slugId,
           nombre: String(nombre),
-          pin_acceso: String(pin),
+          pin_hash: await hashPin(String(pin)),
           rol,
           turno: turno || 'Turno 1',
           estado: 'Activo',

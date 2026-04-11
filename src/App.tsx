@@ -39,6 +39,67 @@ export default function App() {
 
   const canAccessSupervisor = canUseSupervisorPanel(currentUser?.role);
 
+  const REPORT_QUEUE_KEY = 'incubant-pending-report-queue';
+
+  interface PendingReport {
+    machineId: string;
+    reportData: Record<string, any>;
+    photoBase64: string;
+    timestamp: string;
+  }
+
+  const dataURLtoBlob = (dataurl: string) => {
+    const arr = dataurl.split(',');
+    const mime = arr[0].match(/:(.*?);/)?.[1] || 'image/jpeg';
+    const bstr = atob(arr[1]);
+    let n = bstr.length;
+    const u8arr = new Uint8Array(n);
+    while (n--) {
+      u8arr[n] = bstr.charCodeAt(n);
+    }
+    return new Blob([u8arr], { type: mime });
+  };
+
+  const flushPendingReports = useCallback(async () => {
+    if (!currentUser || !isOnline) return;
+
+    const queue = JSON.parse(localStorage.getItem(REPORT_QUEUE_KEY) || '[]') as PendingReport[];
+    if (!queue.length) return;
+
+    const remaining: PendingReport[] = [];
+    for (const pending of queue) {
+      try {
+        const formData = new FormData();
+        formData.append('machineId', pending.machineId);
+        formData.append('reportData', JSON.stringify(pending.reportData));
+        formData.append('evidence', dataURLtoBlob(pending.photoBase64), `report_${pending.machineId}.jpg`);
+
+        const response = await apiFetch(getApiUrl('/api/reports'), {
+          method: 'POST',
+          body: formData,
+        });
+
+        const result = await response.json();
+        if (!response.ok || !result.imageUrl) {
+          throw new Error('No se pudo subir el reporte pendiente');
+        }
+      } catch (error) {
+        remaining.push(pending);
+      }
+    }
+
+    if (remaining.length === 0) {
+      localStorage.removeItem(REPORT_QUEUE_KEY);
+    } else {
+      localStorage.setItem(REPORT_QUEUE_KEY, JSON.stringify(remaining));
+    }
+  }, [currentUser, isOnline]);
+
+  useEffect(() => {
+    if (!isOnline || !currentUser) return;
+    void flushPendingReports();
+  }, [isOnline, currentUser, flushPendingReports]);
+
   useEffect(() => {
     const handleOnline = () => setIsOnline(true);
     const handleOffline = () => setIsOnline(false);

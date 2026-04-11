@@ -19,7 +19,7 @@ services:
     branch: main
 
     # Build settings
-    buildCommand: npm install && npm run build && npx prisma db push --accept-data-loss
+    buildCommand: npm install --include=dev && npm run build && npx prisma db push --accept-data-loss
     startCommand: npm run start
 
     # Health check

@@ -130,12 +130,35 @@ export const processMachineReport = async (req: AuthenticatedRequest, res: Respo
       calcDiff(tempPrincipalReal, tempPrincipalSP) >= 1.5 ||
       calcDiff(humidityReal, humiditySP) >= 2.0;
 
+    // Ensure User existence to prevent Foreign Key constraints crash
+    let safeUserId = userId;
+    let dbUser = await prisma.user.findUnique({ where: { id: safeUserId } });
+    if (!dbUser) {
+      dbUser = await prisma.user.findFirst({ where: { nombre: userName } });
+      if (dbUser) {
+        safeUserId = dbUser.id;
+      } else {
+        const crypto = await import('crypto');
+        dbUser = await prisma.user.create({
+          data: {
+            id: safeUserId,
+            nombre: userName,
+            pin_hash: `ext-${crypto.createHash('sha1').update(safeUserId).digest('hex').slice(0, 8)}`,
+            rol: 'OPERARIO',
+            estado: 'Activo',
+            turno: 'Turno 1'
+          }
+        });
+        safeUserId = dbUser.id;
+      }
+    }
+
     // 4. PERSISTENCIA INICIAL (SIN PDF)
     const [savedReport] = await prisma.$transaction([
       prisma.report.create({
         data: {
           machine_id: machine.id,
-          user_id: userId,
+          user_id: safeUserId,
           tempPrincipalReal,
           tempPrincipalSP,
           humidityReal,
@@ -154,7 +177,7 @@ export const processMachineReport = async (req: AuthenticatedRequest, res: Respo
       }),
       prisma.hourlyLog.create({
         data: {
-          user_id: userId,
+          user_id: safeUserId,
           machine_id: machine.id,
           photo_url: imageUrl || null,
           temp_principal_actual: tempPrincipalReal,

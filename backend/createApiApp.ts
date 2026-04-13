@@ -1333,20 +1333,10 @@ export function createApiApp(app: Express): void {
             // Si el log es antiguo pero es el más reciente, marcamos como mantenimiento (falta reporte actual)
             if (!isLogRecent) status = 'maintenance';
 
-            // Lógica de Foto: Si el log actual (más reciente) tiene foto y es del ciclo actual, úsala.
-            // Si no tiene foto, busca en el photoMap (última foto histórica) pero solo muéstrala 
-            // si es del ciclo actual para cumplir con el "reinicio horario".
+            // Mostrar SIEMPRE la última foto reportada para esta máquina
             const latestPhoto = photoMap.get(machine.id);
-            const isPhotoInCurrentCycle = latestPhoto && (
-              (maxLogTime - latestPhoto.timestamp.getTime()) < (60 * 60 * 1000) ||
-              latestPhoto.timestamp.getTime() > shiftStartUTC.getTime()
-            );
 
-            if (log.photo_url && (isSameBucket || isRecentlyReported)) {
-              photoUrl = log.photo_url;
-              photoTimestamp = log.fecha_hora.toISOString();
-            } else if (isPhotoInCurrentCycle) {
-              // "Sticky" photo logic: mantener la foto si pertenece al turno o ciclo actual
+            if (latestPhoto) {
               photoUrl = latestPhoto.url;
               photoTimestamp = latestPhoto.timestamp.toISOString();
             } else {

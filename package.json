@@ -5,16 +5,13 @@
   "type": "module",
   "scripts": {
     "dev": "tsx server.ts",
-    "build": "prisma generate && vite build",
-    "db:push": "prisma db push --accept-data-loss",
+    "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "clean": "rm -rf dist",
-    "postinstall": "prisma generate",
     "start": "npx tsx server.ts"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
-    "@prisma/client": "^6.19.2",
     "@supabase/supabase-js": "^2.100.0",
     "@tailwindcss/vite": "^4.1.14",
     "@tanstack/react-query": "^5.96.1",
@@ -26,6 +23,8 @@
     "date-fns": "^4.1.0",
     "dotenv": "^17.2.3",
     "express": "^4.21.2",
+    "firebase": "^12.12.0",
+    "firebase-admin": "^13.8.0",
     "lucide-react": "^0.546.0",
     "motion": "^12.23.24",
     "multer": "^2.1.1",
@@ -50,7 +49,6 @@
     "@types/react-dom": "^19.0.0",
     "@types/recharts": "^2.0.0",
     "autoprefixer": "^10.4.21",
-    "prisma": "^6.19.2",
     "tailwindcss": "^4.1.14",
     "typescript": "~5.8.2",
     "vite": "^6.2.0"

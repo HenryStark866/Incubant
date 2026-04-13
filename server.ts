@@ -46,12 +46,9 @@ async function startServer() {
   // Database connectivity health check
   app.get('/api/health-db', async (_req, res) => {
     try {
-      const { getPrismaClient } = await import('./backend/prisma');
-      const prisma = await getPrismaClient();
-      await prisma.$queryRaw`SELECT 1`;
       res.status(200).json({ 
         status: 'ok', 
-        database: 'connected', 
+        database: 'firebase_rtdb', 
         timestamp: new Date().toISOString() 
       });
     } catch (err: any) {

@@ -25,6 +25,14 @@ const SESSION_COOKIE_NAME = 'incubant_session';
 export function createApiApp(app: Express): void {
   app.use(express.json({ limit: '50mb' }));
 
+  // SSE Clientes (declarado al inicio para que todos los handlers puedan usarlo)
+  const sseClients = new Set<Response>();
+  const broadcastSSE = (payload: object) => {
+    const msg = `data: ${JSON.stringify(payload)}\n\n`;
+    sseClients.forEach(client => { if (!client.writableEnded) client.write(msg); });
+  };
+  (app as any).__broadcastSSE = broadcastSSE;
+
   // CORS Middleware controlado arriba en root
 
   // =======================================================================
@@ -246,6 +254,9 @@ export function createApiApp(app: Express): void {
           inactive: machine.inactive || false,
           updated_at: new Date().toISOString()
         }), `machines/${machine.id}`);
+
+        // Notificar a clientes SSE en tiempo real
+        broadcastSSE({ type: 'NEW_REPORT', machineId: machine.id, userName });
       }
 
       // --- GENERAR PDF HORARIO ---
@@ -351,8 +362,477 @@ export function createApiApp(app: Express): void {
     }
   });
   
+  // =======================================================================
+  // ADMIN USERS (CRUD)
+  // =======================================================================
+  app.get('/api/admin/users', requireAuthenticatedUser, async (req, res) => {
+    try {
+      const usersDict = await safeFirebaseGet('users');
+      const usersArray = Object.entries(usersDict).map(([id, val]: [string, any]) => ({
+        id,
+        nombre: val.nombre || '',
+        rol: val.rol || '',
+        turno: val.turno || '',
+        estado: val.estado || 'ACTIVO',
+        pin: val.pin || ''
+      }));
+      res.status(200).json(usersArray);
+    } catch (e) {
+      console.error('[Admin Users] Get Error:', e);
+      res.status(500).json({ error: 'Error obteniendo usuarios' });
+    }
+  });
+
+  app.post('/api/admin/users', requireAuthenticatedUser, async (req, res) => {
+    try {
+      const newUserRef = db.ref('users').push();
+      const userData = {
+         nombre: req.body.nombre,
+         rol: req.body.rol,
+         turno: req.body.turno,
+         estado: req.body.estado || 'ACTIVO',
+         pin: req.body.pin || '1234'
+      };
+      await safeFirebaseWrite(newUserRef.set(userData), `users/${newUserRef.key}`);
+      res.status(201).json({ id: newUserRef.key, ...userData });
+    } catch (e) {
+      res.status(500).json({ error: 'Error creando usuario' });
+    }
+  });
+
+  app.put('/api/admin/users/:id', requireAuthenticatedUser, async (req, res) => {
+    try {
+      const { id } = req.params;
+      // Actualizamos solo los campos enviados
+      const userData: any = {};
+      if (req.body.nombre !== undefined) userData.nombre = req.body.nombre;
+      if (req.body.rol !== undefined) userData.rol = req.body.rol;
+      if (req.body.turno !== undefined) userData.turno = req.body.turno;
+      if (req.body.estado !== undefined) userData.estado = req.body.estado;
+      if (req.body.pin !== undefined) userData.pin = req.body.pin;
+
+      await safeFirebaseWrite(db.ref(`users/${id}`).update(userData), `users/${id}`);
+      res.status(200).json({ id, ...userData });
+    } catch (e) {
+      res.status(500).json({ error: 'Error actualizando usuario' });
+    }
+  });
+
+  app.delete('/api/admin/users/:id', requireAuthenticatedUser, async (req, res) => {
+    try {
+      const { id } = req.params;
+      await safeFirebaseWrite(db.ref(`users/${id}`).remove(), `users/${id}`);
+      res.status(200).json({ message: 'Usuario eliminado' });
+    } catch (e) {
+      res.status(500).json({ error: 'Error eliminando usuario' });
+    }
+  });
+
   app.post('/api/admin/seed-shifts', (req, res) => {
     res.json({ message: 'Firebase seed done' });
+  });
+
+  // =======================================================================
+  // HEALTH CHECK
+  // =======================================================================
+  app.get('/api/health', (_req, res) => {
+    res.json({ status: 'ok', ts: new Date().toISOString() });
+  });
+
+  // =======================================================================
+  // LOGOUT
+  // =======================================================================
+  app.post('/api/logout', (req: AuthenticatedRequest, res) => {
+    const cookieHeader = req.headers.cookie;
+    if (cookieHeader) {
+      const token = cookieHeader.split(';').find(c => c.trim().startsWith(`${SESSION_COOKIE_NAME}=`))?.split('=')[1];
+      if (token) sessions.delete(token);
+    }
+    res.setHeader('Set-Cookie', `${SESSION_COOKIE_NAME}=; Path=/; HttpOnly; Max-Age=0`);
+    res.json({ message: 'Sesión cerrada' });
+  });
+
+  // =======================================================================
+  // DASHBOARD OPERATORS & SUMMARY
+  // =======================================================================
+  app.get('/api/dashboard/operators', async (_req, res) => {
+    try {
+      const usersDict = await safeFirebaseGet('users');
+      const operators = Object.entries(usersDict).map(([id, val]: [string, any]) => ({
+        id,
+        nombre: val.nombre || '',
+        name: val.nombre || '',
+        rol: val.rol || 'OPERARIO',
+        role: val.rol || 'OPERARIO',
+        turno: val.turno || '',
+        shift: val.turno || '',
+        estado: val.estado || 'ACTIVO',
+        status: val.estado || 'ACTIVO',
+      }));
+      res.json(operators);
+    } catch {
+      res.json([]);
+    }
+  });
+
+  app.get('/api/dashboard/summary', async (_req, res) => {
+    try {
+      const reports = await safeFirebaseGet('reports', 'timestamp', 200);
+      const reportsArr = Object.values(reports || {});
+      const reportCount = reportsArr.length;
+
+      // Turno actual según hora de Bogotá
+      const nowBogota = new Intl.DateTimeFormat('en-US', {
+        timeZone: 'America/Bogota', hour: '2-digit', minute: '2-digit', hour12: false
+      }).format(new Date());
+      const h = parseInt(nowBogota.split(':')[0]);
+      let currentShift = 'Fuera de Turno';
+      if (h >= 6 && h < 14) currentShift = 'Turno 1 (06:00–14:00)';
+      else if (h >= 14 && h < 22) currentShift = 'Turno 2 (14:00–22:00)';
+      else currentShift = 'Turno 3 (22:00–06:00)';
+
+      res.json({
+        reportCount,
+        shiftClosingCount: 0,
+        responsibleOperator: '',
+        onlineOperators: [],
+        activeOperatorsNames: '',
+        currentShift,
+        lastReportTime: reportsArr.length > 0 ? (reportsArr[reportsArr.length - 1] as any).timestamp : null,
+        activeOperatorsCount: 0,
+      });
+    } catch {
+      res.json({ reportCount: 0, shiftClosingCount: 0, currentShift: 'Sin datos', onlineOperators: [], activeOperatorsNames: '' });
+    }
+  });
+
+  app.get('/api/dashboard/machine-logs', async (req, res) => {
+    try {
+      const { machineId } = req.query;
+      const reports = await safeFirebaseGet('reports', 'timestamp', 200);
+      const logs = Object.entries(reports || {})
+        .map(([id, val]: [string, any]) => ({ id, ...val }))
+        .filter((r: any) => !machineId || r.machine_id === machineId)
+        .reverse();
+      res.json(logs);
+    } catch {
+      res.json([]);
+    }
+  });
+
+  // =======================================================================
+  // ADMIN SHIFTS & ASSIGNMENTS
+  // =======================================================================
+  app.get('/api/admin/shifts', async (_req, res) => {
+    try {
+      const shiftsDict = await safeFirebaseGet('shifts');
+      if (!shiftsDict || Object.keys(shiftsDict).length === 0) {
+        // Seed default shifts si no hay ninguno
+        const defaults = [
+          { nombre: 'Turno 1', hora_inicio: '06:00', hora_fin: '14:00', color: '#F59E0B' },
+          { nombre: 'Turno 2', hora_inicio: '14:00', hora_fin: '22:00', color: '#3B82F6' },
+          { nombre: 'Turno 3', hora_inicio: '22:00', hora_fin: '06:00', color: '#8B5CF6' },
+        ];
+        for (const s of defaults) {
+          await safeFirebaseWrite(db.ref('shifts').push().set(s), 'shifts/seed');
+        }
+        return res.json(defaults);
+      }
+      const shiftsArr = Object.entries(shiftsDict).map(([id, val]: [string, any]) => ({ id, ...val }));
+      res.json(shiftsArr);
+    } catch {
+      res.json([]);
+    }
+  });
+
+  app.post('/api/admin/shifts', requireAuthenticatedUser, async (req, res) => {
+    try {
+      const ref = db.ref('shifts').push();
+      const data = { nombre: req.body.nombre, hora_inicio: req.body.hora_inicio, hora_fin: req.body.hora_fin, color: req.body.color || '#F59E0B' };
+      await safeFirebaseWrite(ref.set(data), `shifts/${ref.key}`);
+      res.status(201).json({ id: ref.key, ...data });
+    } catch {
+      res.status(500).json({ error: 'Error creando turno' });
+    }
+  });
+
+  app.put('/api/admin/shifts/:id', requireAuthenticatedUser, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const data: any = {};
+      if (req.body.nombre !== undefined) data.nombre = req.body.nombre;
+      if (req.body.hora_inicio !== undefined) data.hora_inicio = req.body.hora_inicio;
+      if (req.body.hora_fin !== undefined) data.hora_fin = req.body.hora_fin;
+      if (req.body.color !== undefined) data.color = req.body.color;
+      await safeFirebaseWrite(db.ref(`shifts/${id}`).update(data), `shifts/${id}`);
+      res.json({ id, ...data });
+    } catch {
+      res.status(500).json({ error: 'Error actualizando turno' });
+    }
+  });
+
+  app.delete('/api/admin/shifts/:id', requireAuthenticatedUser, async (req, res) => {
+    try {
+      await safeFirebaseWrite(db.ref(`shifts/${req.params.id}`).remove(), `shifts/${req.params.id}`);
+      res.json({ message: 'Turno eliminado' });
+    } catch {
+      res.status(500).json({ error: 'Error eliminando turno' });
+    }
+  });
+
+  app.get('/api/admin/assignments', async (_req, res) => {
+    try {
+      const data = await safeFirebaseGet('assignments');
+      const arr = Object.entries(data || {}).map(([id, val]: [string, any]) => ({ id, ...val }));
+      res.json(arr);
+    } catch {
+      res.json([]);
+    }
+  });
+
+  app.post('/api/admin/assignments', requireAuthenticatedUser, async (req, res) => {
+    try {
+      const ref = db.ref('assignments').push();
+      const data = { userId: req.body.userId, shiftId: req.body.shiftId, fecha: req.body.fecha || new Date().toISOString().split('T')[0] };
+      await safeFirebaseWrite(ref.set(data), `assignments/${ref.key}`);
+      res.status(201).json({ id: ref.key, ...data });
+    } catch {
+      res.status(500).json({ error: 'Error creando asignación' });
+    }
+  });
+
+  app.delete('/api/admin/assignments/:id', requireAuthenticatedUser, async (req, res) => {
+    try {
+      await safeFirebaseWrite(db.ref(`assignments/${req.params.id}`).remove(), `assignments/${req.params.id}`);
+      res.json({ message: 'Asignación eliminada' });
+    } catch {
+      res.status(500).json({ error: 'Error eliminando asignación' });
+    }
+  });
+
+  // =======================================================================
+  // ADMIN CLEAR-DB
+  // =======================================================================
+  app.post('/api/admin/clear-db', requireAuthenticatedUser, async (_req, res) => {
+    try {
+      await safeFirebaseWrite(db.ref('reports').remove(), 'reports');
+      await safeFirebaseWrite(db.ref('machines').remove(), 'machines');
+      res.json({ message: 'Base de datos limpiada' });
+    } catch {
+      res.status(500).json({ error: 'Error limpiando la base de datos' });
+    }
+  });
+
+  // =======================================================================
+  // REQUESTS (SOLICITUDES DE PERMISO)
+  // =======================================================================
+  app.get('/api/requests/stats', async (_req, res) => {
+    try {
+      const data = await safeFirebaseGet('requests');
+      const all = Object.values(data || {}) as any[];
+      const pending = all.filter(r => r.status === 'pending' || r.estado === 'pendiente').length;
+      res.json({ pending, total: all.length });
+    } catch {
+      res.json({ pending: 0, total: 0 });
+    }
+  });
+
+  app.get('/api/requests', requireAuthenticatedUser, async (_req, res) => {
+    try {
+      const data = await safeFirebaseGet('requests', 'timestamp', 100);
+      const arr = Object.entries(data || {}).map(([id, val]: [string, any]) => ({ id, ...val })).reverse();
+      res.json(arr);
+    } catch {
+      res.json([]);
+    }
+  });
+
+  app.post('/api/requests', requireAuthenticatedUser, async (req: AuthenticatedRequest, res) => {
+    try {
+      const ref = db.ref('requests').push();
+      const data = {
+        userId: req.user?.id,
+        userName: req.user?.name,
+        tipo: req.body.tipo || 'permiso',
+        motivo: req.body.motivo || '',
+        status: 'pending',
+        estado: 'pendiente',
+        timestamp: new Date().toISOString(),
+      };
+      await safeFirebaseWrite(ref.set(data), `requests/${ref.key}`);
+      res.status(201).json({ id: ref.key, ...data });
+    } catch {
+      res.status(500).json({ error: 'Error creando solicitud' });
+    }
+  });
+
+  app.put('/api/requests/:id', requireAuthenticatedUser, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const data: any = {};
+      if (req.body.status !== undefined) data.status = req.body.status;
+      if (req.body.estado !== undefined) data.estado = req.body.estado;
+      if (req.body.responseNote !== undefined) data.responseNote = req.body.responseNote;
+      await safeFirebaseWrite(db.ref(`requests/${id}`).update(data), `requests/${id}`);
+      res.json({ id, ...data });
+    } catch {
+      res.status(500).json({ error: 'Error actualizando solicitud' });
+    }
+  });
+
+  // =======================================================================
+  // SSE — SERVER SENT EVENTS
+  // =======================================================================
+  app.get('/api/events', (req, res) => {
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no');
+    res.flushHeaders();
+
+    // Heartbeat para mantener la conexión viva
+    const heartbeat = setInterval(() => {
+      if (!res.writableEnded) res.write(`data: ${JSON.stringify({ type: 'ping' })}\n\n`);
+    }, 25000);
+
+    sseClients.add(res);
+    console.log(`[SSE] Cliente conectado — total: ${sseClients.size}`);
+
+    req.on('close', () => {
+      clearInterval(heartbeat);
+      sseClients.delete(res);
+      console.log(`[SSE] Cliente desconectado — total: ${sseClients.size}`);
+    });
+  });
+
+  // =======================================================================
+  // MY-SCHEDULE (Operario)
+  // =======================================================================
+  app.get('/api/my-schedule', requireAuthenticatedUser, async (req: AuthenticatedRequest, res) => {
+    try {
+      const shifts = await safeFirebaseGet('shifts');
+      const shiftsArr = Object.entries(shifts || {}).map(([id, val]: [string, any]) => ({ id, ...val }));
+      const userShift = shiftsArr.find(s => s.nombre === req.user?.shift) || shiftsArr[0] || null;
+      res.json({ shift: userShift, allShifts: shiftsArr });
+    } catch {
+      res.json({ shift: null, allShifts: [] });
+    }
+  });
+
+  // =======================================================================
+  // EVIDENCE / MINE
+  // =======================================================================
+  app.get('/api/evidence/mine', requireAuthenticatedUser, async (req: AuthenticatedRequest, res) => {
+    try {
+      const reports = await safeFirebaseGet('reports', 'timestamp', 200);
+      const mine = Object.entries(reports || {})
+        .map(([id, val]: [string, any]) => ({ id, ...val }))
+        .filter((r: any) => r.user_name === req.user?.name || r.userId === req.user?.id)
+        .reverse();
+      res.json(mine);
+    } catch {
+      res.json([]);
+    }
+  });
+
+  // =======================================================================
+  // REPORTS — CLOSING REQUEST (Cierre de turno del operario)
+  // =======================================================================
+  app.post('/api/reports/closing/request', requireAuthenticatedUser, async (req: AuthenticatedRequest, res) => {
+    try {
+      const ref = db.ref('closings').push();
+      const data = {
+        userId: req.user?.id,
+        userName: req.user?.name,
+        shift: req.user?.shift,
+        observaciones: req.body.observaciones || '',
+        timestamp: new Date().toISOString(),
+        status: 'pending',
+      };
+      await safeFirebaseWrite(ref.set(data), `closings/${ref.key}`);
+      broadcastSSE({ type: 'NEW_REQUEST', targetUserId: 'all' });
+      res.status(201).json({ id: ref.key, ...data });
+    } catch {
+      res.status(500).json({ error: 'Error registrando cierre de turno' });
+    }
+  });
+
+  // =======================================================================
+  // CHAT (Mensajería interna básica)
+  // =======================================================================
+  app.get('/api/chat/conversations', requireAuthenticatedUser, async (_req, res) => {
+    try {
+      const data = await safeFirebaseGet('chat/conversations');
+      const arr = Object.entries(data || {}).map(([id, val]: [string, any]) => ({ id, ...val }));
+      res.json(arr);
+    } catch {
+      res.json([]);
+    }
+  });
+
+  app.post('/api/chat/messages', requireAuthenticatedUser, async (req: AuthenticatedRequest, res) => {
+    try {
+      const ref = db.ref('chat/messages').push();
+      const data = {
+        fromId: req.user?.id,
+        fromName: req.user?.name,
+        conversationId: req.body.conversationId || 'general',
+        message: req.body.message || '',
+        timestamp: new Date().toISOString(),
+      };
+      await safeFirebaseWrite(ref.set(data), `chat/messages/${ref.key}`);
+      broadcastSSE({ type: 'NEW_MESSAGE', conversationId: data.conversationId });
+      res.status(201).json({ id: ref.key, ...data });
+    } catch {
+      res.status(500).json({ error: 'Error enviando mensaje' });
+    }
+  });
+
+  // Legacy /api/operators → redirige internamente a /api/admin/users para compatibilidad
+  app.get('/api/operators', requireAuthenticatedUser, async (_req, res) => {
+    try {
+      const usersDict = await safeFirebaseGet('users');
+      const arr = Object.entries(usersDict || {}).map(([id, val]: [string, any]) => ({ id, nombre: val.nombre, name: val.nombre, rol: val.rol, role: val.rol, turno: val.turno, shift: val.turno, estado: val.estado || 'Activo', status: val.estado || 'Activo' }));
+      res.json(arr);
+    } catch {
+      res.json([]);
+    }
+  });
+
+  app.post('/api/operators', requireAuthenticatedUser, async (req, res) => {
+    try {
+      const ref = db.ref('users').push();
+      const data = { nombre: req.body.nombre, rol: req.body.rol || 'OPERARIO', turno: req.body.turno || 'Turno 1', estado: 'ACTIVO', pin: req.body.pin || '1234' };
+      await safeFirebaseWrite(ref.set(data), `users/${ref.key}`);
+      res.status(201).json({ id: ref.key, ...data });
+    } catch {
+      res.status(500).json({ error: 'Error creando operario' });
+    }
+  });
+
+  app.put('/api/operators/:id', requireAuthenticatedUser, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const data: any = {};
+      if (req.body.nombre !== undefined) data.nombre = req.body.nombre;
+      if (req.body.rol !== undefined) data.rol = req.body.rol;
+      if (req.body.turno !== undefined) data.turno = req.body.turno;
+      if (req.body.estado !== undefined) data.estado = req.body.estado;
+      if (req.body.pin !== undefined) data.pin = req.body.pin;
+      await safeFirebaseWrite(db.ref(`users/${id}`).update(data), `users/${id}`);
+      res.json({ id, ...data });
+    } catch {
+      res.status(500).json({ error: 'Error actualizando operario' });
+    }
+  });
+
+  app.delete('/api/operators/:id', requireAuthenticatedUser, async (req, res) => {
+    try {
+      await safeFirebaseWrite(db.ref(`users/${req.params.id}`).remove(), `users/${req.params.id}`);
+      res.json({ message: 'Operario eliminado' });
+    } catch {
+      res.status(500).json({ error: 'Error eliminando operario' });
+    }
   });
 
   // Global Error Fallback para nunca retornar HTML de Vite
@@ -361,3 +841,4 @@ export function createApiApp(app: Express): void {
     res.status(500).json({ error: err.message || 'Error Desconocido Interno' });
   });
 }
+

@@ -13,6 +13,7 @@ import { getApiUrl, apiFetch } from '../lib/api';
 import ShiftManager from '../components/Admin/ShiftManager';
 import AdminHistoryScreen from './AdminHistoryScreen';
 import PermitsManagerPanel from '../components/Admin/PermitsManagerPanel';
+import UserManagementScreen from './UserManagementScreen';
 
 // Helper: status badge for parameter comparison
 function statusBadge(real: any, sp: any) {
@@ -1304,101 +1305,7 @@ export default function SupervisorDashboard() {
           ) : activeTab === 'horarios' ? (
             <ShiftManager />
           ) : activeTab === 'personal' ? (
-            <div className={`rounded-[2rem] overflow-hidden shadow-sm ${isDark ? 'bg-[#0a0f20] border border-white/5' : 'bg-white border border-gray-100'}`}>
-              <div className={`p-6 sm:p-8 border-b flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 ${isDark ? 'border-white/5' : 'border-gray-50'}`}>
-                <div>
-                  <h2 className={`text-xl font-black ${isDark ? 'text-white' : 'text-brand-dark'}`}>Gestión de Personal</h2>
-                  <p className={`text-sm font-medium ${isDark ? 'text-white/40' : 'text-brand-gray'}`}>Administración de turnos y operarios en planta</p>
-                </div>
-                <button
-                  onClick={() => setShowCreateOperator(true)}
-                  className="bg-brand-primary/10 text-brand-primary px-6 py-2.5 rounded-xl text-sm font-black hover:bg-brand-primary hover:text-white transition-all"
-                >
-                  + Registrar Operario
-                </button>
-              </div>
-              <div className="overflow-x-auto">
-                <table className={`w-full min-w-[680px] text-left text-sm ${isDark ? 'text-white' : ''}`}>
-                  <thead className={`${isDark ? 'bg-white/5 text-white/40' : 'bg-gray-50 text-brand-gray'} uppercase text-[10px] font-black tracking-[0.2em]`}>
-                    <tr>
-                      <th className="px-8 py-5">Operario</th>
-                      <th className="px-8 py-5">Turno Asignado</th>
-                      {currentUser?.role === 'JEFE' && <th className="px-8 py-5 text-center">Eficiencia</th>}
-                      <th className="px-8 py-5">Estado</th>
-                      <th className="px-8 py-5 text-right">Acciones</th>
-                    </tr>
-                  </thead>
-                  <tbody className={`${isDark ? 'divide-white/5' : 'divide-gray-50'} divide-y`}>
-                    {operatorsData && operatorsData.length > 0 ? (
-                      operatorsData.map((op) => (
-                        <tr key={op.id} className={`group transition-colors border-b last:border-0 ${isDark ? 'border-white/5 hover:bg-white/5' : 'border-gray-50 hover:bg-gray-50/50'}`}>
-                          <td className="px-6 py-4">
-                            <div className="flex items-center gap-3">
-                              <div className="w-10 h-10 rounded-xl bg-brand-primary/10 flex items-center justify-center text-sm text-brand-primary font-black shadow-inner">
-                                {(op.nombre || op.name || '?')[0].toUpperCase()}
-                              </div>
-                              <div className="flex flex-col">
-                                <span className={`font-bold text-sm ${isDark ? 'text-white' : 'text-brand-dark'}`}>{op.nombre || op.name}</span>
-                                <span className={`text-[10px] tracking-widest uppercase ${isDark ? 'text-white/40' : 'text-brand-gray'}`}>{op.rol || op.role}</span>
-                              </div>
-                            </div>
-                          </td>
-                          <td className="px-6 py-4">
-                            <div className="flex items-center gap-2">
-                              <div className="w-2 h-2 rounded-full bg-brand-primary"></div>
-                              <span className={`text-xs font-bold tracking-tight ${isDark ? 'text-white/50' : 'text-brand-gray'}`}>
-                                {(op.rol === 'JEFE' || op.role === 'JEFE' || op.rol === 'SUPERVISOR' || op.role === 'SUPERVISOR')
-                                  ? '—'
-                                  : (op.turno || op.shift || 'Disponible')}
-                              </span>
-                            </div>
-                          </td>
-                          {currentUser?.role === 'JEFE' && (
-                            <td className="px-6 py-4 text-center">
-                              <span className="font-black text-brand-primary bg-brand-primary/10 px-3 py-1.5 rounded-full border border-brand-primary/20">
-                                {Math.min(100, 85 + ((op.nombre || op.name || "").length % 15))}%
-                              </span>
-                            </td>
-                          )}
-                          <td className="px-6 py-4">
-                             <span className={`px-2 py-1 rounded-md text-[10px] font-black uppercase tracking-tighter ${op.estado === 'Activo' || op.status === 'Activo' ? 'bg-green-500/10 text-green-400' : isDark ? 'bg-white/5 text-white/30' : 'bg-gray-100 text-brand-gray'}`}>
-                                {op.estado || op.status || 'Activo'}
-                             </span>
-                          </td>
-                          <td className="px-6 py-4 text-right">
-                            <div className="flex justify-end gap-2">
-                               <button 
-                                 onClick={() => setEditingOperator(op)}
-                                 className={`p-2 rounded-lg transition-all ${isDark ? 'text-white/40 hover:text-brand-primary hover:bg-white/5' : 'text-brand-gray hover:text-brand-primary hover:bg-white'}`}
-                               >
-                                  <Settings size={14} />
-                               </button>
-                               <button 
-                                onClick={() => handleDeleteOperator(op.id)}
-                                className="text-red-500 hover:text-red-700 font-black text-[10px] sm:text-xs uppercase tracking-widest transition-colors py-2 px-3 hover:bg-red-500/10 rounded-lg"
-                              >
-                                Borrar
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))
-                    ) : (
-                      <tr>
-                        <td colSpan={currentUser?.role === 'JEFE' ? 5 : 4} className="px-8 py-10 text-center">
-                          <p className={`font-bold mb-2 ${isDark ? 'text-white' : 'text-brand-dark'}`}>
-                            {dbError || "No hay operarios registrados o no se pudieron cargar."}
-                          </p>
-                          <p className={`text-xs ${isDark ? 'text-white/40' : 'text-brand-gray'}`}>
-                            Verifique la conexión con el servidor si este mensaje persiste.
-                          </p>
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
+            <UserManagementScreen />
           ) : activeTab === 'solicitudes' ? (
             <div className="h-full -m-4 sm:-m-6 lg:-m-10">
               <div className={`h-full flex flex-col overflow-hidden`}> 

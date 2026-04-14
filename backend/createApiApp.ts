@@ -27,11 +27,7 @@ const SESSION_COOKIE_NAME = 'incubant_session';
 export function createApiApp(app: Express): void {
   app.use(express.json({ limit: '50mb' }));
 
-  // CORS Middleware si no está ya arriba
-  app.use(cors({
-    origin: '*',
-    credentials: true,
-  }));
+  // CORS Middleware controlado arriba en root
 
   // =======================================================================
   // SESSION MIDDLEWARE (Firebase Session Mocking)

@@ -118,6 +118,7 @@ export default function App() {
       try {
         const response = await apiFetch(getApiUrl('/api/health'));
         if (response.ok) {
+          // CORS limpiado - lo controla la raiz server.ts
           setIsApiHealthy(true);
           return true;
         }
@@ -160,8 +161,16 @@ export default function App() {
       if (isMounted) setIsSessionReady(true);
     };
 
+    // Hard escape timeout - Si la red local (Vite Proxy o Firewall) se eterniza y congela el request JS, forzar el salto 
+    const fallbackTimer = setTimeout(() => {
+      if (isMounted) setIsSessionReady(true);
+    }, 8000);
+
     void validateSession();
-    return () => { isMounted = false; };
+    return () => { 
+        isMounted = false; 
+        clearTimeout(fallbackTimer);
+    };
   }, [login, logout]);
 
   const isSyncingRef = useRef(false);

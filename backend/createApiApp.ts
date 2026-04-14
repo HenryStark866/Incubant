@@ -250,12 +250,42 @@ export function createApiApp(app: Express): void {
     }
   });
 
-  // Dummy endpoints locales (history)
-  app.get('/api/reports/history', (req, res) => {
-    res.json({ logs: [], reports: [], incidents: [] });
+  // Admin History Real endpoint
+  app.get('/api/reports/history', requireAuthenticatedUser, async (req, res) => {
+    try {
+      const reportsRef = db.ref('reports');
+      const snap = await reportsRef.orderByChild('timestamp').limitToLast(300).once('value');
+      const reportsDict = snap.val() || {};
+      
+      const reportsArray = Object.entries(reportsDict).map(([id, val]: [string, any]) => ({
+        id: id,
+        machine_id: val.machine_id,
+        user_name: val.user_name || 'Operario',
+        photo_url: val.photo_url || val.document_url || null,
+        temp_actual: val.temp_actual || 0,
+        temp_consigna: val.temp_consigna || 0,
+        humedad_actual: val.humedad_actual || 0,
+        observaciones: val.observaciones || (val.data ? val.data.observaciones : ''),
+        creado_en: val.timestamp || new Date().toISOString()
+      }));
+
+      // Invertir para más reciente primero
+      reportsArray.reverse();
+
+      res.status(200).json({ logs: [], reports: reportsArray, incidents: [] });
+    } catch (e) {
+      console.error('[History API] Firebase Error:', e);
+      res.status(500).json({ error: 'Fallo al traer historial desde NoSQL' });
+    }
   });
   
   app.post('/api/admin/seed-shifts', (req, res) => {
     res.json({ message: 'Firebase seed done' });
+  });
+
+  // Global Error Fallback para nunca retornar HTML de Vite
+  app.use((err: any, req: Request, res: Response, next: NextFunction) => {
+    if (res.headersSent) { return next(err); }
+    res.status(500).json({ error: err.message || 'Error Desconocido Interno' });
   });
 }

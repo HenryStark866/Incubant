@@ -25,7 +25,7 @@ function initializeFirebaseAdmin() {
 
       admin.initializeApp({
         credential,
-        databaseURL: process.env.FIREBASE_DATABASE_URL || 'https://tu-proyecto.firebaseio.com' 
+        databaseURL: process.env.VITE_FIREBASE_DATABASE_URL || 'https://incubant-db-default-rtdb.firebaseio.com' 
       });
       
       console.log('✅ Firebase Admin inicializado exitosamente.');

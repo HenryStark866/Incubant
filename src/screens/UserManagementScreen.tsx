@@ -57,6 +57,30 @@ export default function UserManagementScreen() {
 
     useEffect(() => {
         void loadUsers();
+
+        // Polling cada 5s para mantener la lista sincronizada
+        const pollInterval = setInterval(() => void loadUsers(true), 5000);
+
+        // SSE: recarga inmediata al recibir cualquier evento del backend
+        let es: EventSource | null = null;
+        try {
+            es = new EventSource(getApiUrl('/api/events'));
+            es.onmessage = (ev) => {
+                try {
+                    const data = JSON.parse(ev.data);
+                    // Recarga en eventos relevantes (no en ping)
+                    if (data.type && data.type !== 'ping') {
+                        void loadUsers(true);
+                    }
+                } catch { /* ignorar mensajes malformados */ }
+            };
+            es.onerror = () => { es?.close(); };
+        } catch { /* SSE no disponible en este entorno */ }
+
+        return () => {
+            clearInterval(pollInterval);
+            es?.close();
+        };
     }, []);
 
     // Auto-clear alerts

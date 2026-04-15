@@ -177,22 +177,37 @@ export function createApiApp(app: Express): void {
 
       // Mapear al frontend
       const machineArray: any[] = [];
-      const timestampNow = new Date().getTime();
 
       Object.entries(machines).forEach(([id, mNode]: [string, any]) => {
+         const tipo = mNode.tipo === 'INCUBADORA' ? 'incubadora' : 'nacedora';
+         const num  = mNode.numero_maquina || id;
+         const prefix = tipo === 'incubadora' ? 'INC' : 'NAC';
+         const name = `${prefix}-${String(num).padStart(2, '0')}`;
+
          machineArray.push({
            id,
-           type: mNode.tipo === 'INCUBADORA' ? 'incubadora' : 'nacedora',
-           number: mNode.numero_maquina,
-           status: 'pending',
-           lastChecked: null,
+           name,
+           type: tipo,
+           number: num,
+           status: mNode.inactive ? 'maintenance' : (mNode.last_photo ? 'ok' : 'pending'),
+           lastChecked: mNode.updated_at || null,
            photoUrl: mNode.last_photo || null,
+           photoTimestamp: mNode.updated_at || null,
+           temp: mNode.last_temp?.toString() || null,
+           humidity: mNode.last_hum?.toString() || null,
+           lastUpdate: mNode.updated_at
+             ? new Date(mNode.updated_at).toLocaleString('es-CO', { timeZone: 'America/Bogota', hour: '2-digit', minute: '2-digit', day: '2-digit', month: 'short' })
+             : 'Sin reporte',
+           updatedBy: mNode.last_user || null,
            data: {
               tempPrincipalReal: mNode.last_temp?.toString(),
               humedadReal: mNode.last_hum?.toString()
            }
          });
       });
+
+      // Ordenar por número de máquina
+      machineArray.sort((a, b) => Number(a.number) - Number(b.number));
 
       res.status(200).json(machineArray);
     } catch (e) {
@@ -233,6 +248,8 @@ export function createApiApp(app: Express): void {
         const mainTemp = d.tempOvoscanReal || d.tempSynchroReal || 0;
         const humedad = d.humedadReal || d.humedadRelativa || 0;
 
+        const nowIso = new Date().toISOString();
+
         // Escribimos a Firebase RTDB en `reports` de manera protegida (anti serverless kill)
         const newReportRef = db.ref('reports').push();
         await safeFirebaseWrite(newReportRef.set({
@@ -243,20 +260,36 @@ export function createApiApp(app: Express): void {
           humedad_actual: humedad,
           is_na: machine.inactive || false,
           data: d,
-          timestamp: new Date().toISOString()
+          timestamp: nowIso
         }), `reports/${machine.id}`);
 
-        // Actualizamos estado de máquina
+        // Derivar tipo y número de la id (formato: inc-1, nac-5)
+        const machineIdParts = machine.id.match(/^(inc|nac)-(\d+)$/i);
+        const tipoDerivado = machineIdParts
+          ? (machineIdParts[1].toLowerCase() === 'inc' ? 'INCUBADORA' : 'NACEDORA')
+          : 'INCUBADORA';
+        const numDerivado = machineIdParts ? parseInt(machineIdParts[2], 10) : 0;
+
+        // Actualizamos estado de máquina — incluimos last_user para el dashboard
         await safeFirebaseWrite(db.ref(`machines/${machine.id}`).update({
+          tipo: tipoDerivado,
+          numero_maquina: numDerivado,
           last_photo: finalPhotoUrl || null,
           last_temp: mainTemp,
           last_hum: humedad,
+          last_user: userName,
           inactive: machine.inactive || false,
-          updated_at: new Date().toISOString()
+          updated_at: nowIso
         }), `machines/${machine.id}`);
 
-        // Notificar a clientes SSE en tiempo real
-        broadcastSSE({ type: 'NEW_REPORT', machineId: machine.id, userName });
+        // Notificar a clientes SSE en tiempo real con todos los datos para actualización inmediata
+        broadcastSSE({
+          type: 'NEW_REPORT',
+          machineId: machine.id,
+          userName,
+          photoUrl: finalPhotoUrl || null,
+          timestamp: nowIso
+        });
       }
 
       // --- GENERAR PDF HORARIO ---

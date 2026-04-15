@@ -389,7 +389,7 @@ export default function DashboardScreen({ canAccessSupervisor = false, onSwitchT
     try {
       setIsSyncing(true);
       // Solicitar generación de reporte al servidor (Zero-Touch)
-      const res = await apiFetch(getApiUrl('/api/reports/closing/request'));
+      const res = await apiFetch(getApiUrl('/api/reports/closing/request'), { method: 'POST' });
       if (!res.ok) {
         console.warn('[Cierre] Error en el servidor al generar reporte');
       }

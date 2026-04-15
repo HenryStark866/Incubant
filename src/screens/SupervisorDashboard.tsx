@@ -402,10 +402,10 @@ export default function SupervisorDashboard() {
     }
   }, [currentUser, canAccessSupervisor]);
 
-  // Polling de datos cada segundo (Máxima frecuencia para tiempo real)
+  // Polling de datos cada 5 segundos (equilibrio entre tiempo real y rendimiento)
   useEffect(() => {
     void fetchData();
-    const interval = setInterval(fetchData, 1000);
+    const interval = setInterval(fetchData, 5000);
     return () => clearInterval(interval);
   }, [fetchData]);
 
@@ -431,12 +431,33 @@ export default function SupervisorDashboard() {
             console.log('[SSE] Evento recibido:', data.type);
             // Increment pending badge immediately for new requests
             if (data.type === 'NEW_REPORT') {
-              // Si el evento trae un machineId específico, resaltarlo
+              // Actualización inmediata de la máquina afectada sin esperar el fetch completo
               if (data.machineId) {
                 setUpdatedMachineId(data.machineId);
                 if (updatedTimeoutRef.current) clearTimeout(updatedTimeoutRef.current);
                 updatedTimeoutRef.current = setTimeout(() => setUpdatedMachineId(null), 8000);
+
+                // Actualizar la foto y estado de la máquina en tiempo real desde el payload SSE
+                if (data.photoUrl !== undefined) {
+                  setMachinesData(prev => prev.map(m => {
+                    if (m.id === data.machineId) {
+                      const nowStr = data.timestamp
+                        ? new Date(data.timestamp).toLocaleString('es-CO', { timeZone: 'America/Bogota', hour: '2-digit', minute: '2-digit', day: '2-digit', month: 'short' })
+                        : 'Ahora';
+                      return {
+                        ...m,
+                        photoUrl: data.photoUrl || m.photoUrl,
+                        photoTimestamp: data.timestamp || m.photoTimestamp,
+                        lastUpdate: nowStr,
+                        updatedBy: data.userName || m.updatedBy,
+                        status: data.photoUrl ? 'ok' : m.status,
+                      };
+                    }
+                    return m;
+                  }));
+                }
               }
+              // Refetch completo para actualizar contadores y datos adicionales
               void fetchData();
             } else if (data.type === 'NEW_REQUEST') {
               setPendingRequestsCount(c => c + 1);
@@ -1107,8 +1128,9 @@ export default function SupervisorDashboard() {
                             {/* Imagen de fondo dinámica con resolución mejorada */}
                             <div className="absolute inset-0">
                               <img
-                                src={getApiUrl(machine.photoUrl) || (machine.status === 'maintenance' ? '/imagen2.png' : '/imagen1.png')}
-                                alt={machine.name}
+                                key={machine.photoUrl || machine.id}
+                                src={machine.photoUrl || (machine.status === 'maintenance' ? '/imagen2.png' : '/imagen1.png')}
+                                alt={machine.name || machine.id}
                                 className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110 group-hover:rotate-1"
                                 style={{
                                   filter: machine.status === 'maintenance' && !machine.photoUrl ? 'brightness(0.4) grayscale(1)' : 'brightness(1.05) contrast(1.1)',
@@ -1159,7 +1181,7 @@ export default function SupervisorDashboard() {
                                 className={`font-black text-base tracking-tight drop-shadow-xl ${machine.status === 'alarm' ? 'text-red-100' : 'text-white'}`} 
                                 style={{ textShadow: '0 4px 12px rgba(0,0,0,0.9)' }}
                               >
-                                {machine.name.replace(/(INC|NAC)-/, '')}
+                                {(machine.name || machine.id).replace(/(INC|NAC)-0?/, '')}
                               </span>
                               
                               <div className="flex items-center gap-2">
@@ -1183,7 +1205,7 @@ export default function SupervisorDashboard() {
                                   className="text-[9px] text-white/90 font-black uppercase tracking-widest" 
                                   style={{ textShadow: '0 1px 4px rgba(0,0,0,1)' }}
                                 >
-                                  {machine.data?.lastUpdate || machine.lastUpdate}
+                                  {machine.lastUpdate}
                                 </span>
                                 {machine.updatedBy && (
                                   <span className="text-[8px] text-brand-primary font-bold uppercase tracking-tighter">
@@ -1221,8 +1243,8 @@ export default function SupervisorDashboard() {
                   <div className="relative max-w-5xl w-full flex flex-col items-center gap-6" onClick={e => e.stopPropagation()}>
                     <div className="relative group overflow-hidden rounded-3xl shadow-2xl bg-black/40 border border-white/5">
                       <img
-                        src={getApiUrl(adminPhotoViewer.photoUrl) || (adminPhotoViewer.status === 'maintenance' ? '/imagen2.png' : '/imagen1.png')}
-                        alt={adminPhotoViewer.name}
+                        src={adminPhotoViewer.photoUrl || (adminPhotoViewer.status === 'maintenance' ? '/imagen2.png' : '/imagen1.png')}
+                        alt={adminPhotoViewer.name || adminPhotoViewer.id}
                         className="max-w-full max-h-[70vh] object-contain"
                         onError={(e) => {
                           const target = e.currentTarget as HTMLImageElement;
@@ -1243,7 +1265,7 @@ export default function SupervisorDashboard() {
                     <div className="bg-[#0a0f20]/90 backdrop-blur-xl border border-white/10 rounded-[2.5rem] px-10 py-8 flex flex-wrap items-center gap-10 shadow-2xl w-full">
                       <div className="flex flex-col">
                         <span className="text-[10px] text-brand-primary font-black uppercase tracking-widest mb-1.5">Máquina</span>
-                        <span className="text-3xl font-black text-white">{adminPhotoViewer.name}</span>
+                        <span className="text-3xl font-black text-white">{adminPhotoViewer.name || adminPhotoViewer.id}</span>
                       </div>
                       
                       <div className="flex gap-10 border-l border-white/10 pl-10">
@@ -1273,11 +1295,11 @@ export default function SupervisorDashboard() {
 
                       <div className="ml-auto flex items-center gap-4">
                         {adminPhotoViewer.photoUrl ? (
-                          <a
-                            href={getApiUrl(adminPhotoViewer.photoUrl)}
-                            download={`${adminPhotoViewer.name}-${Date.now()}.jpg`}
-                            target="_blank"
-                            rel="noopener noreferrer"
+                           <a
+                             href={adminPhotoViewer.photoUrl}
+                             download={`${adminPhotoViewer.name || adminPhotoViewer.id}-${Date.now()}.jpg`}
+                             target="_blank"
+                             rel="noopener noreferrer"
                             className="flex items-center gap-2.5 px-8 py-4 bg-brand-primary/10 hover:bg-brand-primary/20 border border-brand-primary/20 rounded-2xl font-black text-[10px] uppercase text-brand-primary transition-all shadow-xl"
                             onClick={e => e.stopPropagation()}
                           >

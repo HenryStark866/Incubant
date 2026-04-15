@@ -90,17 +90,27 @@ export function createApiApp(app: Express): void {
     }
   };
 
-  // Upload helper to Firebase Storage Bucket
+  // Upload helper to Firebase Storage Bucket (con timeout anti-cuelgue)
   const uploadToFirebaseStorage = async (buffer: Buffer, mimetype: string, folder: string, username: string, machineId: string) => {
      try {
         const bucket = fStorage.bucket();
         const destPath = `${folder}/${username}_${machineId}_${Date.now()}.png`;
         const file = bucket.file(destPath);
-        
-        await file.save(buffer, { metadata: { contentType: mimetype } });
-        // Generate signed URL valid to 2100 essentially making it accessible forever
-        const [url] = await file.getSignedUrl({ action: 'read', expires: '01-01-2100' });
-        return { publicUrl: url };
+
+        const uploadAndSign = async () => {
+          await file.save(buffer, { metadata: { contentType: mimetype } });
+          // URL firmada válida hasta 2100 (acceso permanente)
+          const [url] = await file.getSignedUrl({ action: 'read', expires: '01-01-2100' });
+          return { publicUrl: url };
+        };
+
+        // Timeout de 5s para no bloquear el request en entornos serverless lentos
+        return await Promise.race([
+          uploadAndSign(),
+          new Promise<{publicUrl: string}>((_, reject) =>
+            setTimeout(() => reject(new Error('Storage Upload Timeout 5s')), 5000)
+          )
+        ]);
      } catch (e) {
         console.error("Firebase Storage Upload Error:", e);
         return { publicUrl: '' };
